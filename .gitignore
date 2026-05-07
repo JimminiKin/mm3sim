@@ -1,0 +1,25 @@
+# Rust build artifacts
+/target/
+/Cargo.lock
+
+# Trunk output
+/dist/
+/pkg/
+
+# Bevy and WASM
+*.wasm
+*.js
+*.ts
+*.js.map
+*.wasm.map
+
+# Misc
+.DS_Store
+node_modules/
+**/*.log
+
+# Editor/temp files
+*.swp
+*~
+.idea/
+.vscode/
