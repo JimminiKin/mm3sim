@@ -3,16 +3,20 @@ use bevy_rapier3d::prelude::*;
 
 use crate::components::vibraphone::spawn_vibraphone_bar;
 use crate::resources::constants::*;
+use crate::systems::camera::OrbitCamera;
 
 pub fn setup_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 8.0, 14.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
+    commands.spawn((
+        Camera3dBundle {
+            transform: Transform::from_xyz(0.0, 8.0, 14.0).looking_at(Vec3::ZERO, Vec3::Y),
+            ..default()
+        },
+        OrbitCamera::default(),
+    ));
 
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {

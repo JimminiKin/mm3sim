@@ -25,6 +25,20 @@ pub fn spawn_marble_on_click_system(
     spawn_marble(&mut commands, &mut meshes, &mut materials, spawn_position);
 }
 
+#[derive(Component)]
+pub struct Marble;
+
+pub fn despawn_fallen_marbles_system(
+    mut commands: Commands,
+    query: Query<(Entity, &Transform), With<Marble>>,
+) {
+    for (entity, transform) in &query {
+        if transform.translation.y < DESPAWN_Y {
+            commands.entity(entity).despawn_recursive();
+        }
+    }
+}
+
 pub fn spawn_marble(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -32,6 +46,7 @@ pub fn spawn_marble(
     position: Vec3,
 ) {
     commands.spawn((
+        Marble,
         PbrBundle {
             mesh: meshes.add(Mesh::from(Sphere { radius: MARBLE_RADIUS })),
             material: materials.add(StandardMaterial {

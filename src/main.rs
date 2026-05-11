@@ -6,7 +6,8 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
 use systems::setup::setup_system;
-use systems::marble::spawn_marble_on_click_system;
+use systems::marble::{spawn_marble_on_click_system, despawn_fallen_marbles_system};
+use systems::camera::orbit_camera_system;
 
 fn main() {
     App::new()
@@ -14,6 +15,6 @@ fn main() {
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
         .insert_resource(ClearColor(Color::rgb(0.05, 0.05, 0.08)))
         .add_systems(Startup, setup_system)
-        .add_systems(Update, spawn_marble_on_click_system)
+        .add_systems(Update, (spawn_marble_on_click_system, orbit_camera_system, despawn_fallen_marbles_system))
         .run();
 }

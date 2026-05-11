@@ -9,3 +9,4 @@ pub const MARBLE_RADIUS: f32 = 0.25;
 pub const SPAWN_HEIGHT: f32 = 8.0;
 pub const MARBLE_SPAWN_JITTER: f32 = 0.01;
 pub const BAR_TILT: f32 = std::f32::consts::FRAC_PI_6;
+pub const DESPAWN_Y: f32 = -10.0;
