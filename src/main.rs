@@ -1,7 +1,6 @@
 mod components;
 mod resources;
 mod systems;
-mod utils;
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;

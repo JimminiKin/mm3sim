@@ -35,7 +35,8 @@ pub fn spawn_vibraphone_bar(
     commands
         .spawn((
             SpatialBundle {
-                transform: Transform::from_translation(position),
+                transform: Transform::from_translation(position)
+                    .with_rotation(Quat::from_rotation_z(BAR_TILT)),
                 ..default()
             },
             RigidBody::Fixed,

@@ -1,14 +1,12 @@
 use bevy::prelude::*;
 use bevy::math::primitives::Sphere;
-use bevy::window::PrimaryWindow;
 use bevy_rapier3d::prelude::*;
+use rand::Rng;
 
 use crate::resources::constants::*;
 
 pub fn spawn_marble_on_click_system(
     buttons: Res<ButtonInput<MouseButton>>,
-    windows: Query<&Window, With<PrimaryWindow>>,
-    camera_query: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -17,24 +15,12 @@ pub fn spawn_marble_on_click_system(
         return;
     }
 
-    let window = windows.single();
-    let Some(cursor_position) = window.cursor_position() else {
-        return;
-    };
-
-    let (camera, camera_transform) = camera_query.single();
-    let Some(ray) = camera.viewport_to_world(camera_transform, cursor_position) else {
-        return;
-    };
-
-    let plane_y = 1.5;
-    if ray.direction.y.abs() < 0.001 {
-        return;
-    }
-
-    let t = (plane_y - ray.origin.y) / ray.direction.y;
-    let target = ray.origin + ray.direction * t;
-    let spawn_position = Vec3::new(target.x, SPAWN_HEIGHT, target.z);
+    let mut rng = rand::thread_rng();
+    let spawn_position = Vec3::new(
+        PLATE_LEFT_X + PLATE_WIDTH / 3.0 + rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
+        SPAWN_HEIGHT,
+        rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
+    );
 
     spawn_marble(&mut commands, &mut meshes, &mut materials, spawn_position);
 }

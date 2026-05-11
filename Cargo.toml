@@ -9,6 +9,7 @@ bevy_rapier3d = "0.25"
 wasm-bindgen = "0.2"
 getrandom = { version = "0.3", features = ["wasm_js"] }
 uuid = { version = "1.23.1", features = ["js", "v4"] }
+rand = "0.8"
 
 [profile.release]
 opt-level = 3
