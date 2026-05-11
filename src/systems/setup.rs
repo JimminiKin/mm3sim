@@ -1,8 +1,6 @@
 use bevy::prelude::*;
-use bevy_rapier3d::prelude::*;
 
 use crate::components::vibraphone::spawn_vibraphone_bar;
-use crate::resources::constants::*;
 use crate::systems::camera::OrbitCamera;
 
 pub fn setup_system(
