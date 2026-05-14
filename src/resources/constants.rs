@@ -27,16 +27,16 @@ pub const STEEL_RESTITUTION: f32 = 0.60;
 pub const STEEL_FRICTION: f32 = 0.18;
 
 // ── Snare drum ────────────────────────────────────────────────────────────────
-pub const SNARE_RADIUS: f32 = 1.775;        // 14" diameter
-pub const SNARE_HALF_HEIGHT: f32 = 0.70;    // 5.5" depth
-pub const SNARE_MASS: f32 = 4.0;            // kg
+pub const SNARE_RADIUS: f32 = 1.775; // 14" diameter
+pub const SNARE_HALF_HEIGHT: f32 = 0.70; // 5.5" depth
+pub const SNARE_MASS: f32 = 4.0; // kg
 
 // ── Pivot arm ─────────────────────────────────────────────────────────────────
-pub const ARM_LENGTH: f32 = 6.0;            // 60 cm
-pub const ARM_TUBE_RADIUS: f32 = 0.025;     // 2.5 cm
-pub const PIVOT_TO_EDGE_GAP: f32 = 2.0;     // 20 cm from snare edge to pivot
-pub const ARM_LINEAR_DAMPING: f32 = 1.0;
-pub const ARM_ANGULAR_DAMPING: f32 = 4.0;
+pub const ARM_LENGTH: f32 = 8.0; // 80 cm
+pub const ARM_TUBE_RADIUS: f32 = 0.025; // 2.5 cm
+pub const PIVOT_TO_EDGE_GAP: f32 = 2.0; // 20 cm from snare edge to pivot
+pub const ARM_LINEAR_DAMPING: f32 = 0.0;
+pub const ARM_ANGULAR_DAMPING: f32 = 0.0;
 pub const PIVOT_STAND_HALF_HEIGHT: f32 = 0.5;
 
 // Derived arm geometry (all relative to world origin = snare centre)
@@ -49,16 +49,24 @@ pub const CW_LOCAL_Z: f32 = ARM_HALF_LEN;
 
 // Counterweight: mass computed so torques balance about the pivot
 pub const CW_DISTANCE: f32 = ARM_LENGTH - PIVOT_FROM_SNARE;
-pub const CW_MASS: f32 = SNARE_MASS * PIVOT_FROM_SNARE / CW_DISTANCE;
+pub const CW_RATIO: f32 = 1.1;
+pub const CW_MASS: f32 = SNARE_MASS * PIVOT_FROM_SNARE / CW_DISTANCE * CW_RATIO;
 pub const CW_RADIUS: f32 = 0.12;
 pub const CW_HALF_HEIGHT: f32 = 0.08;
 
+// Arm spawn angle: 19° snare-side down — body position set to satisfy joint constraint exactly
+pub const ARM_SPAWN_ANGLE_RAD: f32 = -0.331_61; // -19° in radians
+pub const ARM_SPAWN_SIN: f32 = 0.325_57; // sin(19°)
+pub const ARM_SPAWN_COS: f32 = 0.945_52; // cos(19°)
+pub const ARM_SPAWN_Y: f32 = -(PIVOT_LOCAL_Z * ARM_SPAWN_SIN);
+pub const ARM_SPAWN_Z: f32 = PIVOT_FROM_SNARE - PIVOT_LOCAL_Z * ARM_SPAWN_COS;
+
 // ── Marble ────────────────────────────────────────────────────────────────────
 pub const MARBLE_RADIUS: f32 = 0.10;
-pub const MARBLE_SPAWN_X: f32 = 0.0;        // centre of snare
+pub const MARBLE_MASS: f32 = 0.033; // kg — steel at 20 mm diameter
+pub const MARBLE_SPAWN_X: f32 = 0.0; // centre of snare
 pub const SPAWN_HEIGHT: f32 = 8.0;
 pub const MARBLE_SPAWN_JITTER: f32 = 0.01;
-pub const MARBLE_GRAVITY_SCALE: f32 = 1.0;
 pub const DESPAWN_Y: f32 = -10.0;
 
 // ── Materials ─────────────────────────────────────────────────────────────────
@@ -75,20 +83,25 @@ pub const MARBLE_METALLIC: f32 = 0.80;
 pub const MARBLE_ROUGHNESS: f32 = 0.20;
 
 // ── Pivot stop ────────────────────────────────────────────────────────────────
-pub const STOP_SIN_20: f32 = 0.342_02;        // sin(20°)
-pub const STOP_COS_20: f32 = 0.939_69;        // cos(20°)
-pub const STOP_BUMPER_Z_REST: f32 = 0.5;      // world Z of bumper at rest (between snare and pivot)
-pub const STOP_BUMPER_LOCAL_Z: f32 = STOP_BUMPER_Z_REST - ARM_CENTER_Z;  // local Z on arm entity
-pub const STOP_ARM_DIST: f32 = PIVOT_FROM_SNARE - STOP_BUMPER_Z_REST;    // pivot-to-bumper distance along arm
-pub const STOP_BUMPER_RADIUS: f32 = 0.08;
-pub const STOP_BUMPER_HALF_HEIGHT: f32 = 0.03;
-// At 20° tilt the bumper sweeps along an arc — post is placed at the arc destination
+pub const STOP_SIN_20: f32 = 0.342_02; // sin(20°)
+pub const STOP_COS_20: f32 = 0.939_69; // cos(20°)
+                                       // Contact point is just past the snare edge so the stop post never overlaps the snare collider
+pub const STOP_CONTACT_Z_REST: f32 = 2.5;
+pub const STOP_ARM_DIST: f32 = PIVOT_FROM_SNARE - STOP_CONTACT_Z_REST;
+// Arc motion shifts the contact point in Z at each angle — posts placed at their destinations
 pub const STOP_POST_Z: f32 = PIVOT_FROM_SNARE - STOP_ARM_DIST * STOP_COS_20;
-pub const STOP_POST_RADIUS: f32 = 0.12;
-pub const STOP_POST_HALF_HEIGHT: f32 = 0.15;
-// Post top surface = bumper bottom at 20°; post center is one half-height below that
-pub const STOP_POST_Y: f32 =
-    -(STOP_ARM_DIST * STOP_SIN_20) - STOP_BUMPER_HALF_HEIGHT - STOP_POST_HALF_HEIGHT;
+// Both stops are slender tubes running along X (perpendicular to the arm)
+pub const STOP_TUBE_RADIUS: f32 = 0.03;
+pub const STOP_TUBE_HALF_LEN: f32 = 0.30;
+// Lower tube top = arm-tube bottom at 20°
+pub const STOP_POST_Y: f32 = -(STOP_ARM_DIST * STOP_SIN_20) - ARM_TUBE_RADIUS - STOP_TUBE_RADIUS;
+
+pub const STOP_UPPER_SIN_15: f32 = 0.258_82; // sin(15°)
+pub const STOP_UPPER_COS_15: f32 = 0.965_93; // cos(15°)
+pub const STOP_UPPER_POST_Z: f32 = PIVOT_FROM_SNARE - STOP_ARM_DIST * STOP_UPPER_COS_15;
+// Upper tube bottom = arm-tube top at 15°
+pub const STOP_UPPER_POST_Y: f32 =
+    -(STOP_ARM_DIST * STOP_UPPER_SIN_15) + ARM_TUBE_RADIUS + STOP_TUBE_RADIUS;
 
 // ── Axes gizmo ────────────────────────────────────────────────────────────────
 pub const AXIS_LENGTH: f32 = 2.0;

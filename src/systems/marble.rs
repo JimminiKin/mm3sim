@@ -1,5 +1,5 @@
-use bevy::prelude::*;
 use bevy::math::primitives::Sphere;
+use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use rand::Rng;
 
@@ -48,7 +48,9 @@ pub fn spawn_marble(
     commands.spawn((
         Marble,
         PbrBundle {
-            mesh: meshes.add(Mesh::from(Sphere { radius: MARBLE_RADIUS })),
+            mesh: meshes.add(Mesh::from(Sphere {
+                radius: MARBLE_RADIUS,
+            })),
             material: materials.add(StandardMaterial {
                 base_color: Color::rgb(MARBLE_COLOR.0, MARBLE_COLOR.1, MARBLE_COLOR.2),
                 metallic: MARBLE_METALLIC,
@@ -60,9 +62,10 @@ pub fn spawn_marble(
         },
         RigidBody::Dynamic,
         Collider::ball(MARBLE_RADIUS),
+        ColliderMassProperties::Mass(MARBLE_MASS),
         Restitution::coefficient(STEEL_RESTITUTION),
         Friction::coefficient(STEEL_FRICTION),
-        GravityScale(MARBLE_GRAVITY_SCALE),
+        GravityScale::default(),
         Velocity::default(),
     ));
 }

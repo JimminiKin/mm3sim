@@ -46,7 +46,10 @@ pub fn spawn_snare(
 
     commands
         .spawn((
-            TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, ARM_CENTER_Z)),
+            TransformBundle::from_transform(
+                Transform::from_xyz(0.0, ARM_SPAWN_Y, ARM_SPAWN_Z)
+                    .with_rotation(Quat::from_rotation_x(ARM_SPAWN_ANGLE_RAD)),
+            ),
             RigidBody::Dynamic,
             Damping {
                 linear_damping: ARM_LINEAR_DAMPING,
@@ -55,17 +58,20 @@ pub fn spawn_snare(
             ImpulseJoint::new(anchor, joint),
         ))
         .with_children(|p| {
-            p.spawn(PbrBundle {
-                mesh: meshes.add(Mesh::from(Cylinder {
-                    radius: ARM_TUBE_RADIUS,
-                    half_height: ARM_HALF_LEN,
-                })),
-                material: dark_steel.clone(),
-                transform: Transform::from_rotation(Quat::from_rotation_x(
-                    -std::f32::consts::FRAC_PI_2,
-                )),
-                ..default()
-            });
+            p.spawn((
+                PbrBundle {
+                    mesh: meshes.add(Mesh::from(Cylinder {
+                        radius: ARM_TUBE_RADIUS,
+                        half_height: ARM_HALF_LEN,
+                    })),
+                    material: dark_steel.clone(),
+                    transform: Transform::from_rotation(Quat::from_rotation_x(
+                        -std::f32::consts::FRAC_PI_2,
+                    )),
+                    ..default()
+                },
+                Collider::cylinder(ARM_HALF_LEN, ARM_TUBE_RADIUS),
+            ));
 
             p.spawn((
                 PbrBundle {
@@ -97,33 +103,37 @@ pub fn spawn_snare(
                 ColliderMassProperties::Mass(CW_MASS),
             ));
 
-            // Bumper: contact surface that rests on the stop post at 20° downward tilt
-            p.spawn((
-                PbrBundle {
-                    mesh: meshes.add(Mesh::from(Cylinder {
-                        radius: STOP_BUMPER_RADIUS,
-                        half_height: STOP_BUMPER_HALF_HEIGHT,
-                    })),
-                    material: dark_steel.clone(),
-                    transform: Transform::from_xyz(0.0, 0.0, STOP_BUMPER_LOCAL_Z),
-                    ..default()
-                },
-                Collider::cylinder(STOP_BUMPER_HALF_HEIGHT, STOP_BUMPER_RADIUS),
-            ));
         });
 
-    // Fixed stop post: top surface meets the bumper bottom when arm tilts 20° snare-side down
+    // Lower stop tube: arm tube bottom rests here at 20° snare-down
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(Mesh::from(Cylinder {
-                radius: STOP_POST_RADIUS,
-                half_height: STOP_POST_HALF_HEIGHT,
+                radius: STOP_TUBE_RADIUS,
+                half_height: STOP_TUBE_HALF_LEN,
             })),
-            material: dark_steel,
-            transform: Transform::from_xyz(0.0, STOP_POST_Y, STOP_POST_Z),
+            material: dark_steel.clone(),
+            transform: Transform::from_xyz(0.0, STOP_POST_Y, STOP_POST_Z)
+                .with_rotation(Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2)),
             ..default()
         },
         RigidBody::Fixed,
-        Collider::cylinder(STOP_POST_HALF_HEIGHT, STOP_POST_RADIUS),
+        Collider::cylinder(STOP_TUBE_HALF_LEN, STOP_TUBE_RADIUS),
+    ));
+
+    // Upper stop tube: arm tube top rests here at 15° snare-down
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Mesh::from(Cylinder {
+                radius: STOP_TUBE_RADIUS,
+                half_height: STOP_TUBE_HALF_LEN,
+            })),
+            material: dark_steel,
+            transform: Transform::from_xyz(0.0, STOP_UPPER_POST_Y, STOP_UPPER_POST_Z)
+                .with_rotation(Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2)),
+            ..default()
+        },
+        RigidBody::Fixed,
+        Collider::cylinder(STOP_TUBE_HALF_LEN, STOP_TUBE_RADIUS),
     ));
 }
