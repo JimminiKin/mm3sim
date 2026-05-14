@@ -17,7 +17,7 @@ pub fn spawn_marble_on_click_system(
 
     let mut rng = rand::thread_rng();
     let spawn_position = Vec3::new(
-        PLATE_LEFT_X + PLATE_WIDTH / 3.0 + rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
+        MARBLE_SPAWN_X + rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
         SPAWN_HEIGHT,
         rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
     );
@@ -50,9 +50,9 @@ pub fn spawn_marble(
         PbrBundle {
             mesh: meshes.add(Mesh::from(Sphere { radius: MARBLE_RADIUS })),
             material: materials.add(StandardMaterial {
-                base_color: Color::rgb(0.95, 0.35, 0.15),
-                metallic: 0.8,
-                perceptual_roughness: 0.2,
+                base_color: Color::rgb(MARBLE_COLOR.0, MARBLE_COLOR.1, MARBLE_COLOR.2),
+                metallic: MARBLE_METALLIC,
+                perceptual_roughness: MARBLE_ROUGHNESS,
                 ..default()
             }),
             transform: Transform::from_translation(position),
@@ -60,9 +60,9 @@ pub fn spawn_marble(
         },
         RigidBody::Dynamic,
         Collider::ball(MARBLE_RADIUS),
-        Restitution::coefficient(0.75),
-        Friction::coefficient(0.6),
-        GravityScale(1.0),
+        Restitution::coefficient(STEEL_RESTITUTION),
+        Friction::coefficient(STEEL_FRICTION),
+        GravityScale(MARBLE_GRAVITY_SCALE),
         Velocity::default(),
     ));
 }

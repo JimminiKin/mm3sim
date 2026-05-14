@@ -1,1 +1,1 @@
-pub mod vibraphone;
+pub mod snare;

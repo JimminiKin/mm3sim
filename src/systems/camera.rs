@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
 
+use crate::resources::constants::*;
+
 #[derive(Component)]
 pub struct OrbitCamera {
     pub focus: Vec3,
@@ -13,9 +15,9 @@ impl Default for OrbitCamera {
     fn default() -> Self {
         Self {
             focus: Vec3::ZERO,
-            radius: 16.12,
-            yaw: 0.0,
-            pitch: -0.52,
+            radius: CAMERA_INITIAL_RADIUS,
+            yaw: CAMERA_INITIAL_YAW,
+            pitch: CAMERA_INITIAL_PITCH,
         }
     }
 }
@@ -40,15 +42,17 @@ pub fn orbit_camera_system(
     for ev in scroll.read() {
         zoom += match ev.unit {
             MouseScrollUnit::Line => ev.y,
-            MouseScrollUnit::Pixel => ev.y * 0.1,
+            MouseScrollUnit::Pixel => ev.y * CAMERA_SCROLL_PIXEL_FACTOR,
         };
     }
 
     let Ok((mut cam, mut transform)) = query.get_single_mut() else { return };
 
-    cam.yaw -= delta.x * 0.005;
-    cam.pitch = (cam.pitch - delta.y * 0.005).clamp(-1.5, 0.4);
-    cam.radius = (cam.radius - zoom * 0.8).clamp(3.0, 60.0);
+    cam.yaw -= delta.x * CAMERA_ORBIT_SENSITIVITY;
+    cam.pitch = (cam.pitch - delta.y * CAMERA_ORBIT_SENSITIVITY)
+        .clamp(CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
+    cam.radius = (cam.radius - zoom * CAMERA_ZOOM_SPEED)
+        .clamp(CAMERA_RADIUS_MIN, CAMERA_RADIUS_MAX);
 
     let rotation = Quat::from_euler(EulerRot::YXZ, cam.yaw, cam.pitch, 0.0);
     transform.translation = cam.focus + rotation * Vec3::new(0.0, 0.0, cam.radius);

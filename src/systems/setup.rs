@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
-use crate::components::vibraphone::spawn_vibraphone_bar;
+use crate::components::snare::spawn_snare;
+use crate::resources::constants::*;
 use crate::systems::camera::OrbitCamera;
 
 pub fn setup_system(
@@ -10,7 +11,8 @@ pub fn setup_system(
 ) {
     commands.spawn((
         Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 8.0, 14.0).looking_at(Vec3::ZERO, Vec3::Y),
+            transform: Transform::from_xyz(CAMERA_POS.0, CAMERA_POS.1, CAMERA_POS.2)
+                .looking_at(Vec3::ZERO, Vec3::Y),
             ..default()
         },
         OrbitCamera::default(),
@@ -18,23 +20,23 @@ pub fn setup_system(
 
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            illuminance: 25_000.0,
+            illuminance: LIGHT_ILLUMINANCE,
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.9, 0.7, 0.0)),
+        transform: Transform::from_rotation(Quat::from_euler(
+            EulerRot::XYZ,
+            LIGHT_ROT_X,
+            LIGHT_ROT_Y,
+            LIGHT_ROT_Z,
+        )),
         ..default()
     });
 
     commands.insert_resource(AmbientLight {
-        brightness: 0.35,
+        brightness: AMBIENT_BRIGHTNESS,
         ..default()
     });
 
-    spawn_vibraphone_bar(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        Vec3::new(0.0, 0.85, 0.0),
-    );
+    spawn_snare(&mut commands, &mut meshes, &mut materials);
 }
