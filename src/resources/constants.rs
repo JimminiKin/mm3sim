@@ -103,5 +103,18 @@ pub const STOP_UPPER_POST_Z: f32 = PIVOT_FROM_SNARE - STOP_ARM_DIST * STOP_UPPER
 pub const STOP_UPPER_POST_Y: f32 =
     -(STOP_ARM_DIST * STOP_UPPER_SIN_15) + ARM_TUBE_RADIUS + STOP_TUBE_RADIUS;
 
+// ── Cycloid chute ─────────────────────────────────────────────────────────────
+// r sized so π√(r/g) = √(2·h/g) where h = SPAWN_HEIGHT − CHUTE_END_Y ≈ 6.0
+pub const CHUTE_R: f32 = 1.22;
+pub const CHUTE_END_X: f32 = 0.0;
+pub const CHUTE_END_Y: f32 = 2.0;
+pub const CHUTE_END_Z: f32 = 0.0;
+pub const CHUTE_THICKNESS: f32 = 0.04;
+pub const CHUTE_WIDTH: f32 = 0.30;
+pub const CHUTE_SEGMENTS: usize = 32;
+pub const CHUTE_MARBLE_COLOR: (f32, f32, f32) = (0.20, 0.45, 0.90);
+pub const CHUTE_START_X: f32 = CHUTE_END_X - CHUTE_R * std::f32::consts::PI;
+pub const CHUTE_START_Y: f32 = CHUTE_END_Y + 2.0 * CHUTE_R;
+
 // ── Axes gizmo ────────────────────────────────────────────────────────────────
 pub const AXIS_LENGTH: f32 = 2.0;

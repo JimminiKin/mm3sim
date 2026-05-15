@@ -4,6 +4,9 @@ use bevy_rapier3d::prelude::*;
 
 use crate::resources::constants::*;
 
+#[derive(Component)]
+pub struct SnareDrum;
+
 pub fn spawn_snare(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -87,6 +90,8 @@ pub fn spawn_snare(
                 ColliderMassProperties::Mass(SNARE_MASS),
                 Restitution::coefficient(STEEL_RESTITUTION),
                 Friction::coefficient(STEEL_FRICTION),
+                SnareDrum,
+                ActiveEvents::COLLISION_EVENTS,
             ));
 
             p.spawn((

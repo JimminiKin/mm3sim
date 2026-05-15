@@ -23,6 +23,7 @@ pub fn spawn_marble_on_click_system(
     );
 
     spawn_marble(&mut commands, &mut meshes, &mut materials, spawn_position);
+    spawn_chute_marble(&mut commands, &mut meshes, &mut materials);
 }
 
 #[derive(Component)]
@@ -65,6 +66,51 @@ pub fn spawn_marble(
         ColliderMassProperties::Mass(MARBLE_MASS),
         Restitution::coefficient(STEEL_RESTITUTION),
         Friction::coefficient(STEEL_FRICTION),
+        ActiveEvents::COLLISION_EVENTS,
+        GravityScale::default(),
+        Velocity::default(),
+    ));
+}
+
+#[derive(Component)]
+pub struct ChuteMarble;
+
+pub fn spawn_chute_marble(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+) {
+    let position = Vec3::new(
+        CHUTE_START_X + MARBLE_RADIUS * 1.01,
+        CHUTE_START_Y,
+        CHUTE_END_Z,
+    );
+    commands.spawn((
+        Marble,
+        ChuteMarble,
+        PbrBundle {
+            mesh: meshes.add(Mesh::from(Sphere {
+                radius: MARBLE_RADIUS,
+            })),
+            material: materials.add(StandardMaterial {
+                base_color: Color::rgb(
+                    CHUTE_MARBLE_COLOR.0,
+                    CHUTE_MARBLE_COLOR.1,
+                    CHUTE_MARBLE_COLOR.2,
+                ),
+                metallic: MARBLE_METALLIC,
+                perceptual_roughness: MARBLE_ROUGHNESS,
+                ..default()
+            }),
+            transform: Transform::from_translation(position),
+            ..default()
+        },
+        RigidBody::Dynamic,
+        Collider::ball(MARBLE_RADIUS),
+        ColliderMassProperties::Mass(MARBLE_MASS),
+        Restitution::coefficient(STEEL_RESTITUTION),
+        Friction::coefficient(STEEL_FRICTION),
+        ActiveEvents::COLLISION_EVENTS,
         GravityScale::default(),
         Velocity::default(),
     ));
