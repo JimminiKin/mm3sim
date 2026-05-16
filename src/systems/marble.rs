@@ -80,11 +80,7 @@ pub fn spawn_chute_marble(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
-    let position = Vec3::new(
-        CHUTE_START_X + MARBLE_RADIUS * 1.01,
-        CHUTE_START_Y,
-        CHUTE_END_Z,
-    );
+    let position = Vec3::new(CHUTE_END_X, CHUTE_START_Y, CHUTE_START_Z - MARBLE_RADIUS);
     commands.spawn((
         Marble,
         ChuteMarble,

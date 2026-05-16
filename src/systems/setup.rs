@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::view::RenderLayers};
 
 use crate::components::cycloid_chute::spawn_cycloid_chute;
 use crate::components::snare::spawn_snare;
@@ -17,6 +17,8 @@ pub fn setup_system(
             ..default()
         },
         OrbitCamera::default(),
+        RenderLayers::layer(0),
+        IsDefaultUiCamera,
     ));
 
     commands.spawn(DirectionalLightBundle {

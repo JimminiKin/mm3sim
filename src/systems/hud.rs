@@ -24,31 +24,23 @@ pub struct LastSnareHit {
 
 pub fn setup_hud(mut commands: Commands) {
     commands.insert_resource(LastSnareHit::default());
-    commands
-        .spawn(NodeBundle {
-            style: Style {
-                position_type: PositionType::Absolute,
-                top: Val::Px(8.0),
-                left: Val::Px(8.0),
-                padding: UiRect::all(Val::Px(8.0)),
+    commands.spawn((
+        TextBundle::from_section(
+            "",
+            TextStyle {
+                font_size: 13.0,
+                color: Color::WHITE,
                 ..default()
             },
-            background_color: BackgroundColor(Color::rgba(0.0, 0.0, 0.0, 0.6)),
+        )
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(8.0),
+            left: Val::Px(8.0),
             ..default()
-        })
-        .with_children(|p| {
-            p.spawn((
-                TextBundle::from_section(
-                    "",
-                    TextStyle {
-                        font_size: 13.0,
-                        color: Color::WHITE,
-                        ..default()
-                    },
-                ),
-                HudText,
-            ));
-        });
+        }),
+        HudText,
+    ));
 }
 
 pub fn record_snare_aoa_system(

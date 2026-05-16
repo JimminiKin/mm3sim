@@ -54,19 +54,15 @@ pub const CW_MASS: f32 = SNARE_MASS * PIVOT_FROM_SNARE / CW_DISTANCE * CW_RATIO;
 pub const CW_RADIUS: f32 = 0.12;
 pub const CW_HALF_HEIGHT: f32 = 0.08;
 
-// Arm spawn angle: 19° snare-side down — body position set to satisfy joint constraint exactly
-pub const ARM_SPAWN_ANGLE_RAD: f32 = -0.331_61; // -19° in radians
-pub const ARM_SPAWN_SIN: f32 = 0.325_57; // sin(19°)
-pub const ARM_SPAWN_COS: f32 = 0.945_52; // cos(19°)
-pub const ARM_SPAWN_Y: f32 = -(PIVOT_LOCAL_Z * ARM_SPAWN_SIN);
-pub const ARM_SPAWN_Z: f32 = PIVOT_FROM_SNARE - PIVOT_LOCAL_Z * ARM_SPAWN_COS;
+// Arm spawn angle (negative = snare-side down)
+pub const ARM_SPAWN_DEG: f32 = -16.0;
 
 // ── Marble ────────────────────────────────────────────────────────────────────
 pub const MARBLE_RADIUS: f32 = 0.10;
 pub const MARBLE_MASS: f32 = 0.033; // kg — steel at 20 mm diameter
 pub const MARBLE_SPAWN_X: f32 = 0.0; // centre of snare
 pub const SPAWN_HEIGHT: f32 = 8.0;
-pub const MARBLE_SPAWN_JITTER: f32 = 0.01;
+pub const MARBLE_SPAWN_JITTER: f32 = 0.001;
 pub const DESPAWN_Y: f32 = -10.0;
 
 // ── Materials ─────────────────────────────────────────────────────────────────
@@ -83,25 +79,15 @@ pub const MARBLE_METALLIC: f32 = 0.80;
 pub const MARBLE_ROUGHNESS: f32 = 0.20;
 
 // ── Pivot stop ────────────────────────────────────────────────────────────────
-pub const STOP_SIN_20: f32 = 0.342_02; // sin(20°)
-pub const STOP_COS_20: f32 = 0.939_69; // cos(20°)
-                                       // Contact point is just past the snare edge so the stop post never overlaps the snare collider
+// Contact point is just past the snare edge so the stop post never overlaps the snare collider
 pub const STOP_CONTACT_Z_REST: f32 = 2.5;
 pub const STOP_ARM_DIST: f32 = PIVOT_FROM_SNARE - STOP_CONTACT_Z_REST;
-// Arc motion shifts the contact point in Z at each angle — posts placed at their destinations
-pub const STOP_POST_Z: f32 = PIVOT_FROM_SNARE - STOP_ARM_DIST * STOP_COS_20;
 // Both stops are slender tubes running along X (perpendicular to the arm)
 pub const STOP_TUBE_RADIUS: f32 = 0.03;
 pub const STOP_TUBE_HALF_LEN: f32 = 0.30;
-// Lower tube top = arm-tube bottom at 20°
-pub const STOP_POST_Y: f32 = -(STOP_ARM_DIST * STOP_SIN_20) - ARM_TUBE_RADIUS - STOP_TUBE_RADIUS;
-
-pub const STOP_UPPER_SIN_15: f32 = 0.258_82; // sin(15°)
-pub const STOP_UPPER_COS_15: f32 = 0.965_93; // cos(15°)
-pub const STOP_UPPER_POST_Z: f32 = PIVOT_FROM_SNARE - STOP_ARM_DIST * STOP_UPPER_COS_15;
-// Upper tube bottom = arm-tube top at 15°
-pub const STOP_UPPER_POST_Y: f32 =
-    -(STOP_ARM_DIST * STOP_UPPER_SIN_15) + ARM_TUBE_RADIUS + STOP_TUBE_RADIUS;
+// Arm angle at which each stop is contacted (positive = snare-side down)
+pub const STOP_LOWER_DEG: f32 = 17.0;
+pub const STOP_UPPER_DEG: f32 = 15.0;
 
 // ── Cycloid chute ─────────────────────────────────────────────────────────────
 // r sized so π√(r/g) = √(2·h/g) where h = SPAWN_HEIGHT − CHUTE_END_Y ≈ 6.0
@@ -113,8 +99,5 @@ pub const CHUTE_THICKNESS: f32 = 0.04;
 pub const CHUTE_WIDTH: f32 = 0.30;
 pub const CHUTE_SEGMENTS: usize = 32;
 pub const CHUTE_MARBLE_COLOR: (f32, f32, f32) = (0.20, 0.45, 0.90);
-pub const CHUTE_START_X: f32 = CHUTE_END_X - CHUTE_R * std::f32::consts::PI;
+pub const CHUTE_START_Z: f32 = CHUTE_END_Z + CHUTE_R * std::f32::consts::PI;
 pub const CHUTE_START_Y: f32 = CHUTE_END_Y + 2.0 * CHUTE_R;
-
-// ── Axes gizmo ────────────────────────────────────────────────────────────────
-pub const AXIS_LENGTH: f32 = 2.0;

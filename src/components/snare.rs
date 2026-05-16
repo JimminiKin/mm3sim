@@ -12,6 +12,21 @@ pub fn spawn_snare(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
+    // Arm geometry — derived from degree constants
+    let arm_rad = ARM_SPAWN_DEG.to_radians();
+    let arm_spawn_y = PIVOT_LOCAL_Z * arm_rad.sin();
+    let arm_spawn_z = PIVOT_FROM_SNARE - PIVOT_LOCAL_Z * arm_rad.cos();
+
+    // Stop post positions — each stop contacts the arm tube at the given angle
+    let stop_lower_rad = STOP_LOWER_DEG.to_radians();
+    let stop_post_z = PIVOT_FROM_SNARE - STOP_ARM_DIST * stop_lower_rad.cos();
+    let stop_post_y =
+        -(STOP_ARM_DIST * stop_lower_rad.sin()) - ARM_TUBE_RADIUS - STOP_TUBE_RADIUS;
+
+    let stop_upper_rad = STOP_UPPER_DEG.to_radians();
+    let stop_upper_post_z = PIVOT_FROM_SNARE - STOP_ARM_DIST * stop_upper_rad.cos();
+    let stop_upper_post_y =
+        -(STOP_ARM_DIST * stop_upper_rad.sin()) + ARM_TUBE_RADIUS + STOP_TUBE_RADIUS;
     let chrome = materials.add(StandardMaterial {
         base_color: Color::rgb(CHROME_COLOR.0, CHROME_COLOR.1, CHROME_COLOR.2),
         metallic: CHROME_METALLIC,
@@ -50,8 +65,8 @@ pub fn spawn_snare(
     commands
         .spawn((
             TransformBundle::from_transform(
-                Transform::from_xyz(0.0, ARM_SPAWN_Y, ARM_SPAWN_Z)
-                    .with_rotation(Quat::from_rotation_x(ARM_SPAWN_ANGLE_RAD)),
+                Transform::from_xyz(0.0, arm_spawn_y, arm_spawn_z)
+                    .with_rotation(Quat::from_rotation_x(arm_rad)),
             ),
             RigidBody::Dynamic,
             Damping {
@@ -118,7 +133,7 @@ pub fn spawn_snare(
                 half_height: STOP_TUBE_HALF_LEN,
             })),
             material: dark_steel.clone(),
-            transform: Transform::from_xyz(0.0, STOP_POST_Y, STOP_POST_Z)
+            transform: Transform::from_xyz(0.0, stop_post_y, stop_post_z)
                 .with_rotation(Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2)),
             ..default()
         },
@@ -134,7 +149,7 @@ pub fn spawn_snare(
                 half_height: STOP_TUBE_HALF_LEN,
             })),
             material: dark_steel,
-            transform: Transform::from_xyz(0.0, STOP_UPPER_POST_Y, STOP_UPPER_POST_Z)
+            transform: Transform::from_xyz(0.0, stop_upper_post_y, stop_upper_post_z)
                 .with_rotation(Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2)),
             ..default()
         },
