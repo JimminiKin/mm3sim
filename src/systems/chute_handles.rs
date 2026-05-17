@@ -9,20 +9,27 @@ use crate::systems::camera::OrbitCamera;
 
 const HANDLE_RADIUS: f32 = 0.12;
 const PICK_RADIUS: f32 = 0.25;
+const PICK_BODY_RADIUS: f32 = 0.35;
 
 const COLORS: [Color; 4] = [
-    Color::rgb(0.20, 0.90, 0.20), // P0  – green
-    Color::rgb(0.95, 0.80, 0.10), // CP1 – yellow
-    Color::rgb(0.95, 0.45, 0.10), // CP2 – orange
-    Color::rgb(0.90, 0.10, 0.10), // P3  – red
+    Color::srgb(0.20, 0.90, 0.20), // P0  – green
+    Color::srgb(0.95, 0.80, 0.10), // CP1 – yellow
+    Color::srgb(0.95, 0.45, 0.10), // CP2 – orange
+    Color::srgb(0.90, 0.10, 0.10), // P3  – red
 ];
 
 #[derive(Component)]
 pub struct ChuteHandle(pub usize); // 0=P0, 1=CP1, 2=CP2, 3=P3
 
+pub enum DragState {
+    Handle(usize),
+    /// anchor and initial are stored as [z, y] matching ChuteParams point layout
+    Body { anchor: [f32; 2], initial: [[f32; 2]; 4] },
+}
+
 #[derive(Resource, Default)]
 pub struct HandleDrag {
-    pub active: Option<usize>,
+    pub active: Option<DragState>,
 }
 
 pub fn setup_chute_handles(
@@ -96,7 +103,21 @@ pub fn chute_handle_drag_system(
                 }
             }
         }
-        drag.active = best.map(|(idx, _)| idx);
+        drag.active = if let Some((idx, _)) = best {
+            Some(DragState::Handle(idx))
+        } else if let Some(hit) = ray_x_plane(origin, dir, CHUTE_END_X) {
+            // No handle hit — check if we clicked on the chute body
+            if dist_to_bezier(&params, hit.z, hit.y) < PICK_BODY_RADIUS {
+                Some(DragState::Body {
+                    anchor: [hit.z, hit.y],
+                    initial: [params.p0, params.cp1, params.cp2, params.p3],
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
     }
 
     // ── Release: trigger segment rebuild ────────────────────────────────────
@@ -108,17 +129,29 @@ pub fn chute_handle_drag_system(
     }
 
     // ── Drag: update params (handles sync via sync_handle_transforms) ────────
-    if let Some(idx) = drag.active {
+    if drag.active.is_some() {
         if let Some(hit) = ray_x_plane(origin, dir, CHUTE_END_X) {
-            let pt = match idx {
-                0 => &mut params.p0,
-                1 => &mut params.cp1,
-                2 => &mut params.cp2,
-                _ => &mut params.p3,
-            };
-            pt[0] = hit.z;
-            pt[1] = hit.y;
-            // dirty NOT set here — segments stay until mouse release
+            match &drag.active {
+                Some(DragState::Handle(idx)) => {
+                    let pt = match idx {
+                        0 => &mut params.p0,
+                        1 => &mut params.cp1,
+                        2 => &mut params.cp2,
+                        _ => &mut params.p3,
+                    };
+                    pt[0] = hit.z;
+                    pt[1] = hit.y;
+                }
+                Some(DragState::Body { anchor, initial }) => {
+                    let dz = hit.z - anchor[0];
+                    let dy = hit.y - anchor[1];
+                    params.p0  = [initial[0][0] + dz, initial[0][1] + dy];
+                    params.cp1 = [initial[1][0] + dz, initial[1][1] + dy];
+                    params.cp2 = [initial[2][0] + dz, initial[2][1] + dy];
+                    params.p3  = [initial[3][0] + dz, initial[3][1] + dy];
+                }
+                None => {}
+            }
         }
     }
 }
@@ -132,8 +165,8 @@ pub fn draw_chute_gizmos(params: Res<ChuteParams>, mut gizmos: Gizmos) {
     let p3  = Vec3::new(x, params.p3[1],  params.p3[0]);
 
     // Tangent arms
-    gizmos.line(p0, cp1, Color::rgb(0.95, 0.85, 0.20));
-    gizmos.line(p3, cp2, Color::rgb(0.95, 0.85, 0.20));
+    gizmos.line(p0, cp1, Color::srgb(0.95, 0.85, 0.20));
+    gizmos.line(p3, cp2, Color::srgb(0.95, 0.85, 0.20));
 
     // Curve preview
     let n = 64usize;
@@ -141,7 +174,7 @@ pub fn draw_chute_gizmos(params: Res<ChuteParams>, mut gizmos: Gizmos) {
     for i in 1..=n {
         let t = i as f32 / n as f32;
         let next = bezier(p0, cp1, cp2, p3, t);
-        gizmos.line(prev, next, Color::rgb(0.35, 0.75, 1.0));
+        gizmos.line(prev, next, Color::srgb(0.35, 0.75, 1.0));
         prev = next;
     }
 }
@@ -171,4 +204,18 @@ fn ray_x_plane(origin: Vec3, dir: Vec3, plane_x: f32) -> Option<Vec3> {
     let t = (plane_x - origin.x) / dir.x;
     if t < 0.0 { return None; }
     Some(origin + dir * t)
+}
+
+/// Minimum distance from (z, y) to the Bézier curve defined by params.
+fn dist_to_bezier(params: &ChuteParams, z: f32, y: f32) -> f32 {
+    let pts = [params.p0, params.cp1, params.cp2, params.p3];
+    let n = 32u32;
+    (0..=n).map(|i| {
+        let t = i as f32 / n as f32;
+        let u = 1.0 - t;
+        let [p0, p1, p2, p3] = pts;
+        let bz = u*u*u*p0[0] + 3.0*u*u*t*p1[0] + 3.0*u*t*t*p2[0] + t*t*t*p3[0];
+        let by = u*u*u*p0[1] + 3.0*u*u*t*p1[1] + 3.0*u*t*t*p2[1] + t*t*t*p3[1];
+        ((bz - z).powi(2) + (by - y).powi(2)).sqrt()
+    }).fold(f32::MAX, f32::min)
 }

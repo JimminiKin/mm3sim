@@ -28,13 +28,13 @@ pub fn spawn_snare(
     let stop_upper_post_y =
         -(STOP_ARM_DIST * stop_upper_rad.sin()) + ARM_TUBE_RADIUS + STOP_TUBE_RADIUS;
     let chrome = materials.add(StandardMaterial {
-        base_color: Color::rgb(CHROME_COLOR.0, CHROME_COLOR.1, CHROME_COLOR.2),
+        base_color: Color::srgb(CHROME_COLOR.0, CHROME_COLOR.1, CHROME_COLOR.2),
         metallic: CHROME_METALLIC,
         perceptual_roughness: CHROME_ROUGHNESS,
         ..default()
     });
     let dark_steel = materials.add(StandardMaterial {
-        base_color: Color::rgb(DARK_STEEL_COLOR.0, DARK_STEEL_COLOR.1, DARK_STEEL_COLOR.2),
+        base_color: Color::srgb(DARK_STEEL_COLOR.0, DARK_STEEL_COLOR.1, DARK_STEEL_COLOR.2),
         metallic: DARK_STEEL_METALLIC,
         perceptual_roughness: DARK_STEEL_ROUGHNESS,
         ..default()

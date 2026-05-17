@@ -46,7 +46,7 @@ pub fn spawn_cycloid_chute(
         PbrBundle {
             mesh: meshes.add(build_smooth_mesh(pts)),
             material: materials.add(StandardMaterial {
-                base_color: Color::rgb(0.55, 0.45, 0.30),
+                base_color: Color::srgb(0.55, 0.45, 0.30),
                 metallic: 0.0,
                 perceptual_roughness: 0.65,
                 double_sided: true,

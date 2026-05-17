@@ -43,7 +43,7 @@ pub fn setup_axes_hud(
                     physical_size: UVec2::new(WIDGET_PX, WIDGET_PX),
                     ..default()
                 }),
-                clear_color: ClearColorConfig::Custom(Color::rgba(0.06, 0.06, 0.10, 1.0)),
+                clear_color: ClearColorConfig::Custom(Color::srgba(0.06, 0.06, 0.10, 1.0)),
                 ..default()
             },
             transform: Transform::from_xyz(0.0, 0.0, CAM_DIST).looking_at(Vec3::ZERO, Vec3::Y),
@@ -55,9 +55,9 @@ pub fn setup_axes_hud(
 
     // ── Axis arrows (shaft + arrowhead per axis) ──────────────────────────────
     let axis_defs = [
-        (Vec3::X, Color::rgb(0.90, 0.18, 0.18)),
-        (Vec3::Y, Color::rgb(0.18, 0.85, 0.18)),
-        (Vec3::Z, Color::rgb(0.20, 0.40, 0.95)),
+        (Vec3::X, Color::srgb(0.90, 0.18, 0.18)),
+        (Vec3::Y, Color::srgb(0.18, 0.85, 0.18)),
+        (Vec3::Z, Color::srgb(0.20, 0.40, 0.95)),
     ];
 
     for (dir, color) in axis_defs {
@@ -93,9 +93,9 @@ pub fn setup_axes_hud(
 
     // ── Letter labels (2D UI, positioned each frame via projection) ───────────
     let label_colors = [
-        Color::rgb(1.0, 0.45, 0.45),
-        Color::rgb(0.45, 1.0, 0.45),
-        Color::rgb(0.45, 0.65, 1.0),
+        Color::srgb(1.0, 0.45, 0.45),
+        Color::srgb(0.45, 1.0, 0.45),
+        Color::srgb(0.45, 0.65, 1.0),
     ];
     for (i, (letter, color)) in ["X", "Y", "Z"].iter().zip(label_colors.iter()).enumerate() {
         commands.spawn((

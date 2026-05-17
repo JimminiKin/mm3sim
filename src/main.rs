@@ -28,14 +28,21 @@ fn main() {
     app.add_plugins(
         DefaultPlugins
             .build()
-            .disable::<bevy::audio::AudioPlugin>(),
+            .disable::<bevy::audio::AudioPlugin>()
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    fit_canvas_to_parent: true,
+                    ..default()
+                }),
+                ..default()
+            }),
     );
     #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(DefaultPlugins);
 
     app.add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugins(EguiPlugin)
-        .insert_resource(ClearColor(Color::rgb(BG_COLOR.0, BG_COLOR.1, BG_COLOR.2)))
+        .insert_resource(ClearColor(Color::srgb(BG_COLOR.0, BG_COLOR.1, BG_COLOR.2)))
         .init_resource::<ChuteParams>()
         .init_resource::<MarbleCollisions>()
         .init_resource::<HandleDrag>()

@@ -88,7 +88,7 @@ pub fn spawn_marble(
                 radius: MARBLE_RADIUS,
             })),
             material: materials.add(StandardMaterial {
-                base_color: Color::rgb(MARBLE_COLOR.0, MARBLE_COLOR.1, MARBLE_COLOR.2),
+                base_color: Color::srgb(MARBLE_COLOR.0, MARBLE_COLOR.1, MARBLE_COLOR.2),
                 metallic: MARBLE_METALLIC,
                 perceptual_roughness: MARBLE_ROUGHNESS,
                 ..default()
@@ -131,7 +131,7 @@ pub fn spawn_chute_marble(
                 radius: MARBLE_RADIUS,
             })),
             material: materials.add(StandardMaterial {
-                base_color: Color::rgb(
+                base_color: Color::srgb(
                     CHUTE_MARBLE_COLOR.0,
                     CHUTE_MARBLE_COLOR.1,
                     CHUTE_MARBLE_COLOR.2,
