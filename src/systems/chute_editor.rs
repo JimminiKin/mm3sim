@@ -20,6 +20,7 @@ pub fn chute_editor_ui(
             if ui.checkbox(&mut params.straight, "Straight line").changed() {
                 changed = true;
             }
+            ui.checkbox(&mut params.handles_visible, "Show handles");
             ui.separator();
 
             drag_row(ui, "P0  start", &mut params.p0, &mut changed);

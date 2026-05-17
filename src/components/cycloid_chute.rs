@@ -10,7 +10,7 @@ use crate::resources::constants::*;
 #[derive(Component)]
 pub struct ChuteSegment;
 
-// ── Bézier helpers ────────────────────────────────────────────────────────────
+// ── Bézier helpers ─────────────────────────────────────────────────────────────
 
 fn bz(pts: [[f32; 2]; 4], t: f32) -> (f32, f32) {
     let u = 1.0 - t;
@@ -21,7 +21,6 @@ fn bz(pts: [[f32; 2]; 4], t: f32) -> (f32, f32) {
     )
 }
 
-/// cross(X, tangent_3d) = (0, −dz, dy), normalised — points toward the sliding surface.
 fn surface_normal(pts: [[f32; 2]; 4], t: f32) -> Vec3 {
     let u = 1.0 - t;
     let [p0, p1, p2, p3] = pts;
@@ -30,7 +29,35 @@ fn surface_normal(pts: [[f32; 2]; 4], t: f32) -> Vec3 {
     Vec3::new(0.0, -dz, dy).normalize_or_zero()
 }
 
-// ── Spawn ─────────────────────────────────────────────────────────────────────
+// ── Adaptive tessellation ──────────────────────────────────────────────────────
+
+/// Maximum chord-to-curve deviation in metres before a segment is subdivided.
+const FLATNESS: f32 = 0.0002; // 0.2 mm
+
+/// Returns a sorted list of t values that adapt to the curve's actual curvature.
+fn adaptive_ts(pts: [[f32; 2]; 4]) -> Vec<f32> {
+    let mut ts = vec![0.0f32, 1.0f32];
+    refine(&mut ts, pts, 0.0, 1.0, 0);
+    ts.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    ts
+}
+
+fn refine(ts: &mut Vec<f32>, pts: [[f32; 2]; 4], t0: f32, t1: f32, depth: u32) {
+    if depth >= 12 { return; }
+    let tm = (t0 + t1) * 0.5;
+    let (z0, y0) = bz(pts, t0);
+    let (z1, y1) = bz(pts, t1);
+    let (zm, ym) = bz(pts, tm);
+    let dz = zm - (z0 + z1) * 0.5;
+    let dy = ym - (y0 + y1) * 0.5;
+    if dz * dz + dy * dy > FLATNESS * FLATNESS {
+        ts.push(tm);
+        refine(ts, pts, t0, tm, depth + 1);
+        refine(ts, pts, tm, t1, depth + 1);
+    }
+}
+
+// ── Spawn ──────────────────────────────────────────────────────────────────────
 
 pub fn spawn_cycloid_chute(
     commands: &mut Commands,
@@ -39,12 +66,17 @@ pub fn spawn_cycloid_chute(
     params: &ChuteParams,
 ) {
     let pts = params.effective_pts();
+    let ts = adaptive_ts(pts);
 
-    let (coll_verts, coll_idx) = build_trimesh_collider(pts);
+    let (coll_verts, coll_idx) = build_trimesh_collider(pts, &ts);
+
+    // FIX_INTERNAL_EDGES prevents "ghost" impulses when the ball crosses
+    // the shared edge between two adjacent coplanar or smooth triangles.
+    let flags = TriMeshFlags::FIX_INTERNAL_EDGES | TriMeshFlags::MERGE_DUPLICATE_VERTICES;
 
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(build_smooth_mesh(pts)),
+            mesh: meshes.add(build_smooth_mesh(pts, &ts)),
             material: materials.add(StandardMaterial {
                 base_color: Color::srgb(0.55, 0.45, 0.30),
                 metallic: 0.0,
@@ -56,7 +88,7 @@ pub fn spawn_cycloid_chute(
             ..default()
         },
         RigidBody::Fixed,
-        Collider::trimesh(coll_verts, coll_idx),
+        Collider::trimesh_with_flags(coll_verts, coll_idx, flags),
         Restitution {
             coefficient: CHUTE_RESTITUTION,
             combine_rule: CoefficientCombineRule::Min,
@@ -66,20 +98,17 @@ pub fn spawn_cycloid_chute(
     ));
 }
 
-// ── Trimesh collider ──────────────────────────────────────────────────────────
+// ── Trimesh collider ───────────────────────────────────────────────────────────
 
-/// Builds a closed-shell trimesh that exactly matches the curve.
-/// 4 unique positions per cross-section (TL, TR, BL, BR).
-fn build_trimesh_collider(pts: [[f32; 2]; 4]) -> (Vec<Vec3>, Vec<[u32; 3]>) {
-    let n = CHUTE_SEGMENTS; // physics resolution
+fn build_trimesh_collider(pts: [[f32; 2]; 4], ts: &[f32]) -> (Vec<Vec3>, Vec<[u32; 3]>) {
+    let n = ts.len() - 1;
     let w = CHUTE_WIDTH * 0.5;
     let h = CHUTE_THICKNESS * 0.5;
     let x = CHUTE_END_X;
 
     let mut verts: Vec<Vec3> = Vec::with_capacity((n + 1) * 4);
 
-    for i in 0..=(n) {
-        let t = i as f32 / n as f32;
+    for &t in ts {
         let (z, y) = bz(pts, t);
         let sn = surface_normal(pts, t);
 
@@ -94,34 +123,27 @@ fn build_trimesh_collider(pts: [[f32; 2]; 4]) -> (Vec<Vec3>, Vec<[u32; 3]>) {
     }
 
     let mut idx: Vec<[u32; 3]> = Vec::with_capacity(n * 8);
-
     for i in 0..n as u32 {
         let a = i * 4;
         let b = (i + 1) * 4;
-
-        // top
-        idx.push([a,   b,   b+1]); idx.push([a,   b+1, a+1]);
-        // bottom
-        idx.push([a+3, b+3, b+2]); idx.push([a+3, b+2, a+2]);
-        // left
-        idx.push([a,   a+2, b+2]); idx.push([a,   b+2, b  ]);
-        // right
-        idx.push([a+1, b+1, b+3]); idx.push([a+1, b+3, a+3]);
+        idx.push([a,   b,   b+1]); idx.push([a,   b+1, a+1]); // top
+        idx.push([a+3, b+3, b+2]); idx.push([a+3, b+2, a+2]); // bottom
+        idx.push([a,   a+2, b+2]); idx.push([a,   b+2, b  ]); // left
+        idx.push([a+1, b+1, b+3]); idx.push([a+1, b+3, a+3]); // right
     }
 
     (verts, idx)
 }
 
-// ── Smooth visual mesh ────────────────────────────────────────────────────────
+// ── Smooth visual mesh ─────────────────────────────────────────────────────────
 
-/// Ribbon mesh with smooth normals along the curve — 4× more samples than the collider.
-fn build_smooth_mesh(pts: [[f32; 2]; 4]) -> Mesh {
-    let n = CHUTE_SEGMENTS * 4;
+fn build_smooth_mesh(pts: [[f32; 2]; 4], ts: &[f32]) -> Mesh {
+    let n = ts.len() - 1;
     let w = CHUTE_WIDTH * 0.5;
     let h = CHUTE_THICKNESS * 0.5;
     let x = CHUTE_END_X;
 
-    // 8 verts/section for sharp side edges with correct per-face normals:
+    // 8 verts/cross-section for sharp side edges with correct per-face normals:
     //  0,1 – top   (L, R)  normal = +sn
     //  2,3 – bot   (L, R)  normal = −sn
     //  4,5 – left  (T, B)  normal = −X
@@ -133,8 +155,7 @@ fn build_smooth_mesh(pts: [[f32; 2]; 4]) -> Mesh {
     let mut normals:   Vec<[f32; 3]> = Vec::with_capacity(cap);
     let mut uvs:       Vec<[f32; 2]> = Vec::with_capacity(cap);
 
-    for i in 0..=(n) {
-        let t = i as f32 / n as f32;
+    for &t in ts {
         let (z, y) = bz(pts, t);
         let sn = surface_normal(pts, t);
         let bn = -sn;
@@ -142,7 +163,6 @@ fn build_smooth_mesh(pts: [[f32; 2]; 4]) -> Mesh {
         let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y, z + CHUTE_ORIGIN_Z);
         let top = centre + sn * h;
         let bot = centre + bn * h;
-        let u = t;
 
         let push = |positions: &mut Vec<[f32; 3]>,
                     normals: &mut Vec<[f32; 3]>,
@@ -153,14 +173,14 @@ fn build_smooth_mesh(pts: [[f32; 2]; 4]) -> Mesh {
             uvs.push(uv);
         };
 
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(top.x-w,top.y,top.z), sn, [u,0.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(top.x+w,top.y,top.z), sn, [u,1.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(bot.x-w,bot.y,bot.z), bn, [u,0.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(bot.x+w,bot.y,bot.z), bn, [u,1.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(top.x-w,top.y,top.z), Vec3::NEG_X, [u,1.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(bot.x-w,bot.y,bot.z), Vec3::NEG_X, [u,0.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(top.x+w,top.y,top.z), Vec3::X,     [u,1.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(bot.x+w,bot.y,bot.z), Vec3::X,     [u,0.0]);
+        push(&mut positions, &mut normals, &mut uvs, Vec3::new(top.x-w, top.y, top.z), sn,          [t, 0.0]);
+        push(&mut positions, &mut normals, &mut uvs, Vec3::new(top.x+w, top.y, top.z), sn,          [t, 1.0]);
+        push(&mut positions, &mut normals, &mut uvs, Vec3::new(bot.x-w, bot.y, bot.z), bn,          [t, 0.0]);
+        push(&mut positions, &mut normals, &mut uvs, Vec3::new(bot.x+w, bot.y, bot.z), bn,          [t, 1.0]);
+        push(&mut positions, &mut normals, &mut uvs, Vec3::new(top.x-w, top.y, top.z), Vec3::NEG_X, [t, 1.0]);
+        push(&mut positions, &mut normals, &mut uvs, Vec3::new(bot.x-w, bot.y, bot.z), Vec3::NEG_X, [t, 0.0]);
+        push(&mut positions, &mut normals, &mut uvs, Vec3::new(top.x+w, top.y, top.z), Vec3::X,     [t, 1.0]);
+        push(&mut positions, &mut normals, &mut uvs, Vec3::new(bot.x+w, bot.y, bot.z), Vec3::X,     [t, 0.0]);
     }
 
     let mut indices: Vec<u32> = Vec::with_capacity(n * 4 * 6);
@@ -168,7 +188,7 @@ fn build_smooth_mesh(pts: [[f32; 2]; 4]) -> Mesh {
         let a = (i * STRIDE) as u32;
         let b = ((i + 1) * STRIDE) as u32;
         quad(&mut indices, a,   a+1, b,   b+1); // top
-        quad(&mut indices, a+3, a+2, b+3, b+2); // bot
+        quad(&mut indices, a+3, a+2, b+3, b+2); // bottom
         quad(&mut indices, b+4, b+5, a+4, a+5); // left
         quad(&mut indices, a+6, a+7, b+6, b+7); // right
     }

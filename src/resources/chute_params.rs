@@ -9,6 +9,7 @@ pub struct ChuteParams {
     pub cp2: [f32; 2],  // second inner handle (z, y)
     pub p3: [f32; 2],   // end (z, y)
     pub straight: bool,
+    pub handles_visible: bool,
     pub dirty: bool,
 }
 
@@ -19,7 +20,8 @@ impl Default for ChuteParams {
             cp1: [CHUTE_CP1.0,   CHUTE_CP1.1],
             cp2: [CHUTE_CP2.0,   CHUTE_CP2.1],
             p3:  [CHUTE_END_Z,   CHUTE_END_Y],
-            straight: false,
+            straight: true,
+            handles_visible: true,
             dirty: false,
         }
     }

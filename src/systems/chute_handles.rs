@@ -56,6 +56,20 @@ pub fn setup_chute_handles(
     }
 }
 
+/// Show or hide handle spheres when the flag changes.
+pub fn sync_handle_visibility(
+    params: Res<ChuteParams>,
+    mut handles: Query<&mut Visibility, With<ChuteHandle>>,
+) {
+    if !params.is_changed() {
+        return;
+    }
+    let vis = if params.handles_visible { Visibility::Inherited } else { Visibility::Hidden };
+    for mut v in &mut handles {
+        *v = vis;
+    }
+}
+
 /// Keep handle sphere positions in sync with ChuteParams every frame.
 pub fn sync_handle_transforms(
     params: Res<ChuteParams>,
@@ -82,6 +96,10 @@ pub fn chute_handle_drag_system(
     mut contexts: EguiContexts,
 ) {
     if contexts.ctx_mut().wants_pointer_input() {
+        return;
+    }
+    if !params.handles_visible {
+        drag.active = None;
         return;
     }
 

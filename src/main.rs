@@ -22,7 +22,7 @@ use systems::hud::{setup_hud, update_hud_system, record_snare_aoa_system, track_
 use systems::chute_editor::{chute_editor_ui, rebuild_chute_system};
 use systems::marble_graph::{record_chute_marble_system, marble_graph_ui};
 use systems::chute_handles::{
-    HandleDrag, setup_chute_handles, sync_handle_transforms,
+    HandleDrag, setup_chute_handles, sync_handle_transforms, sync_handle_visibility,
     chute_handle_drag_system, draw_chute_gizmos,
 };
 
@@ -76,6 +76,7 @@ fn main() {
                 marble_graph_ui,
                 update_marble_collisions,
                 sync_handle_transforms,
+                sync_handle_visibility,
                 draw_chute_gizmos,
             ),
         )

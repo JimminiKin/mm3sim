@@ -61,7 +61,9 @@ pub fn setup_marble_trail_assets(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let mesh = meshes.add(Mesh::from(Sphere { radius: TRAIL_DOT_RADIUS }));
+    let mesh = meshes.add(Mesh::from(Sphere {
+        radius: TRAIL_DOT_RADIUS,
+    }));
     let drop_mat = materials.add(StandardMaterial {
         base_color: Color::srgba(MARBLE_COLOR.0, MARBLE_COLOR.1, MARBLE_COLOR.2, 0.55),
         alpha_mode: AlphaMode::Blend,
@@ -79,7 +81,11 @@ pub fn setup_marble_trail_assets(
         unlit: true,
         ..default()
     });
-    commands.insert_resource(MarbleTrailAssets { mesh, drop_mat, chute_mat });
+    commands.insert_resource(MarbleTrailAssets {
+        mesh,
+        drop_mat,
+        chute_mat,
+    });
 }
 
 // ── Trail dot marker ──────────────────────────────────────────────────────────
@@ -127,8 +133,22 @@ pub fn spawn_marble_on_click_system(
         rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
     );
 
-    spawn_marble(&mut commands, &mut meshes, &mut materials, spawn_position, marble_col.0, spawn_time);
-    spawn_chute_marble(&mut commands, &mut meshes, &mut materials, &chute_params, marble_col.0, spawn_time);
+    spawn_marble(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        spawn_position,
+        marble_col.0,
+        spawn_time,
+    );
+    spawn_chute_marble(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &chute_params,
+        marble_col.0,
+        spawn_time,
+    );
 }
 
 pub fn spawn_marble(
@@ -144,7 +164,9 @@ pub fn spawn_marble(
         SpawnTime(spawn_time),
         TrailTimer(0.0),
         PbrBundle {
-            mesh: meshes.add(Mesh::from(Sphere { radius: MARBLE_RADIUS })),
+            mesh: meshes.add(Mesh::from(Sphere {
+                radius: MARBLE_RADIUS,
+            })),
             material: materials.add(StandardMaterial {
                 base_color: Color::srgb(MARBLE_COLOR.0, MARBLE_COLOR.1, MARBLE_COLOR.2),
                 metallic: MARBLE_METALLIC,
@@ -175,8 +197,8 @@ pub fn spawn_chute_marble(
     spawn_time: f32,
 ) {
     let pts = chute_params.effective_pts();
-    let p0 = pts[0];   // [z, y]
-    let cp1 = pts[1];  // [z, y]
+    let p0 = pts[0]; // [z, y]
+    let cp1 = pts[1]; // [z, y]
 
     // Surface normal at t=0: cross(X, tangent_3d) where tangent = (0, dy, dz)
     let dz = 3.0 * (cp1[0] - p0[0]);
@@ -184,7 +206,10 @@ pub fn spawn_chute_marble(
     let normal = Vec3::new(0.0, -dz, dy).normalize_or_zero();
 
     let chute_centre = Vec3::new(CHUTE_END_X, p0[1] + CHUTE_ORIGIN_Y, p0[0] + CHUTE_ORIGIN_Z);
-    let position = chute_centre + normal * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS);
+    // Embed 1 mm into the surface: at spawn velocity=0 so Rapier's speculative-contact
+    // prediction sees no approaching velocity and skips contact for one step, letting
+    // gravity act freely. A small penetration depth forces immediate resolution.
+    let position = chute_centre + normal * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.004);
     commands.spawn((
         Marble,
         ChuteMarble,
@@ -192,7 +217,9 @@ pub fn spawn_chute_marble(
         TrailTimer(0.0),
         SlideData::default(),
         PbrBundle {
-            mesh: meshes.add(Mesh::from(Sphere { radius: MARBLE_RADIUS })),
+            mesh: meshes.add(Mesh::from(Sphere {
+                radius: MARBLE_RADIUS,
+            })),
             material: materials.add(StandardMaterial {
                 base_color: Color::srgb(
                     CHUTE_MARBLE_COLOR.0,
