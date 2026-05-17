@@ -2,7 +2,7 @@ use bevy::{
     math::primitives::Cuboid,
     prelude::*,
     render::{camera::Viewport, view::RenderLayers},
-    window::PrimaryWindow,
+    window::{PrimaryWindow, WindowResized},
 };
 
 use crate::systems::camera::OrbitCamera;
@@ -163,6 +163,26 @@ pub fn update_axes_hud(
                 style.left = Val::Px(-100.0);
                 style.top = Val::Px(-100.0);
             }
+        }
+    }
+}
+
+/// Keeps the axes widget pinned to the bottom-right corner after a window resize.
+pub fn resize_axes_viewport(
+    mut events: EventReader<WindowResized>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    mut axes_cam: Query<&mut Camera, With<AxesCamera>>,
+) {
+    for _ in events.read() {
+        let Ok(window) = windows.get_single() else { continue };
+        let pw = window.physical_width();
+        let ph = window.physical_height();
+        let Ok(mut cam) = axes_cam.get_single_mut() else { continue };
+        if let Some(vp) = &mut cam.viewport {
+            vp.physical_position = UVec2::new(
+                pw.saturating_sub(WIDGET_PX + 10),
+                ph.saturating_sub(WIDGET_PX + 10),
+            );
         }
     }
 }
