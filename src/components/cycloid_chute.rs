@@ -38,7 +38,7 @@ pub fn spawn_cycloid_chute(
     materials: &mut ResMut<Assets<StandardMaterial>>,
     params: &ChuteParams,
 ) {
-    let pts = [params.p0, params.cp1, params.cp2, params.p3];
+    let pts = params.effective_pts();
 
     let (coll_verts, coll_idx) = build_trimesh_collider(pts);
 
@@ -83,8 +83,9 @@ fn build_trimesh_collider(pts: [[f32; 2]; 4]) -> (Vec<Vec3>, Vec<[u32; 3]>) {
         let (z, y) = bz(pts, t);
         let sn = surface_normal(pts, t);
 
-        let top = Vec3::new(x, y, z) + sn * h;
-        let bot = Vec3::new(x, y, z) - sn * h;
+        let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y, z + CHUTE_ORIGIN_Z);
+        let top = centre + sn * h;
+        let bot = centre - sn * h;
 
         verts.push(Vec3::new(top.x - w, top.y, top.z)); // i*4+0 TL
         verts.push(Vec3::new(top.x + w, top.y, top.z)); // i*4+1 TR
@@ -138,8 +139,9 @@ fn build_smooth_mesh(pts: [[f32; 2]; 4]) -> Mesh {
         let sn = surface_normal(pts, t);
         let bn = -sn;
 
-        let top = Vec3::new(x, y, z) + sn * h;
-        let bot = Vec3::new(x, y, z) + bn * h;
+        let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y, z + CHUTE_ORIGIN_Z);
+        let top = centre + sn * h;
+        let bot = centre + bn * h;
         let u = t;
 
         let push = |positions: &mut Vec<[f32; 3]>,

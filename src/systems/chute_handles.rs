@@ -4,12 +4,12 @@ use bevy::window::PrimaryWindow;
 use bevy_egui::EguiContexts;
 
 use crate::resources::chute_params::ChuteParams;
-use crate::resources::constants::CHUTE_END_X;
+use crate::resources::constants::{CHUTE_END_X, CHUTE_ORIGIN_Y, CHUTE_ORIGIN_Z};
 use crate::systems::camera::OrbitCamera;
 
-const HANDLE_RADIUS: f32 = 0.12;
-const PICK_RADIUS: f32 = 0.25;
-const PICK_BODY_RADIUS: f32 = 0.35;
+const HANDLE_RADIUS: f32 = 0.012;
+const PICK_RADIUS: f32 = 0.025;
+const PICK_BODY_RADIUS: f32 = 0.035;
 
 const COLORS: [Color; 4] = [
     Color::srgb(0.20, 0.90, 0.20), // P0  – green
@@ -48,7 +48,7 @@ pub fn setup_chute_handles(
                     unlit: true,
                     ..default()
                 }),
-                transform: Transform::from_xyz(CHUTE_END_X, pt[1], pt[0]),
+                transform: Transform::from_xyz(CHUTE_END_X, pt[1] + CHUTE_ORIGIN_Y, pt[0] + CHUTE_ORIGIN_Z),
                 ..default()
             },
             ChuteHandle(i),
@@ -68,7 +68,7 @@ pub fn sync_handle_transforms(
             2 => params.cp2,
             _ => params.p3,
         };
-        tf.translation = Vec3::new(CHUTE_END_X, pt[1], pt[0]);
+        tf.translation = Vec3::new(CHUTE_END_X, pt[1] + CHUTE_ORIGIN_Y, pt[0] + CHUTE_ORIGIN_Z);
     }
 }
 
@@ -106,10 +106,11 @@ pub fn chute_handle_drag_system(
         drag.active = if let Some((idx, _)) = best {
             Some(DragState::Handle(idx))
         } else if let Some(hit) = ray_x_plane(origin, dir, CHUTE_END_X) {
-            // No handle hit — check if we clicked on the chute body
-            if dist_to_bezier(&params, hit.z, hit.y) < PICK_BODY_RADIUS {
+            // No handle hit — check if we clicked on the chute body.
+            // Convert world hit to param space before testing.
+            if dist_to_bezier(&params, hit.z - CHUTE_ORIGIN_Z, hit.y - CHUTE_ORIGIN_Y) < PICK_BODY_RADIUS {
                 Some(DragState::Body {
-                    anchor: [hit.z, hit.y],
+                    anchor: [hit.z - CHUTE_ORIGIN_Z, hit.y - CHUTE_ORIGIN_Y],
                     initial: [params.p0, params.cp1, params.cp2, params.p3],
                 })
             } else {
@@ -139,8 +140,8 @@ pub fn chute_handle_drag_system(
                         2 => &mut params.cp2,
                         _ => &mut params.p3,
                     };
-                    pt[0] = hit.z;
-                    pt[1] = hit.y;
+                    pt[0] = hit.z - CHUTE_ORIGIN_Z;
+                    pt[1] = hit.y - CHUTE_ORIGIN_Y;
                 }
                 Some(DragState::Body { anchor, initial }) => {
                     let dz = hit.z - anchor[0];
@@ -159,14 +160,18 @@ pub fn chute_handle_drag_system(
 /// Draw tangent arms and Bézier curve preview using gizmos.
 pub fn draw_chute_gizmos(params: Res<ChuteParams>, mut gizmos: Gizmos) {
     let x = CHUTE_END_X;
-    let p0  = Vec3::new(x, params.p0[1],  params.p0[0]);
-    let cp1 = Vec3::new(x, params.cp1[1], params.cp1[0]);
-    let cp2 = Vec3::new(x, params.cp2[1], params.cp2[0]);
-    let p3  = Vec3::new(x, params.p3[1],  params.p3[0]);
+    let to_world = |pt: [f32; 2]| Vec3::new(x, pt[1] + CHUTE_ORIGIN_Y, pt[0] + CHUTE_ORIGIN_Z);
+    let pts = params.effective_pts();
+    let p0  = to_world(pts[0]);
+    let cp1 = to_world(pts[1]);
+    let cp2 = to_world(pts[2]);
+    let p3  = to_world(pts[3]);
 
-    // Tangent arms
-    gizmos.line(p0, cp1, Color::srgb(0.95, 0.85, 0.20));
-    gizmos.line(p3, cp2, Color::srgb(0.95, 0.85, 0.20));
+    // Tangent arms — only meaningful in curve mode
+    if !params.straight {
+        gizmos.line(p0, to_world(params.cp1), Color::srgb(0.95, 0.85, 0.20));
+        gizmos.line(p3, to_world(params.cp2), Color::srgb(0.95, 0.85, 0.20));
+    }
 
     // Curve preview
     let n = 64usize;

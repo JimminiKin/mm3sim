@@ -17,10 +17,17 @@ pub fn chute_editor_ui(
         .show(ctx, |ui| {
             let mut changed = false;
 
-            drag_row(ui, "P0  start",    &mut params.p0,  &mut changed);
-            drag_row(ui, "CP1 handle 1", &mut params.cp1, &mut changed);
-            drag_row(ui, "CP2 handle 2", &mut params.cp2, &mut changed);
-            drag_row(ui, "P3  end",      &mut params.p3,  &mut changed);
+            if ui.checkbox(&mut params.straight, "Straight line").changed() {
+                changed = true;
+            }
+            ui.separator();
+
+            drag_row(ui, "P0  start", &mut params.p0, &mut changed);
+            ui.add_enabled_ui(!params.straight, |ui| {
+                drag_row(ui, "CP1 handle 1", &mut params.cp1, &mut changed);
+                drag_row(ui, "CP2 handle 2", &mut params.cp2, &mut changed);
+            });
+            drag_row(ui, "P3  end", &mut params.p3, &mut changed);
 
             ui.separator();
             let old_col = marble_col.bypass_change_detection().0;

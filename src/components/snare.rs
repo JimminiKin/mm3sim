@@ -7,6 +7,9 @@ use crate::resources::constants::*;
 #[derive(Component)]
 pub struct SnareDrum;
 
+#[derive(Component)]
+pub struct PivotArm;
+
 pub fn spawn_snare(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -69,6 +72,7 @@ pub fn spawn_snare(
                     .with_rotation(Quat::from_rotation_x(arm_rad)),
             ),
             RigidBody::Dynamic,
+            PivotArm,
             Damping {
                 linear_damping: ARM_LINEAR_DAMPING,
                 angular_damping: ARM_ANGULAR_DAMPING,

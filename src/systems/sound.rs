@@ -4,10 +4,20 @@ use bevy_rapier3d::prelude::*;
 use crate::components::snare::SnareDrum;
 use crate::systems::marble::Marble;
 
+const MAX_IMPACT_SPEED: f32 = 4.0; // m/s — marble free-fall from 0.80 m spawn height
+
+fn impact_volume(speed: f32) -> f32 {
+    // Square-root curve: quieter hits stay audible, loud hits don't clip
+    (speed / MAX_IMPACT_SPEED).clamp(0.0, 1.0).powf(0.5)
+}
+
 // ── Native: pre-bake WAV into a Bevy AudioSource ─────────────────────────────
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
+
+#[cfg(not(target_arch = "wasm32"))]
+use bevy::audio::Volume;
 
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Resource)]
@@ -27,7 +37,7 @@ pub fn setup_snare_sound(
 #[cfg(not(target_arch = "wasm32"))]
 pub fn snare_hit_sound_system(
     mut events: EventReader<CollisionEvent>,
-    marbles: Query<(), With<Marble>>,
+    marbles: Query<&Velocity, With<Marble>>,
     snares: Query<(), With<SnareDrum>>,
     sound: Option<Res<SnareHitSound>>,
     mut commands: Commands,
@@ -35,14 +45,25 @@ pub fn snare_hit_sound_system(
     let Some(sound) = sound else { return };
     for event in events.read() {
         let CollisionEvent::Started(e1, e2, _) = event else { continue };
-        let hit = (marbles.contains(*e1) && snares.contains(*e2))
-            || (marbles.contains(*e2) && snares.contains(*e1));
-        if hit {
-            commands.spawn(AudioBundle {
-                source: sound.0.clone(),
-                settings: PlaybackSettings::ONCE,
-            });
-        }
+        let marble_entity = if marbles.contains(*e1) && snares.contains(*e2) {
+            *e1
+        } else if marbles.contains(*e2) && snares.contains(*e1) {
+            *e2
+        } else {
+            continue;
+        };
+
+        let speed = marbles.get(marble_entity)
+            .map(|v| v.linvel.length())
+            .unwrap_or(0.0);
+
+        commands.spawn(AudioBundle {
+            source: sound.0.clone(),
+            settings: PlaybackSettings {
+                volume: Volume::new(impact_volume(speed)),
+                ..PlaybackSettings::ONCE
+            },
+        });
     }
 }
 
@@ -64,21 +85,29 @@ pub fn setup_snare_sound() {
 #[cfg(target_arch = "wasm32")]
 pub fn snare_hit_sound_system(
     mut events: EventReader<CollisionEvent>,
-    marbles: Query<(), With<Marble>>,
+    marbles: Query<&Velocity, With<Marble>>,
     snares: Query<(), With<SnareDrum>>,
 ) {
     for event in events.read() {
         let CollisionEvent::Started(e1, e2, _) = event else { continue };
-        let hit = (marbles.contains(*e1) && snares.contains(*e2))
-            || (marbles.contains(*e2) && snares.contains(*e1));
-        if hit {
-            play_snare_web_audio();
-        }
+        let marble_entity = if marbles.contains(*e1) && snares.contains(*e2) {
+            *e1
+        } else if marbles.contains(*e2) && snares.contains(*e1) {
+            *e2
+        } else {
+            continue;
+        };
+
+        let speed = marbles.get(marble_entity)
+            .map(|v| v.linvel.length())
+            .unwrap_or(0.0);
+
+        play_snare_web_audio(impact_volume(speed));
     }
 }
 
 #[cfg(target_arch = "wasm32")]
-fn play_snare_web_audio() {
+fn play_snare_web_audio(volume: f32) {
     AUDIO_CTX.with(|slot| {
         let borrow = slot.borrow();
         let Some(ctx) = borrow.as_ref() else { return };
@@ -92,7 +121,12 @@ fn play_snare_web_audio() {
 
         let Ok(source) = ctx.create_buffer_source() else { return };
         source.set_buffer(Some(&buf));
-        let _ = source.connect_with_audio_node(&ctx.destination());
+
+        let Ok(gain) = ctx.create_gain() else { return };
+        gain.gain().set_value(volume);
+
+        let _ = source.connect_with_audio_node(&gain);
+        let _ = gain.connect_with_audio_node(&ctx.destination());
         let _ = source.start();
     });
 }
