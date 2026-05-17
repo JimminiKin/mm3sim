@@ -106,7 +106,11 @@ pub fn spawn_marble_on_click_system(
     time: Res<Time>,
     trail_dots: Query<Entity, With<TrailDot>>,
     snare: Query<&GlobalTransform, With<SnareDrum>>,
+    mut contexts: bevy_egui::EguiContexts,
 ) {
+    if contexts.ctx_mut().wants_pointer_input() {
+        return;
+    }
     if drag.active.is_some() {
         return;
     }
