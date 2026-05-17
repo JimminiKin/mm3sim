@@ -9,11 +9,10 @@ pub const LIGHT_ROT_Z: f32 = 0.0;
 pub const AMBIENT_BRIGHTNESS: f32 = 0.35;
 
 // ── Camera ───────────────────────────────────────────────────────────────────
-pub const CAMERA_POS: (f32, f32, f32) = (0.0, 8.0, 14.0);
-// Derived from CAMERA_POS: radius = sqrt(8²+14²), pitch = -atan(8/14)
+pub const CAMERA_POS: (f32, f32, f32) = (16.0, -1.0, -1.8);
 pub const CAMERA_INITIAL_RADIUS: f32 = 16.12;
 pub const CAMERA_INITIAL_PITCH: f32 = -0.52;
-pub const CAMERA_INITIAL_YAW: f32 = 0.0;
+pub const CAMERA_INITIAL_YAW: f32 = 1.7;
 pub const CAMERA_ORBIT_SENSITIVITY: f32 = 0.005;
 pub const CAMERA_PAN_SENSITIVITY: f32 = 0.0015;
 pub const CAMERA_ZOOM_SPEED: f32 = 0.8;
@@ -98,11 +97,11 @@ pub const CHUTE_END_Y: f32 = 2.0;
 pub const CHUTE_END_Z: f32 = 0.0;
 pub const CHUTE_START_Z: f32 = 3.83;
 pub const CHUTE_START_Y: f32 = 4.44;
-pub const CHUTE_CP1: (f32, f32) = (3.83, 2.0);  // (z, y) first inner handle
-pub const CHUTE_CP2: (f32, f32) = (0.0, 3.5);   // (z, y) second inner handle
+pub const CHUTE_CP1: (f32, f32) = (3.83, 2.0); // (z, y) first inner handle
+pub const CHUTE_CP2: (f32, f32) = (0.0, 3.5); // (z, y) second inner handle
 pub const CHUTE_THICKNESS: f32 = 0.04;
 pub const CHUTE_WIDTH: f32 = 0.30;
 pub const CHUTE_SEGMENTS: usize = 64;
-pub const CHUTE_RESTITUTION: f32 = 0.35; // steel-on-ABS ~0.3-0.4
-pub const CHUTE_FRICTION: f32 = 0.40;   // ABS has moderate grip on steel
+pub const CHUTE_RESTITUTION: f32 = 0.05;
+pub const CHUTE_FRICTION: f32 = 0.40; // ABS has moderate grip on steel
 pub const CHUTE_MARBLE_COLOR: (f32, f32, f32) = (0.20, 0.45, 0.90);

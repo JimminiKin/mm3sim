@@ -138,7 +138,12 @@ pub fn update_hud_system(
     match (last_hit.drop, last_hit.chute) {
         (Some(d), Some(c)) => {
             let delta_ms = (c.time_s - d.time_s) * 1000.0;
-            out.push_str(&format!("Δt = {:+.1} ms (+ = chute later)\n", delta_ms));
+            let (adverb, abs_ms) = if delta_ms >= 0.0 {
+                ("late", delta_ms)
+            } else {
+                ("early", -delta_ms)
+            };
+            out.push_str(&format!("Chute marble is {abs_ms:.1} ms {adverb}\n"));
         }
         _ => out.push_str("Δt = --\n"),
     }
