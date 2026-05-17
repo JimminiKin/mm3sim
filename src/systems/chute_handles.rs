@@ -12,10 +12,10 @@ const PICK_RADIUS: f32 = 0.025;
 const PICK_BODY_RADIUS: f32 = 0.035;
 
 const COLORS: [Color; 4] = [
-    Color::srgb(0.20, 0.90, 0.20), // P0  – green
-    Color::srgb(0.95, 0.80, 0.10), // CP1 – yellow
-    Color::srgb(0.95, 0.45, 0.10), // CP2 – orange
-    Color::srgb(0.90, 0.10, 0.10), // P3  – red
+    Color::srgba(0.20, 0.90, 0.20, 0.35), // P0  – green
+    Color::srgba(0.95, 0.80, 0.10, 0.35), // CP1 – yellow
+    Color::srgba(0.95, 0.45, 0.10, 0.35), // CP2 – orange
+    Color::srgba(0.90, 0.10, 0.10, 0.35), // P3  – red
 ];
 
 #[derive(Component)]
@@ -24,7 +24,10 @@ pub struct ChuteHandle(pub usize); // 0=P0, 1=CP1, 2=CP2, 3=P3
 pub enum DragState {
     Handle(usize),
     /// anchor and initial are stored as [z, y] matching ChuteParams point layout
-    Body { anchor: [f32; 2], initial: [[f32; 2]; 4] },
+    Body {
+        anchor: [f32; 2],
+        initial: [[f32; 2]; 4],
+    },
 }
 
 #[derive(Resource, Default)]
@@ -42,13 +45,20 @@ pub fn setup_chute_handles(
     for (i, (pt, &color)) in pts.iter().zip(COLORS.iter()).enumerate() {
         commands.spawn((
             PbrBundle {
-                mesh: meshes.add(Mesh::from(Sphere { radius: HANDLE_RADIUS })),
+                mesh: meshes.add(Mesh::from(Sphere {
+                    radius: HANDLE_RADIUS,
+                })),
                 material: materials.add(StandardMaterial {
                     base_color: color,
+                    alpha_mode: AlphaMode::Blend,
                     unlit: true,
                     ..default()
                 }),
-                transform: Transform::from_xyz(CHUTE_END_X, pt[1] + CHUTE_ORIGIN_Y, pt[0] + CHUTE_ORIGIN_Z),
+                transform: Transform::from_xyz(
+                    CHUTE_END_X,
+                    pt[1] + CHUTE_ORIGIN_Y,
+                    pt[0] + CHUTE_ORIGIN_Z,
+                ),
                 ..default()
             },
             ChuteHandle(i),
@@ -67,10 +77,18 @@ pub fn sync_handle_visibility(
     for (handle, mut vis) in &mut handles {
         *vis = match handle.0 {
             0 | 3 => {
-                if params.endpoints_visible { Visibility::Inherited } else { Visibility::Hidden }
+                if params.endpoints_visible {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                }
             }
             _ => {
-                if params.handles_visible && !params.straight { Visibility::Inherited } else { Visibility::Hidden }
+                if params.handles_visible && !params.straight {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                }
             }
         };
     }
@@ -110,10 +128,18 @@ pub fn chute_handle_drag_system(
         return;
     }
 
-    let Ok(window) = windows.get_single() else { return };
-    let Some(cursor) = window.cursor_position() else { return };
-    let Ok((camera, cam_gt)) = camera_q.get_single() else { return };
-    let Some(ray) = camera.viewport_to_world(cam_gt, cursor) else { return };
+    let Ok(window) = windows.get_single() else {
+        return;
+    };
+    let Some(cursor) = window.cursor_position() else {
+        return;
+    };
+    let Ok((camera, cam_gt)) = camera_q.get_single() else {
+        return;
+    };
+    let Some(ray) = camera.viewport_to_world(cam_gt, cursor) else {
+        return;
+    };
 
     let origin = ray.origin;
     let dir = Vec3::from(ray.direction);
@@ -126,7 +152,9 @@ pub fn chute_handle_drag_system(
                 0 | 3 => params.endpoints_visible,
                 _ => params.handles_visible && !params.straight,
             };
-            if !visible { continue; }
+            if !visible {
+                continue;
+            }
             if let Some(t) = ray_sphere(origin, dir, tf.translation, PICK_RADIUS) {
                 if best.map_or(true, |(_, bt)| t < bt) {
                     best = Some((handle.0, t));
@@ -138,9 +166,11 @@ pub fn chute_handle_drag_system(
         } else if let Some(hit) = ray_x_plane(origin, dir, CHUTE_END_X) {
             // No handle hit — check if we clicked on the chute body.
             // Convert world hit to param space before testing.
-            if dist_to_bezier(&params, hit.z - CHUTE_ORIGIN_Z, hit.y - CHUTE_ORIGIN_Y) < PICK_BODY_RADIUS {
+            if dist_to_bezier(&params, hit.z - CHUTE_ORIGIN_Z, hit.y - CHUTE_ORIGIN_Y)
+                < PICK_BODY_RADIUS
+            {
                 Some(DragState::Body {
-                    anchor: [hit.z - CHUTE_ORIGIN_Z, hit.y - CHUTE_ORIGIN_Y],
+                    anchor: [hit.z, hit.y],
                     initial: [params.p0, params.cp1, params.cp2, params.p3],
                 })
             } else {
@@ -176,10 +206,10 @@ pub fn chute_handle_drag_system(
                 Some(DragState::Body { anchor, initial }) => {
                     let dz = hit.z - anchor[0];
                     let dy = hit.y - anchor[1];
-                    params.p0  = [initial[0][0] + dz, initial[0][1] + dy];
+                    params.p0 = [initial[0][0] + dz, initial[0][1] + dy];
                     params.cp1 = [initial[1][0] + dz, initial[1][1] + dy];
                     params.cp2 = [initial[2][0] + dz, initial[2][1] + dy];
-                    params.p3  = [initial[3][0] + dz, initial[3][1] + dy];
+                    params.p3 = [initial[3][0] + dz, initial[3][1] + dy];
                 }
                 None => {}
             }
@@ -192,10 +222,10 @@ pub fn draw_chute_gizmos(params: Res<ChuteParams>, mut gizmos: Gizmos) {
     let x = CHUTE_END_X;
     let to_world = |pt: [f32; 2]| Vec3::new(x, pt[1] + CHUTE_ORIGIN_Y, pt[0] + CHUTE_ORIGIN_Z);
     let pts = params.effective_pts();
-    let p0  = to_world(pts[0]);
+    let p0 = to_world(pts[0]);
     let cp1 = to_world(pts[1]);
     let cp2 = to_world(pts[2]);
-    let p3  = to_world(pts[3]);
+    let p3 = to_world(pts[3]);
 
     // Tangent arms — only meaningful in curve mode
     if !params.straight {
@@ -218,7 +248,7 @@ pub fn draw_chute_gizmos(params: Res<ChuteParams>, mut gizmos: Gizmos) {
 
 fn bezier(p0: Vec3, p1: Vec3, p2: Vec3, p3: Vec3, t: f32) -> Vec3 {
     let u = 1.0 - t;
-    u*u*u*p0 + 3.0*u*u*t*p1 + 3.0*u*t*t*p2 + t*t*t*p3
+    u * u * u * p0 + 3.0 * u * u * t * p1 + 3.0 * u * t * t * p2 + t * t * t * p3
 }
 
 /// Returns distance along ray to sphere hit, or None.
@@ -227,17 +257,25 @@ fn ray_sphere(origin: Vec3, dir: Vec3, center: Vec3, radius: f32) -> Option<f32>
     let b = oc.dot(dir);
     let c = oc.length_squared() - radius * radius;
     let disc = b * b - c;
-    if disc < 0.0 { return None; }
+    if disc < 0.0 {
+        return None;
+    }
     let t = -b - disc.sqrt();
-    if t < 0.0 { return None; }
+    if t < 0.0 {
+        return None;
+    }
     Some(t)
 }
 
 /// Returns intersection point of ray with the plane x = plane_x.
 fn ray_x_plane(origin: Vec3, dir: Vec3, plane_x: f32) -> Option<Vec3> {
-    if dir.x.abs() < 1e-6 { return None; }
+    if dir.x.abs() < 1e-6 {
+        return None;
+    }
     let t = (plane_x - origin.x) / dir.x;
-    if t < 0.0 { return None; }
+    if t < 0.0 {
+        return None;
+    }
     Some(origin + dir * t)
 }
 
@@ -245,12 +283,20 @@ fn ray_x_plane(origin: Vec3, dir: Vec3, plane_x: f32) -> Option<Vec3> {
 fn dist_to_bezier(params: &ChuteParams, z: f32, y: f32) -> f32 {
     let pts = [params.p0, params.cp1, params.cp2, params.p3];
     let n = 32u32;
-    (0..=n).map(|i| {
-        let t = i as f32 / n as f32;
-        let u = 1.0 - t;
-        let [p0, p1, p2, p3] = pts;
-        let bz = u*u*u*p0[0] + 3.0*u*u*t*p1[0] + 3.0*u*t*t*p2[0] + t*t*t*p3[0];
-        let by = u*u*u*p0[1] + 3.0*u*u*t*p1[1] + 3.0*u*t*t*p2[1] + t*t*t*p3[1];
-        ((bz - z).powi(2) + (by - y).powi(2)).sqrt()
-    }).fold(f32::MAX, f32::min)
+    (0..=n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let u = 1.0 - t;
+            let [p0, p1, p2, p3] = pts;
+            let bz = u * u * u * p0[0]
+                + 3.0 * u * u * t * p1[0]
+                + 3.0 * u * t * t * p2[0]
+                + t * t * t * p3[0];
+            let by = u * u * u * p0[1]
+                + 3.0 * u * u * t * p1[1]
+                + 3.0 * u * t * t * p2[1]
+                + t * t * t * p3[1];
+            ((bz - z).powi(2) + (by - y).powi(2)).sqrt()
+        })
+        .fold(f32::MAX, f32::min)
 }

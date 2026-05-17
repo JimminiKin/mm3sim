@@ -233,6 +233,10 @@ pub fn hud_panel_ui(
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("Runs").strong());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.small_button("Reset").clicked() {
+                        all_runs.runs.clear();
+                        all_runs.next_index = 0;
+                    }
                     if ui.small_button("Collapse All").clicked() {
                         all_runs.force_all_open = Some(false);
                     }
