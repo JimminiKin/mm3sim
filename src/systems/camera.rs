@@ -28,12 +28,17 @@ pub fn orbit_camera_system(
     mut scroll: EventReader<MouseWheel>,
     mut query: Query<(&mut OrbitCamera, &mut Transform)>,
 ) {
-    let mut delta = Vec2::ZERO;
-    let mut zoom = 0.0;
+    let orbiting = mouse_buttons.pressed(MouseButton::Right);
+    let panning  = mouse_buttons.pressed(MouseButton::Middle);
 
-    if mouse_buttons.pressed(MouseButton::Right) {
+    let mut orbit_delta = Vec2::ZERO;
+    let mut pan_delta   = Vec2::ZERO;
+    let mut zoom        = 0.0;
+
+    if orbiting || panning {
         for ev in motion.read() {
-            delta += ev.delta;
+            if orbiting { orbit_delta += ev.delta; }
+            if panning  { pan_delta   += ev.delta; }
         }
     } else {
         motion.clear();
@@ -48,11 +53,17 @@ pub fn orbit_camera_system(
 
     let Ok((mut cam, mut transform)) = query.get_single_mut() else { return };
 
-    cam.yaw -= delta.x * CAMERA_ORBIT_SENSITIVITY;
-    cam.pitch = (cam.pitch - delta.y * CAMERA_ORBIT_SENSITIVITY)
+    cam.yaw -= orbit_delta.x * CAMERA_ORBIT_SENSITIVITY;
+    cam.pitch = (cam.pitch - orbit_delta.y * CAMERA_ORBIT_SENSITIVITY)
         .clamp(CAMERA_PITCH_MIN, CAMERA_PITCH_MAX);
     cam.radius = (cam.radius - zoom * CAMERA_ZOOM_SPEED)
         .clamp(CAMERA_RADIUS_MIN, CAMERA_RADIUS_MAX);
+
+    if pan_delta != Vec2::ZERO {
+        let scale = cam.radius * CAMERA_PAN_SENSITIVITY;
+        cam.focus -= transform.right()   * pan_delta.x * scale;
+        cam.focus += transform.up()      * pan_delta.y * scale;
+    }
 
     let rotation = Quat::from_euler(EulerRot::YXZ, cam.yaw, cam.pitch, 0.0);
     transform.translation = cam.focus + rotation * Vec3::new(0.0, 0.0, cam.radius);

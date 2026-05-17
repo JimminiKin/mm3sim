@@ -15,6 +15,7 @@ pub const CAMERA_INITIAL_RADIUS: f32 = 16.12;
 pub const CAMERA_INITIAL_PITCH: f32 = -0.52;
 pub const CAMERA_INITIAL_YAW: f32 = 0.0;
 pub const CAMERA_ORBIT_SENSITIVITY: f32 = 0.005;
+pub const CAMERA_PAN_SENSITIVITY: f32 = 0.0015;
 pub const CAMERA_ZOOM_SPEED: f32 = 0.8;
 pub const CAMERA_SCROLL_PIXEL_FACTOR: f32 = 0.1;
 pub const CAMERA_PITCH_MIN: f32 = -1.5;
@@ -89,15 +90,17 @@ pub const STOP_TUBE_HALF_LEN: f32 = 0.30;
 pub const STOP_LOWER_DEG: f32 = 17.0;
 pub const STOP_UPPER_DEG: f32 = 15.0;
 
-// ── Cycloid chute ─────────────────────────────────────────────────────────────
-// r sized so π√(r/g) = √(2·h/g) where h = SPAWN_HEIGHT − CHUTE_END_Y ≈ 6.0
-pub const CHUTE_R: f32 = 1.22;
+// ── Chute ─────────────────────────────────────────────────────────────────────
+// Cubic Bézier profile in the Y-Z plane: P0 → CP1 → CP2 → P3
+// P0 = (CHUTE_START_Z, CHUTE_START_Y), P3 = (CHUTE_END_Z, CHUTE_END_Y)
 pub const CHUTE_END_X: f32 = 0.0;
 pub const CHUTE_END_Y: f32 = 2.0;
 pub const CHUTE_END_Z: f32 = 0.0;
+pub const CHUTE_START_Z: f32 = 3.83;
+pub const CHUTE_START_Y: f32 = 4.44;
+pub const CHUTE_CP1: (f32, f32) = (3.83, 2.0);  // (z, y) first inner handle
+pub const CHUTE_CP2: (f32, f32) = (0.0, 3.5);   // (z, y) second inner handle
 pub const CHUTE_THICKNESS: f32 = 0.04;
 pub const CHUTE_WIDTH: f32 = 0.30;
 pub const CHUTE_SEGMENTS: usize = 32;
 pub const CHUTE_MARBLE_COLOR: (f32, f32, f32) = (0.20, 0.45, 0.90);
-pub const CHUTE_START_Z: f32 = CHUTE_END_Z + CHUTE_R * std::f32::consts::PI;
-pub const CHUTE_START_Y: f32 = CHUTE_END_Y + 2.0 * CHUTE_R;

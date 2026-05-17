@@ -3,14 +3,35 @@ use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 use rand::Rng;
 
+use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
+use crate::resources::marble_collisions::MarbleCollisions;
+use crate::systems::chute_handles::HandleDrag;
+
+/// Marbles live in GROUP_1. Snare/chute use the rapier default (ALL).
+/// When marble-marble collisions are off, filter only matches GROUP_2 (snare/chute),
+/// so marbles pass through each other while still hitting the snare.
+fn marble_filter(collide: bool) -> Group {
+    if collide {
+        Group::GROUP_1 | Group::GROUP_2
+    } else {
+        Group::GROUP_2
+    }
+}
 
 pub fn spawn_marble_on_click_system(
     buttons: Res<ButtonInput<MouseButton>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    chute_params: Res<ChuteParams>,
+    marble_col: Res<MarbleCollisions>,
+    drag: Res<HandleDrag>,
 ) {
+    // Don't spawn when the user is dragging a Bézier handle
+    if drag.active.is_some() {
+        return;
+    }
     if !buttons.just_pressed(MouseButton::Left) {
         return;
     }
@@ -22,8 +43,8 @@ pub fn spawn_marble_on_click_system(
         rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
     );
 
-    spawn_marble(&mut commands, &mut meshes, &mut materials, spawn_position);
-    spawn_chute_marble(&mut commands, &mut meshes, &mut materials);
+    spawn_marble(&mut commands, &mut meshes, &mut materials, spawn_position, marble_col.0);
+    spawn_chute_marble(&mut commands, &mut meshes, &mut materials, &chute_params, marble_col.0);
 }
 
 #[derive(Component)]
@@ -40,11 +61,25 @@ pub fn despawn_fallen_marbles_system(
     }
 }
 
+pub fn update_marble_collisions(
+    settings: Res<MarbleCollisions>,
+    mut marbles: Query<&mut CollisionGroups, With<Marble>>,
+) {
+    if !settings.is_changed() {
+        return;
+    }
+    let filter = marble_filter(settings.0);
+    for mut groups in &mut marbles {
+        groups.filters = filter;
+    }
+}
+
 pub fn spawn_marble(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     position: Vec3,
+    marble_marble_collide: bool,
 ) {
     commands.spawn((
         Marble,
@@ -67,6 +102,7 @@ pub fn spawn_marble(
         Restitution::coefficient(STEEL_RESTITUTION),
         Friction::coefficient(STEEL_FRICTION),
         ActiveEvents::COLLISION_EVENTS,
+        CollisionGroups::new(Group::GROUP_1, marble_filter(marble_marble_collide)),
         GravityScale::default(),
         Velocity::default(),
     ));
@@ -79,8 +115,14 @@ pub fn spawn_chute_marble(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    chute_params: &ChuteParams,
+    marble_marble_collide: bool,
 ) {
-    let position = Vec3::new(CHUTE_END_X, CHUTE_START_Y, CHUTE_START_Z - MARBLE_RADIUS);
+    let position = Vec3::new(
+        CHUTE_END_X,
+        chute_params.p0[1],
+        chute_params.p0[0] - MARBLE_RADIUS,
+    );
     commands.spawn((
         Marble,
         ChuteMarble,
@@ -107,6 +149,7 @@ pub fn spawn_chute_marble(
         Restitution::coefficient(STEEL_RESTITUTION),
         Friction::coefficient(STEEL_FRICTION),
         ActiveEvents::COLLISION_EVENTS,
+        CollisionGroups::new(Group::GROUP_1, marble_filter(marble_marble_collide)),
         GravityScale::default(),
         Velocity::default(),
     ));

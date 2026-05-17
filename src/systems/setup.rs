@@ -2,6 +2,7 @@ use bevy::{prelude::*, render::view::RenderLayers};
 
 use crate::components::cycloid_chute::spawn_cycloid_chute;
 use crate::components::snare::spawn_snare;
+use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
 use crate::systems::camera::OrbitCamera;
 
@@ -9,6 +10,7 @@ pub fn setup_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    chute_params: Res<ChuteParams>,
 ) {
     commands.spawn((
         Camera3dBundle {
@@ -42,5 +44,5 @@ pub fn setup_system(
     });
 
     spawn_snare(&mut commands, &mut meshes, &mut materials);
-    spawn_cycloid_chute(&mut commands, &mut meshes, &mut materials);
+    spawn_cycloid_chute(&mut commands, &mut meshes, &mut materials, &chute_params);
 }

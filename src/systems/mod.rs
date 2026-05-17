@@ -4,3 +4,5 @@ pub mod camera;
 pub mod axes;
 pub mod sound;
 pub mod hud;
+pub mod chute_editor;
+pub mod chute_handles;
