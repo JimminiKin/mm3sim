@@ -59,14 +59,20 @@ pub fn setup_chute_handles(
 /// Show or hide handle spheres when the flag changes.
 pub fn sync_handle_visibility(
     params: Res<ChuteParams>,
-    mut handles: Query<&mut Visibility, With<ChuteHandle>>,
+    mut handles: Query<(&ChuteHandle, &mut Visibility)>,
 ) {
     if !params.is_changed() {
         return;
     }
-    let vis = if params.handles_visible { Visibility::Inherited } else { Visibility::Hidden };
-    for mut v in &mut handles {
-        *v = vis;
+    for (handle, mut vis) in &mut handles {
+        *vis = match handle.0 {
+            0 | 3 => {
+                if params.endpoints_visible { Visibility::Inherited } else { Visibility::Hidden }
+            }
+            _ => {
+                if params.handles_visible && !params.straight { Visibility::Inherited } else { Visibility::Hidden }
+            }
+        };
     }
 }
 
@@ -98,7 +104,8 @@ pub fn chute_handle_drag_system(
     if contexts.ctx_mut().wants_pointer_input() {
         return;
     }
-    if !params.handles_visible {
+    let any_visible = params.endpoints_visible || (params.handles_visible && !params.straight);
+    if !any_visible {
         drag.active = None;
         return;
     }
@@ -115,6 +122,11 @@ pub fn chute_handle_drag_system(
     if buttons.just_pressed(MouseButton::Left) {
         let mut best: Option<(usize, f32)> = None;
         for (handle, tf) in &handles {
+            let visible = match handle.0 {
+                0 | 3 => params.endpoints_visible,
+                _ => params.handles_visible && !params.straight,
+            };
+            if !visible { continue; }
             if let Some(t) = ray_sphere(origin, dir, tf.translation, PICK_RADIUS) {
                 if best.map_or(true, |(_, bt)| t < bt) {
                     best = Some((handle.0, t));

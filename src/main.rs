@@ -9,7 +9,7 @@ use bevy_rapier3d::prelude::*;
 use resources::constants::BG_COLOR;
 use resources::chute_params::ChuteParams;
 use resources::marble_collisions::MarbleCollisions;
-use resources::marble_history::ChuteMarbleHistory;
+use resources::marble_runs::AllMarbleRuns;
 use systems::setup::setup_system;
 use systems::marble::{
     spawn_marble_on_click_system, despawn_fallen_marbles_system,
@@ -18,7 +18,7 @@ use systems::marble::{
 use systems::camera::orbit_camera_system;
 use systems::axes::{setup_axes_hud, update_axes_hud, resize_axes_viewport};
 use systems::sound::{setup_snare_sound, snare_hit_sound_system};
-use systems::hud::{setup_hud, update_hud_system, record_snare_aoa_system, track_slide_end_system};
+use systems::hud::{hud_panel_ui, record_snare_aoa_system, track_slide_end_system};
 use systems::chute_editor::{chute_editor_ui, rebuild_chute_system};
 use systems::marble_graph::{record_chute_marble_system, marble_graph_ui};
 use systems::chute_handles::{
@@ -51,10 +51,10 @@ fn main() {
         .init_resource::<ChuteParams>()
         .init_resource::<MarbleCollisions>()
         .init_resource::<HandleDrag>()
-        .init_resource::<ChuteMarbleHistory>()
+        .init_resource::<AllMarbleRuns>()
         .add_systems(
             Startup,
-            (setup_system, setup_snare_sound, setup_hud, setup_axes_hud, setup_chute_handles, setup_marble_trail_assets),
+            (setup_system, setup_snare_sound, setup_axes_hud, setup_chute_handles, setup_marble_trail_assets),
         )
         .add_systems(
             Update,
@@ -69,10 +69,10 @@ fn main() {
                 trail_record_system,
                 track_slide_end_system,
                 record_snare_aoa_system,
-                update_hud_system,
+                record_chute_marble_system,
+                hud_panel_ui,
                 chute_editor_ui,
                 rebuild_chute_system,
-                record_chute_marble_system,
                 marble_graph_ui,
                 update_marble_collisions,
                 sync_handle_transforms,

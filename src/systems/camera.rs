@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
+use bevy_egui::EguiContexts;
 
 use crate::resources::constants::*;
 
@@ -27,7 +28,10 @@ pub fn orbit_camera_system(
     mut motion: EventReader<MouseMotion>,
     mut scroll: EventReader<MouseWheel>,
     mut query: Query<(&mut OrbitCamera, &mut Transform)>,
+    mut contexts: EguiContexts,
 ) {
+    let ui_wants_scroll = contexts.ctx_mut().is_pointer_over_area();
+
     let orbiting = mouse_buttons.pressed(MouseButton::Right);
     let panning  = mouse_buttons.pressed(MouseButton::Middle);
 
@@ -44,11 +48,14 @@ pub fn orbit_camera_system(
         motion.clear();
     }
 
+    // Always drain scroll events; only apply to zoom when egui is not using them.
     for ev in scroll.read() {
-        zoom += match ev.unit {
-            MouseScrollUnit::Line => ev.y,
-            MouseScrollUnit::Pixel => ev.y * CAMERA_SCROLL_PIXEL_FACTOR,
-        };
+        if !ui_wants_scroll {
+            zoom += match ev.unit {
+                MouseScrollUnit::Line => ev.y,
+                MouseScrollUnit::Pixel => ev.y * CAMERA_SCROLL_PIXEL_FACTOR,
+            };
+        }
     }
 
     let Ok((mut cam, mut transform)) = query.get_single_mut() else { return };

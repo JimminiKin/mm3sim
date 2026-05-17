@@ -10,6 +10,7 @@ pub struct ChuteParams {
     pub p3: [f32; 2],   // end (z, y)
     pub straight: bool,
     pub handles_visible: bool,
+    pub endpoints_visible: bool,
     pub dirty: bool,
 }
 
@@ -22,6 +23,7 @@ impl Default for ChuteParams {
             p3:  [CHUTE_END_Z,   CHUTE_END_Y],
             straight: true,
             handles_visible: true,
+            endpoints_visible: true,
             dirty: false,
         }
     }

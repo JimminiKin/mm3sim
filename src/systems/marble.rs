@@ -7,6 +7,7 @@ use crate::components::snare::SnareDrum;
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
 use crate::resources::marble_collisions::MarbleCollisions;
+use crate::resources::marble_runs::AllMarbleRuns;
 use crate::systems::chute_handles::HandleDrag;
 
 // ── Collision filter ──────────────────────────────────────────────────────────
@@ -32,6 +33,10 @@ pub struct ChuteMarble;
 
 #[derive(Component)]
 pub struct SpawnTime(pub f32);
+
+/// Links a marble entity back to its run in AllMarbleRuns.
+#[derive(Component)]
+pub struct RunIndex(pub usize);
 
 /// Accumulated seconds since the last trail dot was emitted for this marble.
 #[derive(Component)]
@@ -107,6 +112,7 @@ pub fn spawn_marble_on_click_system(
     trail_dots: Query<Entity, With<TrailDot>>,
     snare: Query<&GlobalTransform, With<SnareDrum>>,
     mut contexts: bevy_egui::EguiContexts,
+    mut all_runs: ResMut<AllMarbleRuns>,
 ) {
     if contexts.ctx_mut().wants_pointer_input() {
         return;
@@ -137,6 +143,8 @@ pub fn spawn_marble_on_click_system(
         rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
     );
 
+    let run_idx = all_runs.push_new_run();
+
     spawn_marble(
         &mut commands,
         &mut meshes,
@@ -144,6 +152,7 @@ pub fn spawn_marble_on_click_system(
         spawn_position,
         marble_col.0,
         spawn_time,
+        run_idx,
     );
     spawn_chute_marble(
         &mut commands,
@@ -152,6 +161,7 @@ pub fn spawn_marble_on_click_system(
         &chute_params,
         marble_col.0,
         spawn_time,
+        run_idx,
     );
 }
 
@@ -162,9 +172,11 @@ pub fn spawn_marble(
     position: Vec3,
     marble_marble_collide: bool,
     spawn_time: f32,
+    run_idx: usize,
 ) {
     commands.spawn((
         Marble,
+        RunIndex(run_idx),
         SpawnTime(spawn_time),
         TrailTimer(0.0),
         PbrBundle {
@@ -199,6 +211,7 @@ pub fn spawn_chute_marble(
     chute_params: &ChuteParams,
     marble_marble_collide: bool,
     spawn_time: f32,
+    run_idx: usize,
 ) {
     let pts = chute_params.effective_pts();
     let p0 = pts[0]; // [z, y]
@@ -214,12 +227,9 @@ pub fn spawn_chute_marble(
     // prediction sees no approaching velocity and skips contact for one step, letting
     // gravity act freely. A small penetration depth forces immediate resolution.
     let position = chute_centre + normal * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.004);
+    // Nest the marker components so the outer tuple stays under Bevy's 15-element Bundle limit.
     commands.spawn((
-        Marble,
-        ChuteMarble,
-        SpawnTime(spawn_time),
-        TrailTimer(0.0),
-        SlideData::default(),
+        (Marble, ChuteMarble, RunIndex(run_idx), SpawnTime(spawn_time), TrailTimer(0.0), SlideData::default()),
         PbrBundle {
             mesh: meshes.add(Mesh::from(Sphere {
                 radius: MARBLE_RADIUS,

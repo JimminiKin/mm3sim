@@ -11,32 +11,39 @@ pub fn chute_editor_ui(
     mut marble_col: ResMut<MarbleCollisions>,
 ) {
     let ctx = contexts.ctx_mut();
-    egui::Window::new("Chute Shape")
-        .default_pos([10.0, 220.0])
+    egui::Window::new("Parameters")
+        .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-8.0, 8.0))
         .resizable(false)
         .show(ctx, |ui| {
             let mut changed = false;
 
-            if ui.checkbox(&mut params.straight, "Straight line").changed() {
+            ui.heading("Options");
+            if ui
+                .checkbox(&mut params.straight, "Force straight line chute")
+                .changed()
+            {
                 changed = true;
             }
-            ui.checkbox(&mut params.handles_visible, "Show handles");
-            ui.separator();
-
-            drag_row(ui, "P0  start", &mut params.p0, &mut changed);
-            ui.add_enabled_ui(!params.straight, |ui| {
-                drag_row(ui, "CP1 handle 1", &mut params.cp1, &mut changed);
-                drag_row(ui, "CP2 handle 2", &mut params.cp2, &mut changed);
-            });
-            drag_row(ui, "P3  end", &mut params.p3, &mut changed);
-
-            ui.separator();
+            ui.checkbox(&mut params.handles_visible, "Show curve handles");
+            ui.checkbox(&mut params.endpoints_visible, "Show endpoint handles");
             let old_col = marble_col.bypass_change_detection().0;
             let mut new_col = old_col;
             ui.checkbox(&mut new_col, "Marble-marble collisions");
             if new_col != old_col {
                 marble_col.0 = new_col;
             }
+
+            ui.separator();
+            ui.heading("Extremities");
+            drag_row(ui, "End", &mut params.p3, &mut changed);
+            drag_row(ui, "Start", &mut params.p0, &mut changed);
+
+            ui.separator();
+            ui.heading("Curve Handles");
+            ui.add_enabled_ui(!params.straight, |ui| {
+                drag_row(ui, "CP2 handle 2", &mut params.cp2, &mut changed);
+                drag_row(ui, "CP1 handle 1", &mut params.cp1, &mut changed);
+            });
 
             ui.separator();
             if ui.button("Reset to defaults").clicked() {
