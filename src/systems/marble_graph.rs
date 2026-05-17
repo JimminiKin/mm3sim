@@ -4,19 +4,17 @@ use bevy_rapier3d::prelude::*;
 use egui_plot::{Legend, Line, Plot, PlotPoints};
 
 use crate::resources::constants::MARBLE_RADIUS;
-use crate::resources::marble_runs::{AllMarbleRuns, HistorySample};
+use crate::resources::marble_runs::{RunHistory, VelocitySample};
 use crate::systems::marble::{ChuteMarble, Marble, RunIndex, SpawnTime};
 
-/// Records one sample per frame for every live ChuteMarble, stored in its run's samples.
 pub fn record_chute_marble_system(
-    mut all_runs: ResMut<AllMarbleRuns>,
+    mut all_runs: ResMut<RunHistory>,
     time: Res<Time>,
     marbles: Query<(&Velocity, &SpawnTime, &RunIndex), (With<Marble>, With<ChuteMarble>)>,
 ) {
     for (vel, spawn_time, run_idx) in &marbles {
-        let t = time.elapsed_seconds() - spawn_time.0;
-        let sample = HistorySample {
-            t,
+        let sample = VelocitySample {
+            t: time.elapsed_seconds() - spawn_time.0,
             vy: vel.linvel.y,
             vz: vel.linvel.z,
             speed: vel.linvel.length(),
@@ -28,14 +26,11 @@ pub fn record_chute_marble_system(
     }
 }
 
-/// Renders one graph window per run that has graph_open == true.
-pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<AllMarbleRuns>) {
+pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHistory>) {
     let ctx = contexts.ctx_mut();
 
     for run in &mut all_runs.runs {
-        if !run.graph_open {
-            continue;
-        }
+        if !run.graph_open { continue; }
 
         let title = format!("Run {} — Velocity", run.index + 1);
         let mut open = true;
@@ -50,7 +45,7 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<AllMarbl
                     return;
                 }
 
-                let pts = |f: fn(&HistorySample) -> f64| -> PlotPoints {
+                let pts = |f: fn(&VelocitySample) -> f64| -> PlotPoints {
                     PlotPoints::from_iter(run.samples.iter().map(|s| [s.t as f64, f(s)]))
                 };
 
@@ -67,8 +62,6 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<AllMarbl
                     });
             });
 
-        if !open {
-            run.graph_open = false;
-        }
+        if !open { run.graph_open = false; }
     }
 }

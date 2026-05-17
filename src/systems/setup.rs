@@ -1,6 +1,6 @@
 use bevy::{prelude::*, render::view::RenderLayers};
 
-use crate::components::cycloid_chute::spawn_cycloid_chute;
+use crate::components::chute::spawn_chute;
 use crate::components::snare::spawn_snare;
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
@@ -44,5 +44,5 @@ pub fn setup_system(
     });
 
     spawn_snare(&mut commands, &mut meshes, &mut materials);
-    spawn_cycloid_chute(&mut commands, &mut meshes, &mut materials, &chute_params);
+    spawn_chute(&mut commands, &mut meshes, &mut materials, &chute_params);
 }

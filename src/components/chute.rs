@@ -10,8 +10,6 @@ use crate::resources::constants::*;
 #[derive(Component)]
 pub struct ChuteSegment;
 
-// ── Bézier helpers ─────────────────────────────────────────────────────────────
-
 fn bz(pts: [[f32; 2]; 4], t: f32) -> (f32, f32) {
     let u = 1.0 - t;
     let [p0, p1, p2, p3] = pts;
@@ -29,12 +27,9 @@ fn surface_normal(pts: [[f32; 2]; 4], t: f32) -> Vec3 {
     Vec3::new(0.0, -dz, dy).normalize_or_zero()
 }
 
-// ── Adaptive tessellation ──────────────────────────────────────────────────────
-
 /// Maximum chord-to-curve deviation in metres before a segment is subdivided.
-const FLATNESS: f32 = 0.0002; // 0.2 mm
+const FLATNESS: f32 = 0.0002;
 
-/// Returns a sorted list of t values that adapt to the curve's actual curvature.
 fn adaptive_ts(pts: [[f32; 2]; 4]) -> Vec<f32> {
     let mut ts = vec![0.0f32, 1.0f32];
     refine(&mut ts, pts, 0.0, 1.0, 0);
@@ -57,9 +52,7 @@ fn refine(ts: &mut Vec<f32>, pts: [[f32; 2]; 4], t0: f32, t1: f32, depth: u32) {
     }
 }
 
-// ── Spawn ──────────────────────────────────────────────────────────────────────
-
-pub fn spawn_cycloid_chute(
+pub fn spawn_chute(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
@@ -67,11 +60,10 @@ pub fn spawn_cycloid_chute(
 ) {
     let pts = params.effective_pts();
     let ts = adaptive_ts(pts);
-
     let (coll_verts, coll_idx) = build_trimesh_collider(pts, &ts);
 
     // FIX_INTERNAL_EDGES prevents "ghost" impulses when the ball crosses
-    // the shared edge between two adjacent coplanar or smooth triangles.
+    // the shared edge between two adjacent coplanar or near-smooth triangles.
     let flags = TriMeshFlags::FIX_INTERNAL_EDGES | TriMeshFlags::MERGE_DUPLICATE_VERTICES;
 
     commands.spawn((
@@ -98,8 +90,6 @@ pub fn spawn_cycloid_chute(
     ));
 }
 
-// ── Trimesh collider ───────────────────────────────────────────────────────────
-
 fn build_trimesh_collider(pts: [[f32; 2]; 4], ts: &[f32]) -> (Vec<Vec3>, Vec<[u32; 3]>) {
     let n = ts.len() - 1;
     let w = CHUTE_WIDTH * 0.5;
@@ -107,35 +97,30 @@ fn build_trimesh_collider(pts: [[f32; 2]; 4], ts: &[f32]) -> (Vec<Vec3>, Vec<[u3
     let x = CHUTE_END_X;
 
     let mut verts: Vec<Vec3> = Vec::with_capacity((n + 1) * 4);
-
     for &t in ts {
         let (z, y) = bz(pts, t);
         let sn = surface_normal(pts, t);
-
         let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y, z + CHUTE_ORIGIN_Z);
         let top = centre + sn * h;
         let bot = centre - sn * h;
-
-        verts.push(Vec3::new(top.x - w, top.y, top.z)); // i*4+0 TL
-        verts.push(Vec3::new(top.x + w, top.y, top.z)); // i*4+1 TR
-        verts.push(Vec3::new(bot.x - w, bot.y, bot.z)); // i*4+2 BL
-        verts.push(Vec3::new(bot.x + w, bot.y, bot.z)); // i*4+3 BR
+        verts.push(Vec3::new(top.x - w, top.y, top.z));
+        verts.push(Vec3::new(top.x + w, top.y, top.z));
+        verts.push(Vec3::new(bot.x - w, bot.y, bot.z));
+        verts.push(Vec3::new(bot.x + w, bot.y, bot.z));
     }
 
     let mut idx: Vec<[u32; 3]> = Vec::with_capacity(n * 8);
     for i in 0..n as u32 {
         let a = i * 4;
         let b = (i + 1) * 4;
-        idx.push([a,   b,   b+1]); idx.push([a,   b+1, a+1]); // top
-        idx.push([a+3, b+3, b+2]); idx.push([a+3, b+2, a+2]); // bottom
-        idx.push([a,   a+2, b+2]); idx.push([a,   b+2, b  ]); // left
-        idx.push([a+1, b+1, b+3]); idx.push([a+1, b+3, a+3]); // right
+        idx.push([a,   b,   b+1]); idx.push([a,   b+1, a+1]);
+        idx.push([a+3, b+3, b+2]); idx.push([a+3, b+2, a+2]);
+        idx.push([a,   a+2, b+2]); idx.push([a,   b+2, b  ]);
+        idx.push([a+1, b+1, b+3]); idx.push([a+1, b+3, a+3]);
     }
 
     (verts, idx)
 }
-
-// ── Smooth visual mesh ─────────────────────────────────────────────────────────
 
 fn build_smooth_mesh(pts: [[f32; 2]; 4], ts: &[f32]) -> Mesh {
     let n = ts.len() - 1;
@@ -143,11 +128,11 @@ fn build_smooth_mesh(pts: [[f32; 2]; 4], ts: &[f32]) -> Mesh {
     let h = CHUTE_THICKNESS * 0.5;
     let x = CHUTE_END_X;
 
-    // 8 verts/cross-section for sharp side edges with correct per-face normals:
-    //  0,1 – top   (L, R)  normal = +sn
-    //  2,3 – bot   (L, R)  normal = −sn
-    //  4,5 – left  (T, B)  normal = −X
-    //  6,7 – right (T, B)  normal = +X
+    // 8 vertices per cross-section for correct per-face normals:
+    //   0,1 top   (L,R) normal = +sn
+    //   2,3 bot   (L,R) normal = -sn
+    //   4,5 left  (T,B) normal = -X
+    //   6,7 right (T,B) normal = +X
     const STRIDE: usize = 8;
 
     let cap = (n + 1) * STRIDE;
@@ -159,15 +144,12 @@ fn build_smooth_mesh(pts: [[f32; 2]; 4], ts: &[f32]) -> Mesh {
         let (z, y) = bz(pts, t);
         let sn = surface_normal(pts, t);
         let bn = -sn;
-
         let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y, z + CHUTE_ORIGIN_Z);
         let top = centre + sn * h;
         let bot = centre + bn * h;
 
-        let push = |positions: &mut Vec<[f32; 3]>,
-                    normals: &mut Vec<[f32; 3]>,
-                    uvs: &mut Vec<[f32; 2]>,
-                    p: Vec3, n: Vec3, uv: [f32; 2]| {
+        let push = |positions: &mut Vec<[f32; 3]>, normals: &mut Vec<[f32; 3]>,
+                    uvs: &mut Vec<[f32; 2]>, p: Vec3, n: Vec3, uv: [f32; 2]| {
             positions.push(p.to_array());
             normals.push(n.to_array());
             uvs.push(uv);
@@ -187,10 +169,10 @@ fn build_smooth_mesh(pts: [[f32; 2]; 4], ts: &[f32]) -> Mesh {
     for i in 0..n {
         let a = (i * STRIDE) as u32;
         let b = ((i + 1) * STRIDE) as u32;
-        quad(&mut indices, a,   a+1, b,   b+1); // top
-        quad(&mut indices, a+3, a+2, b+3, b+2); // bottom
-        quad(&mut indices, b+4, b+5, a+4, a+5); // left
-        quad(&mut indices, a+6, a+7, b+6, b+7); // right
+        quad(&mut indices, a,   a+1, b,   b+1);
+        quad(&mut indices, a+3, a+2, b+3, b+2);
+        quad(&mut indices, b+4, b+5, a+4, a+5);
+        quad(&mut indices, a+6, a+7, b+6, b+7);
     }
 
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
