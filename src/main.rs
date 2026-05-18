@@ -13,17 +13,22 @@ use resources::marble_collisions::MarbleCollisions;
 use resources::marble_runs::RunHistory;
 use systems::axes::{resize_axes_viewport, setup_axes_hud, update_axes_hud};
 use systems::camera::orbit_camera_system;
-use systems::chute_editor::{apply_snare_fixed_system, chute_editor_ui, rebuild_chute_system, SnareFixed};
+use systems::chute_editor::{
+    apply_snare_fixed_system, chute_editor_ui, rebuild_chute_system, SnareFixed,
+};
 use systems::chute_handles::{
     chute_handle_drag_system, draw_chute_gizmos, setup_chute_handles, sync_handle_transforms,
     sync_handle_visibility, HandleDrag,
 };
 use systems::hud::hud_panel_ui;
 use systems::marble::{
-    despawn_fallen_marbles_system, record_marble_paths_system, record_snare_hit_system,
-    spawn_marble_on_click_system, track_slide_end_system, update_marble_collisions,
+    advance_flight_timers_system, auto_spawn_system, despawn_fallen_marbles_system,
+    record_marble_paths_system, record_snare_hit_system, spawn_marble_on_click_system,
+    track_slide_end_system, update_marble_collisions, AutoSpawn,
 };
-use systems::marble_graph::{draw_marble_ghosts_system, marble_graph_ui, record_chute_marble_system};
+use systems::marble_graph::{
+    draw_marble_ghosts_system, marble_graph_ui, record_chute_marble_system,
+};
 use systems::setup::setup_system;
 use systems::sound::{setup_snare_sound, snare_hit_sound_system, SnareVolume};
 
@@ -57,6 +62,7 @@ fn main() {
         .init_resource::<RunHistory>()
         .init_resource::<SnareFixed>()
         .init_resource::<SnareVolume>()
+        .init_resource::<AutoSpawn>()
         .add_systems(
             Startup,
             (
@@ -71,10 +77,12 @@ fn main() {
         .add_systems(
             FixedUpdate,
             (
+                advance_flight_timers_system,
                 track_slide_end_system,
                 record_snare_hit_system,
                 record_chute_marble_system,
             )
+                .chain()
                 .after(PhysicsSet::Writeback),
         )
         .add_systems(
@@ -82,8 +90,8 @@ fn main() {
             (
                 // Input
                 chute_handle_drag_system,
-                spawn_marble_on_click_system.after(chute_handle_drag_system),
                 orbit_camera_system,
+                spawn_marble_on_click_system.after(chute_handle_drag_system),
                 // Simulation maintenance
                 apply_snare_fixed_system,
                 despawn_fallen_marbles_system,
@@ -100,6 +108,8 @@ fn main() {
                 hud_panel_ui,
                 chute_editor_ui,
                 marble_graph_ui,
+                // Batch auto-spawner (after UI so Stop/Start clicks register this frame)
+                auto_spawn_system,
                 // Axes overlay
                 update_axes_hud,
                 resize_axes_viewport,

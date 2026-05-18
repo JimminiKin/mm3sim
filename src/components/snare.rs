@@ -23,8 +23,7 @@ pub fn spawn_snare(
     // Stop post positions — each stop contacts the arm tube at the given angle
     let stop_lower_rad = STOP_LOWER_DEG.to_radians();
     let stop_post_z = PIVOT_FROM_SNARE - STOP_ARM_DIST * stop_lower_rad.cos();
-    let stop_post_y =
-        -(STOP_ARM_DIST * stop_lower_rad.sin()) - ARM_TUBE_RADIUS - STOP_TUBE_RADIUS;
+    let stop_post_y = -(STOP_ARM_DIST * stop_lower_rad.sin()) - ARM_TUBE_RADIUS - STOP_TUBE_RADIUS;
 
     let stop_upper_rad = STOP_UPPER_DEG.to_radians();
     let stop_upper_post_z = PIVOT_FROM_SNARE - STOP_ARM_DIST * stop_upper_rad.cos();
@@ -126,7 +125,6 @@ pub fn spawn_snare(
                 Collider::cylinder(CW_HALF_HEIGHT, CW_RADIUS),
                 ColliderMassProperties::Mass(CW_MASS),
             ));
-
         });
 
     // Lower stop tube: arm tube bottom rests here at 20° snare-down

@@ -8,16 +8,15 @@ const CHUTE_GHOST_COLOR: Color = Color::srgba(0.20, 0.45, 0.90, 0.75);
 
 use crate::resources::constants::MARBLE_RADIUS;
 use crate::resources::marble_runs::{RunHistory, VelocitySample};
-use crate::systems::marble::{ChuteMarble, Marble, RunIndex, SpawnTime};
+use crate::systems::marble::{ChuteMarble, FlightTimer, Marble, RunIndex};
 
 pub fn record_chute_marble_system(
     mut all_runs: ResMut<RunHistory>,
-    time: Res<Time<Fixed>>,
-    marbles: Query<(&Velocity, &SpawnTime, &RunIndex), (With<Marble>, With<ChuteMarble>)>,
+    marbles: Query<(&Velocity, &FlightTimer, &RunIndex), (With<Marble>, With<ChuteMarble>)>,
 ) {
-    for (vel, spawn_time, run_idx) in &marbles {
+    for (vel, timer, run_idx) in &marbles {
         let sample = VelocitySample {
-            t: time.elapsed_seconds() - spawn_time.0,
+            t: timer.0,
             vy: vel.linvel.y,
             vz: vel.linvel.z,
             speed: vel.linvel.length(),

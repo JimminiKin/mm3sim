@@ -6,6 +6,7 @@ use crate::components::chute::{spawn_chute, ChuteSegment};
 use crate::components::snare::PivotArm;
 use crate::resources::chute_params::{ChuteParams, DragAxis};
 use crate::resources::marble_collisions::MarbleCollisions;
+use crate::systems::marble::AutoSpawn;
 use crate::systems::sound::SnareVolume;
 
 #[derive(Resource, Default)]
@@ -31,6 +32,7 @@ pub fn chute_editor_ui(
     mut marble_col: ResMut<MarbleCollisions>,
     mut snare_fixed: ResMut<SnareFixed>,
     mut snare_volume: ResMut<SnareVolume>,
+    mut auto_spawn: ResMut<AutoSpawn>,
 ) {
     let ctx = contexts.ctx_mut();
     egui::Window::new("Parameters")
@@ -111,6 +113,35 @@ pub fn chute_editor_ui(
                     }
 
                     if changed { params.dirty = true; }
+
+                    ui.separator();
+                    ui.heading("Batch Runs");
+                    ui.horizontal(|ui| {
+                        ui.label("Count:");
+                        ui.add(egui::DragValue::new(&mut auto_spawn.batch_size).range(1..=1000u32));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Step P3.y (mm):");
+                        ui.add(egui::DragValue::new(&mut auto_spawn.step_y_mm).speed(0.1));
+                    });
+
+                    let is_running = auto_spawn.pending > 0 || auto_spawn.waiting_for.is_some();
+                    ui.horizontal(|ui| {
+                        if is_running {
+                            let done = auto_spawn.spawned;
+                            let total = done + auto_spawn.pending;
+                            ui.label(format!("{done}/{total}"));
+                            if ui.button("Stop").clicked() {
+                                auto_spawn.pending = 0;
+                                auto_spawn.waiting_for = None;
+                            }
+                        } else {
+                            if ui.button(format!("Start {}", auto_spawn.batch_size)).clicked() {
+                                auto_spawn.pending = auto_spawn.batch_size;
+                                auto_spawn.spawned = 0;
+                            }
+                        }
+                    });
                 });
         });
 }
