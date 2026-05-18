@@ -54,8 +54,7 @@ pub struct Run {
     pub graph_open: bool,
     pub drop_path: Vec<Vec3>,
     pub chute_path: Vec<Vec3>,
-    pub drop_ghost_open: bool,
-    pub chute_ghost_open: bool,
+    pub show_ghost: bool,
 }
 
 #[derive(Resource, Default)]
@@ -80,8 +79,7 @@ impl RunHistory {
             graph_open: false,
             drop_path: Vec::new(),
             chute_path: Vec::new(),
-            drop_ghost_open: false,
-            chute_ghost_open: false,
+            show_ghost: false,
         });
         idx
     }

@@ -126,6 +126,14 @@ pub fn hud_panel_ui(
                             if ui.small_button("Expand All").clicked() {
                                 all_runs.force_all_open = Some(true);
                             }
+                            let any_ghost = all_runs.runs.iter().any(|r| r.show_ghost);
+                            let ghost_label = if any_ghost { "Hide Ghosts" } else { "Show Ghosts" };
+                            if ui.small_button(ghost_label).clicked() {
+                                let new_val = !any_ghost;
+                                for run in &mut all_runs.runs {
+                                    run.show_ghost = new_val;
+                                }
+                            }
                         });
                     });
 
@@ -135,11 +143,23 @@ pub fn hud_panel_ui(
                         .show(ui, |ui| {
                             for i in (0..run_count).rev() {
                                 let header = run_header_label(&all_runs.runs[i]);
-                                egui::CollapsingHeader::new(&header)
-                                    .id_source(all_runs.runs[i].index)
-                                    .default_open(false)
-                                    .open(force_open)
-                                    .show(ui, |ui| {
+                                let run_id = all_runs.runs[i].index;
+
+                                let state_id = ui.make_persistent_id(("run_header", run_id));
+                                let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                                    ui.ctx(), state_id, false,
+                                );
+                                if let Some(open) = force_open {
+                                    state.set_open(open);
+                                    state.store(ui.ctx());
+                                }
+
+                                state
+                                    .show_header(ui, |ui| {
+                                        ui.checkbox(&mut all_runs.runs[i].show_ghost, "");
+                                        ui.label(&header);
+                                    })
+                                    .body(|ui| {
                                         ui.label(egui::RichText::new("Drop").strong());
                                         match all_runs.runs[i].drop {
                                             None => { ui.label("  — in flight"); }
@@ -156,14 +176,6 @@ pub fn hud_panel_ui(
                                             let graph_label = if all_runs.runs[i].graph_open { "Hide Graph" } else { "Graph" };
                                             if ui.button(graph_label).clicked() {
                                                 all_runs.runs[i].graph_open = !all_runs.runs[i].graph_open;
-                                            }
-                                            let drop_label = if all_runs.runs[i].drop_ghost_open { "Hide Drop" } else { "Drop Ghost" };
-                                            if ui.button(drop_label).clicked() {
-                                                all_runs.runs[i].drop_ghost_open = !all_runs.runs[i].drop_ghost_open;
-                                            }
-                                            let chute_label = if all_runs.runs[i].chute_ghost_open { "Hide Chute" } else { "Chute Ghost" };
-                                            if ui.button(chute_label).clicked() {
-                                                all_runs.runs[i].chute_ghost_open = !all_runs.runs[i].chute_ghost_open;
                                             }
                                         });
                                     });

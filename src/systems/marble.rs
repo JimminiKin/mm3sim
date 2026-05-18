@@ -114,6 +114,7 @@ pub fn spawn_marble(
         CollisionGroups::new(Group::GROUP_1, marble_filter(marble_marble_collide)),
         GravityScale::default(),
         Velocity::default(),
+        Ccd::enabled(),
     ));
 }
 
@@ -164,6 +165,7 @@ pub fn spawn_chute_marble(
         CollisionGroups::new(Group::GROUP_1, marble_filter(marble_marble_collide)),
         GravityScale::default(),
         Velocity::default(),
+        Ccd::enabled(),
     ));
 }
 
@@ -208,7 +210,7 @@ pub fn update_marble_collisions(
 
 /// Detects when a chute marble lifts off the chute surface and records the moment.
 pub fn track_slide_end_system(
-    time: Res<Time>,
+    time: Res<Time<Fixed>>,
     chute_params: Res<ChuteParams>,
     mut marbles: Query<(&Transform, &Velocity, &mut SlideRecord), (With<Marble>, With<ChuteMarble>)>,
 ) {
@@ -241,7 +243,7 @@ pub fn track_slide_end_system(
 /// On snare collision, computes and stores the impact record for that marble's run.
 pub fn record_snare_hit_system(
     mut events: EventReader<CollisionEvent>,
-    time: Res<Time>,
+    time: Res<Time<Fixed>>,
     marbles: Query<(&Transform, &Velocity, &SpawnTime, Option<&ChuteMarble>, Option<&SlideRecord>, &RunIndex), With<Marble>>,
     snares: Query<&GlobalTransform, With<SnareDrum>>,
     arm_q: Query<&Velocity, With<crate::components::snare::PivotArm>>,

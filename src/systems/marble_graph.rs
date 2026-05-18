@@ -12,7 +12,7 @@ use crate::systems::marble::{ChuteMarble, Marble, RunIndex, SpawnTime};
 
 pub fn record_chute_marble_system(
     mut all_runs: ResMut<RunHistory>,
-    time: Res<Time>,
+    time: Res<Time<Fixed>>,
     marbles: Query<(&Velocity, &SpawnTime, &RunIndex), (With<Marble>, With<ChuteMarble>)>,
 ) {
     for (vel, spawn_time, run_idx) in &marbles {
@@ -31,11 +31,13 @@ pub fn record_chute_marble_system(
 
 pub fn draw_marble_ghosts_system(mut gizmos: Gizmos, all_runs: Res<RunHistory>) {
     for run in &all_runs.runs {
-        if run.drop_ghost_open && run.drop_path.len() >= 2 {
-            gizmos.linestrip(run.drop_path.iter().copied(), DROP_GHOST_COLOR);
-        }
-        if run.chute_ghost_open && run.chute_path.len() >= 2 {
-            gizmos.linestrip(run.chute_path.iter().copied(), CHUTE_GHOST_COLOR);
+        if run.show_ghost {
+            if run.drop_path.len() >= 2 {
+                gizmos.linestrip(run.drop_path.iter().copied(), DROP_GHOST_COLOR);
+            }
+            if run.chute_path.len() >= 2 {
+                gizmos.linestrip(run.chute_path.iter().copied(), CHUTE_GHOST_COLOR);
+            }
         }
     }
 }
