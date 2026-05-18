@@ -187,8 +187,19 @@ fn run_header_label(run: &Run) -> String {
         (Some(d), Some(c)) => {
             let ms = (c.flight_s - d.flight_s) * 1000.0;
             let sign = if ms >= 0.0 { "+" } else { "" };
-            format!("Run {}   Δt {}{:.1} ms   spd drop {:.2} / chute {:.2}",
-                run.index + 1, sign, ms, d.speed, c.speed)
+            let exit_str = run.chute_exit.map_or(String::new(), |p3| {
+                format!("   P3 y{:+.1} z{:.1}cm", p3[1] * 100.0, p3[0] * 100.0)
+            });
+            let arc_str = run.chute_exit.map_or(String::new(), |p3| {
+                let p3_world = Vec3::new(
+                    CHUTE_END_X,
+                    p3[1] + CHUTE_ORIGIN_Y,
+                    p3[0] + CHUTE_ORIGIN_Z,
+                );
+                format!("   arc {:.1}cm", p3_world.distance(c.hit_pos) * 100.0)
+            });
+            format!("Run {}   Δt {}{:.1} ms   spd {:.2}/{:.2}{}{}",
+                run.index + 1, sign, ms, d.speed, c.speed, exit_str, arc_str)
         }
         (Some(_), None) => format!("Run {}   drop hit, chute in flight…", run.index + 1),
         (None, Some(_)) => format!("Run {}   chute hit, drop in flight…", run.index + 1),
@@ -202,8 +213,13 @@ fn render_drop_compact(ui: &mut egui::Ui, r: HitRecord) {
         r.flight_s, r.speed, r.aoa, r.ke_mj
     ));
     ui.monospace(format!(
-        "  vx/vy/vz  {:+.3}/{:+.3}/{:+.3}   spin {:.3}",
-        r.vx, r.vy, r.vz, r.spin
+        "  vx/vy/vz  {:+.3}/{:+.3}/{:+.3}   spin {:.3}   arm {:+.2}° ω{:+.1}°/s",
+        r.vx, r.vy, r.vz, r.spin, r.arm_deg, r.arm_angvel
+    ));
+    let radial = (r.hit_local.x * r.hit_local.x + r.hit_local.z * r.hit_local.z).sqrt();
+    ui.monospace(format!(
+        "  hit local  y{:+.1}mm  r{:.1}mm",
+        r.hit_local.y * 1000.0, radial * 1000.0
     ));
 }
 
@@ -213,18 +229,31 @@ fn render_chute_detail(ui: &mut egui::Ui, r: HitRecord) {
         r.flight_s, r.speed, r.aoa, r.ke_mj
     ));
     ui.monospace(format!(
-        "  vx/vy/vz  {:+.3}/{:+.3}/{:+.3}   spin {:.3}",
-        r.vx, r.vy, r.vz, r.spin
+        "  vx/vy/vz  {:+.3}/{:+.3}/{:+.3}   spin {:.3}   arm {:+.2}° ω{:+.1}°/s",
+        r.vx, r.vy, r.vz, r.spin, r.arm_deg, r.arm_angvel
+    ));
+    let radial = (r.hit_local.x * r.hit_local.x + r.hit_local.z * r.hit_local.z).sqrt();
+    ui.monospace(format!(
+        "  hit local  y{:+.1}mm  r{:.1}mm",
+        r.hit_local.y * 1000.0, radial * 1000.0
     ));
     if let Some(slide) = r.slide_s {
+        let free_s = r.flight_s - slide;
         if let (Some(end_vy), Some(end_vz)) = (r.slide_end_vy, r.slide_end_vz) {
             let liftoff = (end_vy * end_vy + end_vz * end_vz).sqrt();
             ui.monospace(format!(
-                "  slide {:.3} s   liftoff vy/vz {:+.3}/{:+.3}  ({:.3} m/s)",
-                slide, end_vy, end_vz, liftoff
+                "  slide {:.3} s   free {:.3} s   liftoff vy/vz {:+.3}/{:+.3}  ({:.3} m/s)",
+                slide, free_s, end_vy, end_vz, liftoff
             ));
         } else {
-            ui.monospace(format!("  slide {:.3} s", slide));
+            ui.monospace(format!("  slide {:.3} s   free {:.3} s", slide, free_s));
+        }
+        if let Some(p) = r.slide_end_pos {
+            ui.monospace(format!(
+                "  liftoff y{:+.1}cm  z{:.1}cm",
+                (p.y - CHUTE_ORIGIN_Y) * 100.0,
+                (p.z - CHUTE_ORIGIN_Z) * 100.0,
+            ));
         }
     }
 }

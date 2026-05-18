@@ -1,14 +1,34 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
+use bevy_rapier3d::prelude::*;
 
 use crate::components::chute::{spawn_chute, ChuteSegment};
-use crate::resources::chute_params::ChuteParams;
+use crate::components::snare::PivotArm;
+use crate::resources::chute_params::{ChuteParams, DragAxis};
 use crate::resources::marble_collisions::MarbleCollisions;
+
+#[derive(Resource, Default)]
+pub struct SnareFixed(pub bool);
+
+pub fn apply_snare_fixed_system(
+    snare_fixed: Res<SnareFixed>,
+    mut arm: Query<(&mut RigidBody, &mut Velocity), With<PivotArm>>,
+) {
+    if !snare_fixed.is_changed() { return; }
+    let Ok((mut rb, mut vel)) = arm.get_single_mut() else { return };
+    if snare_fixed.0 {
+        *rb = RigidBody::Fixed;
+        *vel = Velocity::zero();
+    } else {
+        *rb = RigidBody::Dynamic;
+    }
+}
 
 pub fn chute_editor_ui(
     mut contexts: EguiContexts,
     mut params: ResMut<ChuteParams>,
     mut marble_col: ResMut<MarbleCollisions>,
+    mut snare_fixed: ResMut<SnareFixed>,
 ) {
     let ctx = contexts.ctx_mut();
     egui::Window::new("Parameters")
@@ -29,10 +49,40 @@ pub fn chute_editor_ui(
                     ui.checkbox(&mut params.handles_visible, "Show curve handles");
                     ui.checkbox(&mut params.endpoints_visible, "Show endpoint handles");
 
+                    ui.horizontal(|ui| {
+                        ui.label("Drag axis:");
+                        ui.radio_value(&mut params.drag_axis, DragAxis::Free,       "Free");
+                        ui.radio_value(&mut params.drag_axis, DragAxis::Vertical,   "Y only");
+                        ui.radio_value(&mut params.drag_axis, DragAxis::Horizontal, "Z only");
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Shift Y:");
+                        if ui.button("− 1mm").clicked() {
+                            params.p0[1]  -= 0.001;
+                            params.cp1[1] -= 0.001;
+                            params.cp2[1] -= 0.001;
+                            params.p3[1]  -= 0.001;
+                            changed = true;
+                        }
+                        if ui.button("+ 1mm").clicked() {
+                            params.p0[1]  += 0.001;
+                            params.cp1[1] += 0.001;
+                            params.cp2[1] += 0.001;
+                            params.p3[1]  += 0.001;
+                            changed = true;
+                        }
+                    });
+
                     let old_col = marble_col.bypass_change_detection().0;
                     let mut new_col = old_col;
                     ui.checkbox(&mut new_col, "Marble-marble collisions");
                     if new_col != old_col { marble_col.0 = new_col; }
+
+                    let old_fixed = snare_fixed.bypass_change_detection().0;
+                    let mut new_fixed = old_fixed;
+                    ui.checkbox(&mut new_fixed, "Fix snare (freeze arm)");
+                    if new_fixed != old_fixed { snare_fixed.0 = new_fixed; }
 
                     ui.separator();
                     ui.heading("Extremities");

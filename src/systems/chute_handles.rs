@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy_egui::EguiContexts;
 
-use crate::resources::chute_params::ChuteParams;
+use crate::resources::chute_params::{ChuteParams, DragAxis};
 use crate::resources::constants::{CHUTE_END_X, CHUTE_ORIGIN_Y, CHUTE_ORIGIN_Z};
 use crate::systems::camera::OrbitCamera;
 
@@ -194,18 +194,27 @@ pub fn chute_handle_drag_system(
         if let Some(hit) = ray_x_plane(origin, dir, CHUTE_END_X) {
             match &drag.active {
                 Some(DragState::Handle(idx)) => {
+                    let axis = params.drag_axis;
                     let pt = match idx {
                         0 => &mut params.p0,
                         1 => &mut params.cp1,
                         2 => &mut params.cp2,
                         _ => &mut params.p3,
                     };
-                    pt[0] = hit.z - CHUTE_ORIGIN_Z;
-                    pt[1] = hit.y - CHUTE_ORIGIN_Y;
+                    match axis {
+                        DragAxis::Free       => { pt[0] = hit.z - CHUTE_ORIGIN_Z; pt[1] = hit.y - CHUTE_ORIGIN_Y; }
+                        DragAxis::Vertical   => { pt[1] = hit.y - CHUTE_ORIGIN_Y; }
+                        DragAxis::Horizontal => { pt[0] = hit.z - CHUTE_ORIGIN_Z; }
+                    }
                 }
                 Some(DragState::Body { anchor, initial }) => {
-                    let dz = hit.z - anchor[0];
-                    let dy = hit.y - anchor[1];
+                    let raw_dz = hit.z - anchor[0];
+                    let raw_dy = hit.y - anchor[1];
+                    let (dz, dy) = match params.drag_axis {
+                        DragAxis::Free       => (raw_dz, raw_dy),
+                        DragAxis::Vertical   => (0.0,    raw_dy),
+                        DragAxis::Horizontal => (raw_dz, 0.0),
+                    };
                     params.p0 = [initial[0][0] + dz, initial[0][1] + dy];
                     params.cp1 = [initial[1][0] + dz, initial[1][1] + dy];
                     params.cp2 = [initial[2][0] + dz, initial[2][1] + dy];

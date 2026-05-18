@@ -2,6 +2,14 @@ use bevy::prelude::*;
 
 use crate::resources::constants::*;
 
+#[derive(Default, PartialEq, Clone, Copy)]
+pub enum DragAxis {
+    #[default]
+    Free,
+    Vertical,   // Y only
+    Horizontal, // Z only
+}
+
 #[derive(Resource)]
 pub struct ChuteParams {
     pub p0: [f32; 2],   // start (z, y)
@@ -11,6 +19,7 @@ pub struct ChuteParams {
     pub straight: bool,
     pub handles_visible: bool,
     pub endpoints_visible: bool,
+    pub drag_axis: DragAxis,
     pub dirty: bool,
 }
 
@@ -24,6 +33,7 @@ impl Default for ChuteParams {
             straight: true,
             handles_visible: true,
             endpoints_visible: true,
+            drag_axis: DragAxis::Free,
             dirty: false,
         }
     }

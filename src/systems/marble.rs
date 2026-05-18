@@ -36,6 +36,7 @@ pub struct TrailTimer(pub f32);
 pub struct SlideRecord {
     pub end_time: Option<f32>,
     pub end_vel: Option<Vec3>,
+    pub end_pos: Option<Vec3>,
 }
 
 const TRAIL_DOT_RADIUS: f32 = MARBLE_RADIUS * 0.5;
@@ -80,7 +81,8 @@ pub fn spawn_marble_on_click_system(
     chute_params: Res<ChuteParams>,
     marble_col: Res<MarbleCollisions>,
     drag: Res<HandleDrag>,
-    time: Res<Time>,
+    // Use fixed-step time so spawn timestamps are on the same clock as velocity samples.
+    time: Res<Time<Fixed>>,
     trail_dots: Query<Entity, With<TrailDot>>,
     snare: Query<&GlobalTransform, With<SnareDrum>>,
     mut contexts: bevy_egui::EguiContexts,
@@ -108,6 +110,9 @@ pub fn spawn_marble_on_click_system(
     );
 
     let run_idx = all_runs.push_new_run();
+    if let Some(run) = all_runs.get_run_mut(run_idx) {
+        run.chute_exit = Some(chute_params.p3);
+    }
     spawn_marble(&mut commands, &mut meshes, &mut materials, spawn_position, marble_col.0, spawn_time, run_idx);
     spawn_chute_marble(&mut commands, &mut meshes, &mut materials, &chute_params, marble_col.0, spawn_time, run_idx);
 }
@@ -275,6 +280,7 @@ pub fn track_slide_end_system(
         if min_dist > CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS * 2.0 {
             slide.end_time = Some(time.elapsed_seconds());
             slide.end_vel = Some(vel.linvel);
+            slide.end_pos = Some(tf.translation);
         }
     }
 }
@@ -283,8 +289,9 @@ pub fn track_slide_end_system(
 pub fn record_snare_hit_system(
     mut events: EventReader<CollisionEvent>,
     time: Res<Time>,
-    marbles: Query<(&Velocity, &SpawnTime, Option<&ChuteMarble>, Option<&SlideRecord>, &RunIndex), With<Marble>>,
+    marbles: Query<(&Transform, &Velocity, &SpawnTime, Option<&ChuteMarble>, Option<&SlideRecord>, &RunIndex), With<Marble>>,
     snares: Query<&GlobalTransform, With<SnareDrum>>,
+    arm_q: Query<&Velocity, With<crate::components::snare::PivotArm>>,
     mut all_runs: ResMut<RunHistory>,
 ) {
     for event in events.read() {
@@ -296,12 +303,24 @@ pub fn record_snare_hit_system(
             else { continue };
 
         let Ok(snare_gt) = snares.get(snare_entity) else { continue };
-        let snare_normal = snare_gt.compute_transform().rotation * Vec3::Y;
+        let snare_rot = snare_gt.compute_transform().rotation;
+        let snare_normal = snare_rot * Vec3::Y;
+        let arm_deg = snare_rot.to_euler(EulerRot::XYZ).0.to_degrees();
+        let arm_angvel = arm_q.get_single()
+            .map(|v| v.angvel.x.to_degrees())
+            .unwrap_or(0.0);
 
-        let Ok((vel, spawn_time, is_chute, slide, run_idx)) = marbles.get(marble_entity) else { continue };
+        let Ok((tf, vel, spawn_time, is_chute, slide, run_idx)) = marbles.get(marble_entity) else { continue };
+
+        let snare_center = snare_gt.translation();
+        let hit_local = snare_rot.inverse() * (tf.translation - snare_center);
 
         let flight_s = time.elapsed_seconds() - spawn_time.0;
         let mut record = HitRecord::new(vel.linvel, vel.angvel, snare_normal, flight_s, MARBLE_RADIUS);
+        record.hit_pos = tf.translation;
+        record.hit_local = hit_local;
+        record.arm_deg = arm_deg;
+        record.arm_angvel = arm_angvel;
 
         if is_chute.is_some() {
             if let Some(s) = slide {
@@ -310,6 +329,7 @@ pub fn record_snare_hit_system(
                     record.slide_end_vy = Some(lv.y);
                     record.slide_end_vz = Some(lv.z);
                 }
+                record.slide_end_pos = s.end_pos;
             }
         }
 
