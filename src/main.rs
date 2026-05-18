@@ -51,10 +51,11 @@ fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(DefaultPlugins);
 
-    app.add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
+    app.add_plugins(RapierPhysicsPlugin::<NoUserData>::default().in_fixed_schedule())
         .add_plugins(EguiPlugin)
-        // 2000 Hz physics: reduces step-boundary collision time quantization to ~0.50 ms max.
-        .insert_resource(Time::<Fixed>::from_hz(2000.0))
+        // 2000 Hz physics: physics runs in FixedUpdate so each step is 0.5 ms,
+        // giving ~0.5 ms max collision-time quantization.
+        .insert_resource(Time::<Fixed>::from_hz(10000.0))
         .insert_resource(ClearColor(Color::srgb(BG_COLOR.0, BG_COLOR.1, BG_COLOR.2)))
         .init_resource::<ChuteParams>()
         .init_resource::<MarbleCollisions>()

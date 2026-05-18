@@ -122,7 +122,11 @@ pub fn chute_editor_ui(
                     });
                     ui.horizontal(|ui| {
                         ui.label("Step P3.y (mm):");
-                        ui.add(egui::DragValue::new(&mut auto_spawn.step_y_mm).speed(0.1));
+                        ui.add(egui::DragValue::new(&mut auto_spawn.step_p3_y_mm).speed(0.1));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Step P0.y (mm):");
+                        ui.add(egui::DragValue::new(&mut auto_spawn.step_p0_y_mm).speed(0.1));
                     });
 
                     let is_running = auto_spawn.pending > 0 || auto_spawn.waiting_for.is_some();

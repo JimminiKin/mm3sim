@@ -296,14 +296,16 @@ pub fn record_snare_hit_system(
         }
 
         let Some(run) = all_runs.get_run_mut(run_idx.0) else { continue };
-        if is_chute.is_some() { run.chute = Some(record); } else { run.drop = Some(record); }
+        // Only keep the first contact — bounces and rim/head secondary hits must not overwrite.
+        if is_chute.is_some() { run.chute.get_or_insert(record); } else { run.drop.get_or_insert(record); }
     }
 }
 
 #[derive(Resource)]
 pub struct AutoSpawn {
     pub batch_size: u32,
-    pub step_y_mm: f32,
+    pub step_p3_y_mm: f32,
+    pub step_p0_y_mm: f32,
     pub pending: u32,
     pub spawned: u32,
     pub waiting_for: Option<usize>,
@@ -311,7 +313,7 @@ pub struct AutoSpawn {
 
 impl Default for AutoSpawn {
     fn default() -> Self {
-        Self { batch_size: 100, step_y_mm: 1.0, pending: 0, spawned: 0, waiting_for: None }
+        Self { batch_size: 100, step_p3_y_mm: 0.0, step_p0_y_mm: 0.0, pending: 0, spawned: 0, waiting_for: None }
     }
 }
 
@@ -324,20 +326,26 @@ pub fn auto_spawn_system(
     marble_col: Res<MarbleCollisions>,
     snare: Query<&GlobalTransform, With<SnareDrum>>,
     mut all_runs: ResMut<RunHistory>,
-    marble_runs: Query<&RunIndex, With<Marble>>,
+    // Wait until the chute marble from the previous run has left the chute surface.
+    // This lets the next run start while the previous marble is still in the air.
+    chute_slides: Query<(&RunIndex, &SlideRecord), (With<Marble>, With<ChuteMarble>)>,
 ) {
-    // Wait until the current in-flight pair is gone
     if let Some(waiting_idx) = auto.waiting_for {
-        if marble_runs.iter().any(|ri| ri.0 == waiting_idx) { return; }
+        // Proceed once the chute marble has lifted off, or is already despawned.
+        let still_on_chute = chute_slides
+            .iter()
+            .any(|(ri, slide)| ri.0 == waiting_idx && slide.end_time.is_none());
+        if still_on_chute { return; }
         auto.waiting_for = None;
     }
 
     if auto.pending == 0 { return; }
 
-    // Advance p3.y for every run after the first so the first run uses the current position
+    // Advance control points for every run after the first.
     if auto.spawned > 0 {
-        params.p3[1] += auto.step_y_mm * 0.001;
-        params.dirty = true;
+        if auto.step_p3_y_mm != 0.0 { params.p3[1] += auto.step_p3_y_mm * 0.001; }
+        if auto.step_p0_y_mm != 0.0 { params.p0[1] += auto.step_p0_y_mm * 0.001; }
+        if auto.step_p3_y_mm != 0.0 || auto.step_p0_y_mm != 0.0 { params.dirty = true; }
     }
 
     let snare_top_y = snare

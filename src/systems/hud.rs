@@ -62,44 +62,55 @@ pub fn hud_panel_ui(
                         .collect();
                     live.sort_by_key(|(is_chute, _, _)| *is_chute as u8);
 
-                    if !live.is_empty() {
-                        ui.label(egui::RichText::new("Live").strong());
-                        egui::Grid::new("live_grid")
-                            .num_columns(6)
-                            .spacing([6.0, 2.0])
-                            .show(ui, |ui| {
-                                for label in ["", "spd", "vy", "vh", "AoA", "spin"] {
-                                    ui.monospace(label);
-                                }
-                                ui.end_row();
-                                for (is_chute, v, angvel) in &live {
-                                    let label = if *is_chute { "Chute" } else { "Drop " };
-                                    let speed = v.length();
-                                    let aoa = if speed > 0.01 {
-                                        (*v / speed).dot(snare_normal).abs().clamp(0.0, 1.0).asin().to_degrees()
-                                    } else {
-                                        0.0
-                                    };
-                                    let spin = angvel.length() * MARBLE_RADIUS;
-                                    let vh = Vec2::new(v.x, v.z).length();
-                                    ui.monospace(label);
-                                    ui.monospace(format!("{speed:5.2}"));
-                                    ui.monospace(format!("{:+5.2}", v.y));
-                                    ui.monospace(format!("{vh:5.2}"));
-                                    ui.monospace(format!("{aoa:4.1}°"));
-                                    ui.monospace(format!("{spin:.3}"));
-                                    ui.end_row();
-                                }
-                            });
-                        ui.separator();
-                    }
+                    let live_label = if live.is_empty() {
+                        egui::RichText::new("Live").strong()
+                    } else {
+                        egui::RichText::new(format!("Live ({})", live.len())).strong()
+                    };
+                    egui::CollapsingHeader::new(live_label)
+                        .id_source("live_header")
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            if live.is_empty() {
+                                ui.label("No marbles in flight");
+                            } else {
+                                egui::Grid::new("live_grid")
+                                    .num_columns(6)
+                                    .spacing([6.0, 2.0])
+                                    .show(ui, |ui| {
+                                        for label in ["", "spd", "vy", "vh", "AoA", "spin"] {
+                                            ui.monospace(label);
+                                        }
+                                        ui.end_row();
+                                        for (is_chute, v, angvel) in &live {
+                                            let label = if *is_chute { "Chute" } else { "Drop " };
+                                            let speed = v.length();
+                                            let aoa = if speed > 0.01 {
+                                                (*v / speed).dot(snare_normal).abs().clamp(0.0, 1.0).asin().to_degrees()
+                                            } else {
+                                                0.0
+                                            };
+                                            let spin = angvel.length() * MARBLE_RADIUS;
+                                            let vh = Vec2::new(v.x, v.z).length();
+                                            ui.monospace(label);
+                                            ui.monospace(format!("{speed:5.2}"));
+                                            ui.monospace(format!("{:+5.2}", v.y));
+                                            ui.monospace(format!("{vh:5.2}"));
+                                            ui.monospace(format!("{aoa:4.1}°"));
+                                            ui.monospace(format!("{spin:.3}"));
+                                            ui.end_row();
+                                        }
+                                    });
+                            }
+                        });
+                    ui.separator();
 
                     // Summary
                     let has_runs = !all_runs.runs.is_empty();
                     if has_runs {
                         egui::CollapsingHeader::new("Summary")
                             .id_source("summary_header")
-                            .default_open(true)
+                            .default_open(false)
                             .show(ui, |ui| render_summary(ui, &all_runs.runs));
                         ui.separator();
                     }
