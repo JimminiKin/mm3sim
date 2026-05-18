@@ -52,6 +52,10 @@ pub struct Run {
     pub chute_exit: Option<[f32; 2]>, // p3 at spawn time: [z, y] relative to snare top
     pub samples: Vec<VelocitySample>,
     pub graph_open: bool,
+    pub drop_path: Vec<Vec3>,
+    pub chute_path: Vec<Vec3>,
+    pub drop_ghost_open: bool,
+    pub chute_ghost_open: bool,
 }
 
 #[derive(Resource, Default)]
@@ -74,6 +78,10 @@ impl RunHistory {
             chute_exit: None,
             samples: Vec::new(),
             graph_open: false,
+            drop_path: Vec::new(),
+            chute_path: Vec::new(),
+            drop_ghost_open: false,
+            chute_ghost_open: false,
         });
         idx
     }

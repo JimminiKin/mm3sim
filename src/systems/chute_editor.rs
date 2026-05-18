@@ -6,6 +6,7 @@ use crate::components::chute::{spawn_chute, ChuteSegment};
 use crate::components::snare::PivotArm;
 use crate::resources::chute_params::{ChuteParams, DragAxis};
 use crate::resources::marble_collisions::MarbleCollisions;
+use crate::systems::sound::SnareVolume;
 
 #[derive(Resource, Default)]
 pub struct SnareFixed(pub bool);
@@ -29,6 +30,7 @@ pub fn chute_editor_ui(
     mut params: ResMut<ChuteParams>,
     mut marble_col: ResMut<MarbleCollisions>,
     mut snare_fixed: ResMut<SnareFixed>,
+    mut snare_volume: ResMut<SnareVolume>,
 ) {
     let ctx = contexts.ctx_mut();
     egui::Window::new("Parameters")
@@ -83,6 +85,12 @@ pub fn chute_editor_ui(
                     let mut new_fixed = old_fixed;
                     ui.checkbox(&mut new_fixed, "Fix snare (freeze arm)");
                     if new_fixed != old_fixed { snare_fixed.0 = new_fixed; }
+
+                    ui.horizontal(|ui| {
+                        ui.label("Snare volume:");
+                        ui.add(egui::Slider::new(&mut snare_volume.0, 0.0..=1.0).show_value(false));
+                        ui.monospace(format!("{:.0}%", snare_volume.0 * 100.0));
+                    });
 
                     ui.separator();
                     ui.heading("Extremities");

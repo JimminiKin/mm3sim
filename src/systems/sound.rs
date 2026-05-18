@@ -6,9 +6,16 @@ use crate::systems::marble::Marble;
 
 const MAX_IMPACT_SPEED: f32 = 4.0; // m/s — marble free-fall from 0.80 m spawn height
 
-fn impact_volume(speed: f32) -> f32 {
+#[derive(Resource)]
+pub struct SnareVolume(pub f32);
+
+impl Default for SnareVolume {
+    fn default() -> Self { SnareVolume(1.0) }
+}
+
+fn impact_volume(speed: f32, vol: f32) -> f32 {
     // Square-root curve: quieter hits stay audible, loud hits don't clip
-    (speed / MAX_IMPACT_SPEED).clamp(0.0, 1.0).powf(0.5)
+    (speed / MAX_IMPACT_SPEED).clamp(0.0, 1.0).powf(0.5) * vol
 }
 
 // ── Native: pre-bake WAV into a Bevy AudioSource ─────────────────────────────
@@ -40,6 +47,7 @@ pub fn snare_hit_sound_system(
     marbles: Query<&Velocity, With<Marble>>,
     snares: Query<(), With<SnareDrum>>,
     sound: Option<Res<SnareHitSound>>,
+    snare_volume: Res<SnareVolume>,
     mut commands: Commands,
 ) {
     let Some(sound) = sound else { return };
@@ -60,7 +68,7 @@ pub fn snare_hit_sound_system(
         commands.spawn(AudioBundle {
             source: sound.0.clone(),
             settings: PlaybackSettings {
-                volume: Volume::new(impact_volume(speed)),
+                volume: Volume::new(impact_volume(speed, snare_volume.0)),
                 ..PlaybackSettings::ONCE
             },
         });
@@ -87,6 +95,7 @@ pub fn snare_hit_sound_system(
     mut events: EventReader<CollisionEvent>,
     marbles: Query<&Velocity, With<Marble>>,
     snares: Query<(), With<SnareDrum>>,
+    snare_volume: Res<SnareVolume>,
 ) {
     for event in events.read() {
         let CollisionEvent::Started(e1, e2, _) = event else { continue };
@@ -102,7 +111,7 @@ pub fn snare_hit_sound_system(
             .map(|v| v.linvel.length())
             .unwrap_or(0.0);
 
-        play_snare_web_audio(impact_volume(speed));
+        play_snare_web_audio(impact_volume(speed, snare_volume.0));
     }
 }
 

@@ -20,13 +20,12 @@ use systems::chute_handles::{
 };
 use systems::hud::hud_panel_ui;
 use systems::marble::{
-    despawn_fallen_marbles_system, record_snare_hit_system, setup_marble_trail_assets,
-    spawn_marble_on_click_system, track_slide_end_system, trail_record_system,
-    update_marble_collisions,
+    despawn_fallen_marbles_system, record_marble_paths_system, record_snare_hit_system,
+    spawn_marble_on_click_system, track_slide_end_system, update_marble_collisions,
 };
-use systems::marble_graph::{marble_graph_ui, record_chute_marble_system};
+use systems::marble_graph::{draw_marble_ghosts_system, marble_graph_ui, record_chute_marble_system};
 use systems::setup::setup_system;
-use systems::sound::{setup_snare_sound, snare_hit_sound_system};
+use systems::sound::{setup_snare_sound, snare_hit_sound_system, SnareVolume};
 
 fn main() {
     let mut app = App::new();
@@ -57,6 +56,7 @@ fn main() {
         .init_resource::<HandleDrag>()
         .init_resource::<RunHistory>()
         .init_resource::<SnareFixed>()
+        .init_resource::<SnareVolume>()
         .add_systems(
             Startup,
             (
@@ -64,7 +64,6 @@ fn main() {
                 setup_snare_sound,
                 setup_axes_hud,
                 setup_chute_handles,
-                setup_marble_trail_assets,
             ),
         )
         // All physics data collection runs after PhysicsSet::Writeback so collision events
@@ -90,7 +89,8 @@ fn main() {
                 despawn_fallen_marbles_system,
                 update_marble_collisions,
                 snare_hit_sound_system,
-                trail_record_system,
+                record_marble_paths_system,
+                draw_marble_ghosts_system,
                 // Chute
                 rebuild_chute_system,
                 sync_handle_transforms,

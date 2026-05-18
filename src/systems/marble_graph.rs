@@ -3,6 +3,9 @@ use bevy_egui::{egui, EguiContexts};
 use bevy_rapier3d::prelude::*;
 use egui_plot::{Legend, Line, Plot, PlotPoints};
 
+const DROP_GHOST_COLOR: Color  = Color::srgba(0.95, 0.35, 0.15, 0.75);
+const CHUTE_GHOST_COLOR: Color = Color::srgba(0.20, 0.45, 0.90, 0.75);
+
 use crate::resources::constants::MARBLE_RADIUS;
 use crate::resources::marble_runs::{RunHistory, VelocitySample};
 use crate::systems::marble::{ChuteMarble, Marble, RunIndex, SpawnTime};
@@ -22,6 +25,17 @@ pub fn record_chute_marble_system(
         };
         if let Some(run) = all_runs.get_run_mut(run_idx.0) {
             run.samples.push(sample);
+        }
+    }
+}
+
+pub fn draw_marble_ghosts_system(mut gizmos: Gizmos, all_runs: Res<RunHistory>) {
+    for run in &all_runs.runs {
+        if run.drop_ghost_open && run.drop_path.len() >= 2 {
+            gizmos.linestrip(run.drop_path.iter().copied(), DROP_GHOST_COLOR);
+        }
+        if run.chute_ghost_open && run.chute_path.len() >= 2 {
+            gizmos.linestrip(run.chute_path.iter().copied(), CHUTE_GHOST_COLOR);
         }
     }
 }

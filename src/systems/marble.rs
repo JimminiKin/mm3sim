@@ -30,7 +30,7 @@ pub struct SpawnTime(pub f32);
 pub struct RunIndex(pub usize);
 
 #[derive(Component)]
-pub struct TrailTimer(pub f32);
+pub struct PathTimer(pub f32);
 
 #[derive(Component, Default)]
 pub struct SlideRecord {
@@ -39,39 +39,7 @@ pub struct SlideRecord {
     pub end_pos: Option<Vec3>,
 }
 
-const TRAIL_DOT_RADIUS: f32 = MARBLE_RADIUS * 0.5;
-const TRAIL_INTERVAL_S: f32 = 0.005;
-
-#[derive(Resource)]
-pub struct MarbleTrailAssets {
-    pub mesh: Handle<Mesh>,
-    pub drop_mat: Handle<StandardMaterial>,
-    pub chute_mat: Handle<StandardMaterial>,
-}
-
-pub fn setup_marble_trail_assets(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let mesh = meshes.add(Mesh::from(Sphere { radius: TRAIL_DOT_RADIUS }));
-    let drop_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(MARBLE_COLOR.0, MARBLE_COLOR.1, MARBLE_COLOR.2, 0.55),
-        alpha_mode: AlphaMode::Blend,
-        unlit: true,
-        ..default()
-    });
-    let chute_mat = materials.add(StandardMaterial {
-        base_color: Color::srgba(CHUTE_MARBLE_COLOR.0, CHUTE_MARBLE_COLOR.1, CHUTE_MARBLE_COLOR.2, 0.55),
-        alpha_mode: AlphaMode::Blend,
-        unlit: true,
-        ..default()
-    });
-    commands.insert_resource(MarbleTrailAssets { mesh, drop_mat, chute_mat });
-}
-
-#[derive(Component)]
-pub struct TrailDot;
+const GHOST_SAMPLE_INTERVAL: f32 = 0.008; // ~125 Hz — smooth curves without excessive data
 
 pub fn spawn_marble_on_click_system(
     buttons: Res<ButtonInput<MouseButton>>,
@@ -83,7 +51,6 @@ pub fn spawn_marble_on_click_system(
     drag: Res<HandleDrag>,
     // Use fixed-step time so spawn timestamps are on the same clock as velocity samples.
     time: Res<Time<Fixed>>,
-    trail_dots: Query<Entity, With<TrailDot>>,
     snare: Query<&GlobalTransform, With<SnareDrum>>,
     mut contexts: bevy_egui::EguiContexts,
     mut all_runs: ResMut<RunHistory>,
@@ -91,10 +58,6 @@ pub fn spawn_marble_on_click_system(
     if contexts.ctx_mut().wants_pointer_input() { return; }
     if drag.active.is_some() { return; }
     if !buttons.just_pressed(MouseButton::Left) { return; }
-
-    for entity in &trail_dots {
-        commands.entity(entity).despawn();
-    }
 
     let snare_top_y = snare
         .get_single()
@@ -130,7 +93,7 @@ pub fn spawn_marble(
         Marble,
         RunIndex(run_idx),
         SpawnTime(spawn_time),
-        TrailTimer(0.0),
+        PathTimer(0.0),
         PbrBundle {
             mesh: meshes.add(Mesh::from(Sphere { radius: MARBLE_RADIUS })),
             material: materials.add(StandardMaterial {
@@ -180,7 +143,7 @@ pub fn spawn_chute_marble(
 
     // Nest marker components to stay under Bevy's 15-element flat Bundle limit.
     commands.spawn((
-        (Marble, ChuteMarble, RunIndex(run_idx), SpawnTime(spawn_time), TrailTimer(0.0), SlideRecord::default()),
+        (Marble, ChuteMarble, RunIndex(run_idx), SpawnTime(spawn_time), PathTimer(0.0), SlideRecord::default()),
         PbrBundle {
             mesh: meshes.add(Mesh::from(Sphere { radius: MARBLE_RADIUS })),
             material: materials.add(StandardMaterial {
@@ -204,30 +167,20 @@ pub fn spawn_chute_marble(
     ));
 }
 
-pub fn trail_record_system(
-    mut commands: Commands,
+pub fn record_marble_paths_system(
+    mut all_runs: ResMut<RunHistory>,
     time: Res<Time>,
-    mut marbles: Query<(&Transform, Option<&ChuteMarble>, &mut TrailTimer), With<Marble>>,
-    assets: Option<Res<MarbleTrailAssets>>,
+    mut marbles: Query<(&Transform, Option<&ChuteMarble>, &RunIndex, &mut PathTimer), With<Marble>>,
 ) {
-    let Some(assets) = assets else { return };
     let dt = time.delta_seconds();
-
-    for (transform, is_chute, mut timer) in &mut marbles {
+    for (tf, is_chute, run_idx, mut timer) in &mut marbles {
         timer.0 += dt;
-        if timer.0 < TRAIL_INTERVAL_S { continue; }
-        timer.0 -= TRAIL_INTERVAL_S;
-
-        let mat = if is_chute.is_some() { assets.chute_mat.clone() } else { assets.drop_mat.clone() };
-        commands.spawn((
-            PbrBundle {
-                mesh: assets.mesh.clone(),
-                material: mat,
-                transform: *transform,
-                ..default()
-            },
-            TrailDot,
-        ));
+        if timer.0 < GHOST_SAMPLE_INTERVAL { continue; }
+        timer.0 -= GHOST_SAMPLE_INTERVAL;
+        if let Some(run) = all_runs.get_run_mut(run_idx.0) {
+            let path = if is_chute.is_some() { &mut run.chute_path } else { &mut run.drop_path };
+            path.push(tf.translation);
+        }
     }
 }
 

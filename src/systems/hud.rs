@@ -7,7 +7,6 @@ use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
 use crate::resources::marble_runs::{HitRecord, Run, RunHistory};
 use crate::systems::marble::{ChuteMarble, Marble};
-
 pub fn hud_panel_ui(
     mut contexts: EguiContexts,
     marbles: Query<(&Velocity, Option<&ChuteMarble>), With<Marble>>,
@@ -153,10 +152,20 @@ pub fn hud_panel_ui(
                                             Some(r) => render_chute_detail(ui, r),
                                         }
                                         ui.add_space(4.0);
-                                        let btn_label = if all_runs.runs[i].graph_open { "Hide Graph" } else { "Show Graph" };
-                                        if ui.button(btn_label).clicked() {
-                                            all_runs.runs[i].graph_open = !all_runs.runs[i].graph_open;
-                                        }
+                                        ui.horizontal(|ui| {
+                                            let graph_label = if all_runs.runs[i].graph_open { "Hide Graph" } else { "Graph" };
+                                            if ui.button(graph_label).clicked() {
+                                                all_runs.runs[i].graph_open = !all_runs.runs[i].graph_open;
+                                            }
+                                            let drop_label = if all_runs.runs[i].drop_ghost_open { "Hide Drop" } else { "Drop Ghost" };
+                                            if ui.button(drop_label).clicked() {
+                                                all_runs.runs[i].drop_ghost_open = !all_runs.runs[i].drop_ghost_open;
+                                            }
+                                            let chute_label = if all_runs.runs[i].chute_ghost_open { "Hide Chute" } else { "Chute Ghost" };
+                                            if ui.button(chute_label).clicked() {
+                                                all_runs.runs[i].chute_ghost_open = !all_runs.runs[i].chute_ghost_open;
+                                            }
+                                        });
                                     });
                             }
                         });
