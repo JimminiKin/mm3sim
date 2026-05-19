@@ -9,6 +9,7 @@ use bevy_rapier3d::prelude::*;
 
 use resources::chute_params::ChuteParams;
 use resources::constants::BG_COLOR;
+use resources::constants::SIMULATION_TPS;
 use resources::marble_collisions::MarbleCollisions;
 use resources::marble_runs::RunHistory;
 use systems::axes::{resize_axes_viewport, setup_axes_hud, update_axes_hud};
@@ -22,9 +23,9 @@ use systems::chute_handles::{
 };
 use systems::hud::hud_panel_ui;
 use systems::marble::{
-    advance_flight_timers_system, auto_spawn_system, despawn_fallen_marbles_system,
-    record_marble_paths_system, record_snare_hit_system, spawn_marble_on_click_system,
-    track_slide_end_system, update_marble_collisions, AutoSpawn,
+    advance_flight_timers_system, auto_spawn_system, capture_prev_velocity_system,
+    despawn_fallen_marbles_system, record_marble_paths_system, record_snare_hit_system,
+    spawn_marble_on_click_system, track_slide_end_system, update_marble_collisions, AutoSpawn,
 };
 use systems::marble_graph::{
     draw_marble_ghosts_system, marble_graph_ui, record_marble_samples_system,
@@ -53,15 +54,20 @@ fn main() {
 
     app.add_plugins(RapierPhysicsPlugin::<NoUserData>::default().in_fixed_schedule())
         .add_plugins(EguiPlugin)
-        // 2000 Hz physics ticks, 4 substeps each → 8000 effective solver passes/s.
-        // Substeps share the broad phase, so cost is ~2–3× a single-substep tick.
-        // TimestepMode::Fixed is the Rapier-recommended mode for in_fixed_schedule.
-        .insert_resource(Time::<Fixed>::from_hz(2000.0))
+        // 1000 Hz outer tick × 8 substeps = 8000 effective solver passes/s.
+        // The substep dt (0.125 ms) moves a 4.4 m/s marble only 0.55 mm — below
+        // Rapier's 1 mm allowed_linear_error, so Baumgarte position correction is
+        // never triggered and bounces are driven purely by the restitution coefficient.
+        .insert_resource(Time::<Fixed>::from_hz(SIMULATION_TPS.into()))
         .insert_resource(RapierConfiguration {
             timestep_mode: TimestepMode::Fixed {
-                dt: 1.0 / 2000.0,
-                substeps: 8,
+                dt: 1.0 / SIMULATION_TPS,
+                substeps: 1,
             },
+            physics_pipeline_active: true,
+            query_pipeline_active: true,
+            scaled_shape_subdivision: 10,
+            force_update_from_transform_changes: false,
             ..RapierConfiguration::new(1.0)
         })
         .insert_resource(ClearColor(Color::srgb(BG_COLOR.0, BG_COLOR.1, BG_COLOR.2)))
@@ -80,6 +86,12 @@ fn main() {
                 setup_axes_hud,
                 setup_chute_handles,
             ),
+        )
+        // Snapshot velocity before physics so impact recording always sees approach speed,
+        // not the partial post-bounce velocity that varies by substep contact phase.
+        .add_systems(
+            FixedUpdate,
+            capture_prev_velocity_system.before(PhysicsSet::SyncBackend),
         )
         // All physics data collection runs after PhysicsSet::Writeback so collision events
         // and velocity reads come from the completed step, not a prior tick's state.

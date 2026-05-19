@@ -45,6 +45,9 @@ pub const CHUTE_MARBLE_COLOR: (f32, f32, f32) = (0.20, 0.45, 0.90);
 // Physics & Geometry
 // =============================================================================
 
+// ── Simulation ────────────────────────────────────────────────────────────────
+pub const SIMULATION_TPS: f32 = 1000.0;
+
 // ── Surface physics ───────────────────────────────────────────────────────────
 pub const STEEL_RESTITUTION: f32 = 0.60; // marble
 pub const STEEL_FRICTION: f32 = 0.18; // marble
