@@ -177,7 +177,7 @@ pub fn spawn_chute_marble(
 
 pub fn record_marble_paths_system(
     mut all_runs: ResMut<RunHistory>,
-    time: Res<Time>,
+    time: Res<Time<Fixed>>,
     mut marbles: Query<(&Transform, Option<&ChuteMarble>, &RunIndex, &mut PathTimer), With<Marble>>,
 ) {
     let dt = time.delta_seconds();

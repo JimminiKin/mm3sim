@@ -55,7 +55,7 @@ fn main() {
         .add_plugins(EguiPlugin)
         // 2000 Hz physics: physics runs in FixedUpdate so each step is 0.5 ms,
         // giving ~0.5 ms max collision-time quantization.
-        .insert_resource(Time::<Fixed>::from_hz(20000.0))
+        .insert_resource(Time::<Fixed>::from_hz(2000.0))
         .insert_resource(ClearColor(Color::srgb(BG_COLOR.0, BG_COLOR.1, BG_COLOR.2)))
         .init_resource::<ChuteParams>()
         .init_resource::<MarbleCollisions>()
@@ -82,6 +82,7 @@ fn main() {
                 track_slide_end_system,
                 record_snare_hit_system,
                 record_marble_samples_system,
+                record_marble_paths_system,
             )
                 .chain()
                 .after(PhysicsSet::Writeback),
@@ -98,7 +99,6 @@ fn main() {
                 despawn_fallen_marbles_system,
                 update_marble_collisions,
                 snare_hit_sound_system,
-                record_marble_paths_system,
                 draw_marble_ghosts_system,
                 // Chute
                 rebuild_chute_system,

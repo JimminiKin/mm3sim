@@ -153,10 +153,10 @@ fn point_drag_row(ui: &mut egui::Ui, label: &str, pt: &mut [f32; 2], changed: &m
         ui.label(label);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             *changed |= ui
-                .add(egui::DragValue::new(&mut pt[1]).prefix("y ").speed(0.05))
+                .add(egui::DragValue::new(&mut pt[1]).prefix("y ").speed(0.001))
                 .changed();
             *changed |= ui
-                .add(egui::DragValue::new(&mut pt[0]).prefix("z ").speed(0.05))
+                .add(egui::DragValue::new(&mut pt[0]).prefix("z ").speed(0.001))
                 .changed();
         });
     });
@@ -171,8 +171,8 @@ fn center_drag_row(ui: &mut egui::Ui, label: &str, pt: &mut ChuteParams, changed
     ui.horizontal(|ui| {
         ui.label(label);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.add(egui::DragValue::new(&mut new_y).prefix("y ").speed(0.05));
-            ui.add(egui::DragValue::new(&mut new_z).prefix("z ").speed(0.05));
+            ui.add(egui::DragValue::new(&mut new_y).prefix("y ").speed(0.001));
+            ui.add(egui::DragValue::new(&mut new_z).prefix("z ").speed(0.001));
         });
     });
 
