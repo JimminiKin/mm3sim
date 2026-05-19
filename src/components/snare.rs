@@ -52,15 +52,6 @@ pub fn spawn_snare(
     let arm_spawn_y = PIVOT_LOCAL_Z * arm_rad.sin();
     let arm_spawn_z = PIVOT_FROM_SNARE - PIVOT_LOCAL_Z * arm_rad.cos();
 
-    // Stop post positions — each stop contacts the arm tube at the given angle
-    let stop_lower_rad = STOP_LOWER_DEG.to_radians();
-    let stop_post_z = PIVOT_FROM_SNARE - STOP_ARM_DIST * stop_lower_rad.cos();
-    let stop_post_y = -(STOP_ARM_DIST * stop_lower_rad.sin()) - ARM_TUBE_RADIUS - STOP_TUBE_RADIUS;
-
-    let stop_upper_rad = STOP_UPPER_DEG.to_radians();
-    let stop_upper_post_z = PIVOT_FROM_SNARE - STOP_ARM_DIST * stop_upper_rad.cos();
-    let stop_upper_post_y =
-        -(STOP_ARM_DIST * stop_upper_rad.sin()) + ARM_TUBE_RADIUS + STOP_TUBE_RADIUS;
     let chrome = materials.add(StandardMaterial {
         base_color: Color::srgb(CHROME_COLOR.0, CHROME_COLOR.1, CHROME_COLOR.2),
         metallic: CHROME_METALLIC,
@@ -94,6 +85,10 @@ pub fn spawn_snare(
     let joint = RevoluteJointBuilder::new(Vec3::X)
         .local_anchor1(Vec3::ZERO)
         .local_anchor2(Vec3::new(0.0, 0.0, PIVOT_LOCAL_Z))
+        .limits([
+            -(SNARE_REST_DEG + MAX_TILT_DEG).to_radians(),
+            -SNARE_REST_DEG.to_radians(),
+        ])
         .build();
 
     commands
@@ -161,35 +156,4 @@ pub fn spawn_snare(
             ));
         });
 
-    // Lower stop tube: arm tube bottom rests here at 20° snare-down
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Mesh::from(Cylinder {
-                radius: STOP_TUBE_RADIUS,
-                half_height: STOP_TUBE_HALF_LEN,
-            })),
-            material: dark_steel.clone(),
-            transform: Transform::from_xyz(0.0, stop_post_y, stop_post_z)
-                .with_rotation(Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2)),
-            ..default()
-        },
-        RigidBody::Fixed,
-        Collider::cylinder(STOP_TUBE_HALF_LEN, STOP_TUBE_RADIUS),
-    ));
-
-    // Upper stop tube: arm tube top rests here at 15° snare-down
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Mesh::from(Cylinder {
-                radius: STOP_TUBE_RADIUS,
-                half_height: STOP_TUBE_HALF_LEN,
-            })),
-            material: dark_steel,
-            transform: Transform::from_xyz(0.0, stop_upper_post_y, stop_upper_post_z)
-                .with_rotation(Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2)),
-            ..default()
-        },
-        RigidBody::Fixed,
-        Collider::cylinder(STOP_TUBE_HALF_LEN, STOP_TUBE_RADIUS),
-    ));
 }

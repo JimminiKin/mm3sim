@@ -50,13 +50,18 @@ pub const CW_LOCAL_Z: f32 = ARM_HALF_LEN;
 
 // Counterweight: mass computed so torques balance about the pivot
 pub const CW_DISTANCE: f32 = ARM_LENGTH - PIVOT_FROM_SNARE;
-pub const CW_RATIO: f32 = 1.1;
-pub const CW_MASS: f32 = SNARE_MASS * PIVOT_FROM_SNARE / CW_DISTANCE * CW_RATIO;
+pub const CW_WEIGHT_RATIO: f32 = 0.0010; // fraction above torque balance; > 0 → arm rests at upper joint limit
+pub const CW_MASS: f32 = (SNARE_MASS * PIVOT_FROM_SNARE + ARM_MASS * PIVOT_LOCAL_Z) / CW_DISTANCE
+    * (1.0 + CW_WEIGHT_RATIO);
 pub const CW_RADIUS: f32 = 0.02;
 pub const CW_HALF_HEIGHT: f32 = 0.08;
 
-// Arm spawn angle (negative = snare-side down)
-pub const ARM_SPAWN_DEG: f32 = -15.04;
+// ── Pivot joint limits ────────────────────────────────────────────────────────
+pub const SNARE_REST_DEG: f32 = 15.0; // snare tilt at rest (positive = snare-side down)
+pub const MAX_TILT_DEG: f32 = 2.0; // max additional downward tilt from rest on impact
+
+// Arm spawns at its rest angle (upper joint limit)
+pub const ARM_SPAWN_DEG: f32 = -SNARE_REST_DEG;
 
 // ── Marble ────────────────────────────────────────────────────────────────────
 pub const MARBLE_RADIUS: f32 = 0.0075;
@@ -78,17 +83,6 @@ pub const DARK_STEEL_ROUGHNESS: f32 = 0.20;
 pub const MARBLE_COLOR: (f32, f32, f32) = (0.95, 0.35, 0.15);
 pub const MARBLE_METALLIC: f32 = 0.80;
 pub const MARBLE_ROUGHNESS: f32 = 0.20;
-
-// ── Pivot stop ────────────────────────────────────────────────────────────────
-// Contact point is just past the snare edge so the stop post never overlaps the snare collider
-pub const STOP_CONTACT_Z_REST: f32 = 0.25;
-pub const STOP_ARM_DIST: f32 = PIVOT_FROM_SNARE - STOP_CONTACT_Z_REST;
-// Both stops are slender tubes running along X (perpendicular to the arm)
-pub const STOP_TUBE_RADIUS: f32 = 0.003;
-pub const STOP_TUBE_HALF_LEN: f32 = 0.05;
-// Arm angle at which each stop is contacted (positive = snare-side down)
-pub const STOP_LOWER_DEG: f32 = 17.0;
-pub const STOP_UPPER_DEG: f32 = 15.0;
 
 // ── Chute ─────────────────────────────────────────────────────────────────────
 // All chute Y/Z coords are relative to the snare top-face centre at arm θ=0.

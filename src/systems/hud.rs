@@ -579,7 +579,7 @@ fn render_help_panel(ui: &mut egui::Ui) {
                         ("θ < 0", "Snare-side of the arm is lower (snare tilted toward chute)."),
                         ("θ = 0", "Arm level; snare head is horizontal."),
                         ("θ > 0", "Counterweight side is lower; snare tilted away from chute."),
-                        ("Stops", "Physical stop posts prevent the arm rotating beyond ±15–17°."),
+                        ("Limits", "Revolute joint limits: arm rests at the upper limit (−SNARE_REST_DEG) and can tilt up to MAX_TILT_DEG further on impact."),
                     ];
                     for (k, v) in rows {
                         ui.label(egui::RichText::new(*k).monospace().strong());
