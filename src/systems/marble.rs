@@ -10,6 +10,17 @@ use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::marble_runs::{HitRecord, RunHistory};
 use crate::systems::chute_handles::HandleDrag;
 
+fn jittered_spawn(snare_top_y: f32) -> Vec3 {
+    let (x_off, z_off) = if MARBLE_SPAWN_JITTER > 0.0 {
+        let mut rng = rand::thread_rng();
+        (rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
+         rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER))
+    } else {
+        (0.0, 0.0)
+    };
+    Vec3::new(MARBLE_SPAWN_X + x_off, snare_top_y + SPAWN_HEIGHT, z_off)
+}
+
 // Marbles live in GROUP_1. Snare/chute use the Rapier default (ALL).
 // When marble-marble collisions are off, the filter only matches GROUP_2 (snare/chute),
 // so marbles pass through each other while still hitting the snare.
@@ -103,12 +114,7 @@ pub fn spawn_marble_on_click_system(
         .map(|gt| gt.translation().y + SNARE_HALF_HEIGHT)
         .unwrap_or(CHUTE_ORIGIN_Y);
 
-    let mut rng = rand::thread_rng();
-    let spawn_position = Vec3::new(
-        MARBLE_SPAWN_X + rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
-        snare_top_y + SPAWN_HEIGHT,
-        rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
-    );
+    let spawn_position = jittered_spawn(snare_top_y);
 
     let run_idx = all_runs.push_new_run();
     if let Some(run) = all_runs.get_run_mut(run_idx) {
@@ -355,12 +361,7 @@ pub fn auto_spawn_system(
         .map(|gt| gt.translation().y + SNARE_HALF_HEIGHT)
         .unwrap_or(CHUTE_ORIGIN_Y);
 
-    let mut rng = rand::thread_rng();
-    let spawn_position = Vec3::new(
-        MARBLE_SPAWN_X + rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
-        snare_top_y + SPAWN_HEIGHT,
-        rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
-    );
+    let spawn_position = jittered_spawn(snare_top_y);
 
     let run_idx = all_runs.push_new_run();
     if let Some(run) = all_runs.get_run_mut(run_idx) {

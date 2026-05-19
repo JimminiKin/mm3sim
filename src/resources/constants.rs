@@ -63,7 +63,7 @@ pub const MARBLE_RADIUS: f32 = 0.0075;
 pub const MARBLE_MASS: f32 = 0.014; // kg — steel at 20 mm diameter
 pub const MARBLE_SPAWN_X: f32 = 0.0; // centre of snare
 pub const SPAWN_HEIGHT: f32 = 1.0; // above snare top centre
-pub const MARBLE_SPAWN_JITTER: f32 = 0.0;
+pub const MARBLE_SPAWN_JITTER: f32 = 0.001;
 pub const DESPAWN_Y: f32 = -0.3;
 
 // ── Materials ─────────────────────────────────────────────────────────────────

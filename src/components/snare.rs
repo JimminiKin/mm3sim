@@ -4,6 +4,38 @@ use bevy_rapier3d::prelude::*;
 
 use crate::resources::constants::*;
 
+/// Flat disk trimesh at the snare top face (y = +SNARE_HALF_HEIGHT in local space).
+/// A pure flat polygon gives Rapier an unambiguous face normal, avoiding the
+/// GJK instability that comes from the cylinder's flat-cap / curved-side boundary.
+fn snare_head_collider() -> Collider {
+    const N: u32 = 48;
+    let h = SNARE_HALF_HEIGHT;
+    let r = SNARE_RADIUS;
+
+    let mut verts: Vec<Vec3> = Vec::with_capacity((N + 1) as usize);
+    verts.push(Vec3::new(0.0, h, 0.0)); // centre (index 0)
+    for i in 0..N {
+        let a = 2.0 * std::f32::consts::PI * i as f32 / N as f32;
+        verts.push(Vec3::new(r * a.cos(), h, r * a.sin()));
+    }
+
+    // Winding that gives normal = +Y (toward incoming marble).
+    // curr = rim vertex i+1, next = rim vertex (i+1)%N+1 (wraps 48→1).
+    // Cross product of (next-center)×(curr-center) points +Y.
+    let mut indices: Vec<[u32; 3]> = Vec::with_capacity(N as usize);
+    for i in 0..N {
+        let curr = i + 1;
+        let next = (i + 1) % N + 1;
+        indices.push([0, next, curr]);
+    }
+
+    Collider::trimesh_with_flags(
+        verts,
+        indices,
+        TriMeshFlags::FIX_INTERNAL_EDGES | TriMeshFlags::MERGE_DUPLICATE_VERTICES,
+    )
+}
+
 #[derive(Component)]
 pub struct SnareDrum;
 
@@ -106,7 +138,7 @@ pub fn spawn_snare(
                     transform: Transform::from_xyz(0.0, 0.0, SNARE_LOCAL_Z),
                     ..default()
                 },
-                Collider::cylinder(SNARE_HALF_HEIGHT, SNARE_RADIUS),
+                snare_head_collider(),
                 ColliderMassProperties::Mass(SNARE_MASS),
                 Restitution::coefficient(STEEL_RESTITUTION),
                 Friction::coefficient(STEEL_FRICTION),

@@ -9,10 +9,15 @@ const CHUTE_COLOR: egui::Color32 = egui::Color32::from_rgb(51,  115, 230);
 const DROP_GHOST_COLOR:  Color = Color::srgba(0.95, 0.35, 0.15, 0.75);
 const CHUTE_GHOST_COLOR: Color = Color::srgba(0.20, 0.45, 0.90, 0.75);
 
-/// Window of fixed-steps over which the smoothed acceleration is computed.
-/// At 10 kHz this equals 10 ms — wide enough to damp single-step contact
+/// Record one sample per millisecond (1 kHz). At 10 kHz physics this skips 9
+/// out of every 10 steps, keeping each run's sample count under ~2000 even for
+/// long chute slides. The acceleration window below stays 10 ms wide.
+const SAMPLE_INTERVAL: f32 = 0.001;
+
+/// Number of consecutive samples that span the smoothing window.
+/// At 1 kHz, 10 samples = 10 ms — wide enough to damp single-step contact
 /// spikes while still resolving the slide/free-flight phases clearly.
-const ACCEL_SMOOTH: usize = 100;
+const ACCEL_SMOOTH: usize = 10;
 
 use crate::resources::constants::MARBLE_RADIUS;
 use crate::resources::marble_runs::{MarbleSample, RunHistory};
@@ -23,20 +28,25 @@ pub fn record_marble_samples_system(
     marbles: Query<(&Velocity, &FlightTimer, &RunIndex, Option<&ChuteMarble>), With<Marble>>,
 ) {
     for (vel, timer, run_idx, is_chute) in &marbles {
-        let sample = MarbleSample {
+        let Some(run) = all_runs.get_run_mut(run_idx.0) else { continue };
+        let samples = if is_chute.is_some() {
+            &mut run.chute_samples
+        } else {
+            &mut run.drop_samples
+        };
+
+        // Throttle: skip if not enough time has elapsed since the last stored sample.
+        if let Some(last) = samples.last() {
+            if timer.0 - last.t < SAMPLE_INTERVAL { continue; }
+        }
+
+        samples.push(MarbleSample {
             t: timer.0,
             vy: vel.linvel.y,
             vz: vel.linvel.z,
             speed: vel.linvel.length(),
             spin: vel.angvel.length() * MARBLE_RADIUS,
-        };
-        if let Some(run) = all_runs.get_run_mut(run_idx.0) {
-            if is_chute.is_some() {
-                run.chute_samples.push(sample);
-            } else {
-                run.drop_samples.push(sample);
-            }
-        }
+        });
     }
 }
 
@@ -64,7 +74,7 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
 
         egui::Window::new(&title)
             .id(egui::Id::new(("graph", run.index)))
-            .default_size([420.0, 380.0])
+            .default_size([420.0, 400.0])
             .open(&mut open)
             .show(ctx, |ui| {
                 let has_drop  = !run.drop_samples.is_empty();
@@ -74,6 +84,16 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
                     ui.label("No data — marble still in flight or not yet spawned");
                     return;
                 }
+
+                // Diagnostic sample counts
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(format!(
+                        "drop {} pts    chute {} pts",
+                        run.drop_samples.len(),
+                        run.chute_samples.len(),
+                    )).small().weak());
+                });
+                ui.add_space(2.0);
 
                 let avail_h = ui.available_height();
                 let vel_h   = avail_h * 0.55;
@@ -115,7 +135,7 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
                 ui.add_space(6.0);
 
                 // ── Acceleration panel ────────────────────────────────────────
-                // Smoothed over ACCEL_SMOOTH steps (10 ms at 10 kHz).
+                // Smoothed over ACCEL_SMOOTH samples (10 ms at 1 kHz).
                 // Uses only vy/vz since vx ≈ 0 for both marble types.
                 let accel_pts = |samples: &[MarbleSample]| -> PlotPoints {
                     if samples.len() <= ACCEL_SMOOTH {
