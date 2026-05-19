@@ -36,8 +36,8 @@ impl HitRecord {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct VelocitySample {
+#[derive(Clone, Copy, Default)]
+pub struct MarbleSample {
     pub t: f32,
     pub vy: f32,
     pub vz: f32,
@@ -50,7 +50,8 @@ pub struct Run {
     pub drop: Option<HitRecord>,
     pub chute: Option<HitRecord>,
     pub chute_exit: Option<[f32; 2]>, // p3 at spawn time: [z, y] relative to snare top
-    pub samples: Vec<VelocitySample>,
+    pub drop_samples: Vec<MarbleSample>,
+    pub chute_samples: Vec<MarbleSample>,
     pub graph_open: bool,
     pub drop_path: Vec<Vec3>,
     pub chute_path: Vec<Vec3>,
@@ -75,7 +76,8 @@ impl RunHistory {
             drop: None,
             chute: None,
             chute_exit: None,
-            samples: Vec::new(),
+            drop_samples: Vec::new(),
+            chute_samples: Vec::new(),
             graph_open: false,
             drop_path: Vec::new(),
             chute_path: Vec::new(),

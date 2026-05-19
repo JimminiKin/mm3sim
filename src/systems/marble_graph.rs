@@ -1,21 +1,29 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use bevy_rapier3d::prelude::*;
-use egui_plot::{Legend, Line, Plot, PlotPoints};
+use egui_plot::{Legend, Line, LineStyle, Plot, PlotPoints};
 
-const DROP_GHOST_COLOR: Color  = Color::srgba(0.95, 0.35, 0.15, 0.75);
+const DROP_COLOR:  egui::Color32 = egui::Color32::from_rgb(242, 89,  38);
+const CHUTE_COLOR: egui::Color32 = egui::Color32::from_rgb(51,  115, 230);
+
+const DROP_GHOST_COLOR:  Color = Color::srgba(0.95, 0.35, 0.15, 0.75);
 const CHUTE_GHOST_COLOR: Color = Color::srgba(0.20, 0.45, 0.90, 0.75);
 
+/// Window of fixed-steps over which the smoothed acceleration is computed.
+/// At 10 kHz this equals 10 ms — wide enough to damp single-step contact
+/// spikes while still resolving the slide/free-flight phases clearly.
+const ACCEL_SMOOTH: usize = 100;
+
 use crate::resources::constants::MARBLE_RADIUS;
-use crate::resources::marble_runs::{RunHistory, VelocitySample};
+use crate::resources::marble_runs::{MarbleSample, RunHistory};
 use crate::systems::marble::{ChuteMarble, FlightTimer, Marble, RunIndex};
 
-pub fn record_chute_marble_system(
+pub fn record_marble_samples_system(
     mut all_runs: ResMut<RunHistory>,
-    marbles: Query<(&Velocity, &FlightTimer, &RunIndex), (With<Marble>, With<ChuteMarble>)>,
+    marbles: Query<(&Velocity, &FlightTimer, &RunIndex, Option<&ChuteMarble>), With<Marble>>,
 ) {
-    for (vel, timer, run_idx) in &marbles {
-        let sample = VelocitySample {
+    for (vel, timer, run_idx, is_chute) in &marbles {
+        let sample = MarbleSample {
             t: timer.0,
             vy: vel.linvel.y,
             vz: vel.linvel.z,
@@ -23,7 +31,11 @@ pub fn record_chute_marble_system(
             spin: vel.angvel.length() * MARBLE_RADIUS,
         };
         if let Some(run) = all_runs.get_run_mut(run_idx.0) {
-            run.samples.push(sample);
+            if is_chute.is_some() {
+                run.chute_samples.push(sample);
+            } else {
+                run.drop_samples.push(sample);
+            }
         }
     }
 }
@@ -47,33 +59,92 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
     for run in &mut all_runs.runs {
         if !run.graph_open { continue; }
 
-        let title = format!("Run {} — Velocity", run.index + 1);
+        let title = format!("Run {} — Velocity & Acceleration", run.index + 1);
         let mut open = true;
 
         egui::Window::new(&title)
             .id(egui::Id::new(("graph", run.index)))
-            .default_size([380.0, 240.0])
+            .default_size([420.0, 380.0])
             .open(&mut open)
             .show(ctx, |ui| {
-                if run.samples.is_empty() {
+                let has_drop  = !run.drop_samples.is_empty();
+                let has_chute = !run.chute_samples.is_empty();
+
+                if !has_drop && !has_chute {
                     ui.label("No data — marble still in flight or not yet spawned");
                     return;
                 }
 
-                let pts = |f: fn(&VelocitySample) -> f64| -> PlotPoints {
-                    PlotPoints::from_iter(run.samples.iter().map(|s| [s.t as f64, f(s)]))
+                let avail_h = ui.available_height();
+                let vel_h   = avail_h * 0.55;
+                let accel_h = avail_h * 0.45 - 6.0;
+
+                // ── Velocity panel ────────────────────────────────────────────
+                let vel_pts = |samples: &[MarbleSample], f: fn(&MarbleSample) -> f64| -> PlotPoints {
+                    PlotPoints::from_iter(samples.iter().map(|s| [s.t as f64, f(s)]))
                 };
 
                 Plot::new(format!("run_{}_vel", run.index))
                     .legend(Legend::default())
-                    .height(ui.available_height())
+                    .height(vel_h)
                     .x_axis_label("t (s)")
                     .y_axis_label("m/s")
                     .show(ui, |p| {
-                        p.line(Line::new(pts(|s| s.vy as f64)).name("vy"));
-                        p.line(Line::new(pts(|s| s.vz as f64)).name("vz"));
-                        p.line(Line::new(pts(|s| s.speed as f64)).name("speed"));
-                        p.line(Line::new(pts(|s| s.spin as f64)).name("spin"));
+                        if has_drop {
+                            p.line(Line::new(vel_pts(&run.drop_samples,  |s| s.speed as f64))
+                                .name("drop speed").color(DROP_COLOR));
+                            p.line(Line::new(vel_pts(&run.drop_samples,  |s| s.vy as f64))
+                                .name("drop vy").color(DROP_COLOR)
+                                .style(LineStyle::Dashed { length: 10.0 }));
+                        }
+                        if has_chute {
+                            p.line(Line::new(vel_pts(&run.chute_samples, |s| s.speed as f64))
+                                .name("chute speed").color(CHUTE_COLOR));
+                            p.line(Line::new(vel_pts(&run.chute_samples, |s| s.vy as f64))
+                                .name("chute vy").color(CHUTE_COLOR)
+                                .style(LineStyle::Dashed { length: 10.0 }));
+                            p.line(Line::new(vel_pts(&run.chute_samples, |s| s.vz as f64))
+                                .name("chute vz").color(CHUTE_COLOR)
+                                .style(LineStyle::Dotted { spacing: 6.0 }));
+                            p.line(Line::new(vel_pts(&run.chute_samples, |s| s.spin as f64))
+                                .name("chute spin").color(CHUTE_COLOR)
+                                .style(LineStyle::Dashed { length: 4.0 }));
+                        }
+                    });
+
+                ui.add_space(6.0);
+
+                // ── Acceleration panel ────────────────────────────────────────
+                // Smoothed over ACCEL_SMOOTH steps (10 ms at 10 kHz).
+                // Uses only vy/vz since vx ≈ 0 for both marble types.
+                let accel_pts = |samples: &[MarbleSample]| -> PlotPoints {
+                    if samples.len() <= ACCEL_SMOOTH {
+                        return PlotPoints::from_iter([]);
+                    }
+                    PlotPoints::from_iter(samples.windows(ACCEL_SMOOTH + 1).filter_map(|w| {
+                        let dt = w[ACCEL_SMOOTH].t - w[0].t;
+                        if dt < 1e-6 { return None; }
+                        let dvy = w[ACCEL_SMOOTH].vy - w[0].vy;
+                        let dvz = w[ACCEL_SMOOTH].vz - w[0].vz;
+                        let a = (dvy * dvy + dvz * dvz).sqrt() / dt;
+                        Some([w[ACCEL_SMOOTH].t as f64, a as f64])
+                    }))
+                };
+
+                Plot::new(format!("run_{}_accel", run.index))
+                    .legend(Legend::default())
+                    .height(accel_h)
+                    .x_axis_label("t (s)")
+                    .y_axis_label("m/s²")
+                    .show(ui, |p| {
+                        if has_drop {
+                            p.line(Line::new(accel_pts(&run.drop_samples))
+                                .name("drop |a|").color(DROP_COLOR));
+                        }
+                        if has_chute {
+                            p.line(Line::new(accel_pts(&run.chute_samples))
+                                .name("chute |a|").color(CHUTE_COLOR));
+                        }
                     });
             });
 

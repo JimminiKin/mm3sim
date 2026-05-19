@@ -38,6 +38,21 @@ pub fn hud_panel_ui(
                                 ui.label("Pivot");
                                 ui.monospace(format!("{:+6.2}°  (− = snare down)", deg));
                                 ui.end_row();
+
+                                // Gravitational torque about the pivot X-axis from the two
+                                // explicit masses. Positive = CW-side torque (snare rises).
+                                let d_cw    = CW_LOCAL_Z    - PIVOT_LOCAL_Z; // +CW_DISTANCE
+                                let d_snare = SNARE_LOCAL_Z - PIVOT_LOCAL_Z; // -PIVOT_FROM_SNARE
+                                let torque = 9.81 * deg.to_radians().cos()
+                                    * (CW_MASS * d_cw + SNARE_MASS * d_snare);
+                                ui.label("Torque");
+                                ui.monospace(format!("{:+.3} N·m", torque));
+                                ui.end_row();
+
+                                let asm_mass = SNARE_MASS + CW_MASS;
+                                ui.label("Weight");
+                                ui.monospace(format!("{:.2} kg  ({:.1} N)", asm_mass, asm_mass * 9.81));
+                                ui.end_row();
                             }
                             let dz = chute_params.p0[0] - chute_params.p3[0];
                             let dy = chute_params.p0[1] - chute_params.p3[1];
@@ -601,21 +616,25 @@ fn render_help_panel(ui: &mut egui::Ui) {
 
         ui.add_space(4.0);
 
-        egui::CollapsingHeader::new(egui::RichText::new("Velocity Graph").strong())
+        egui::CollapsingHeader::new(egui::RichText::new("Velocity & Acceleration Graph").strong())
             .id_source("help_graph")
             .default_open(false)
             .show(ui, |ui| {
                 ui.label(
-                    "Each run records the chute marble's velocity every frame. Open the graph \
-                     for any run via the \"Show Graph\" button inside that run's entry."
+                    "Each run records both marbles every physics step. Open the graph for any \
+                     run via the \"Graph\" button inside that run's entry. Orange = drop marble, \
+                     blue = chute marble."
                 );
                 ui.add_space(2.0);
                 egui::Grid::new("help_graph_grid").num_columns(2).spacing([12.0, 3.0]).show(ui, |ui| {
                     let rows: &[(&str, &str)] = &[
-                        ("vy",    "Vertical velocity (m/s). Negative while falling."),
-                        ("vz",    "Forward velocity along the chute / arm axis."),
-                        ("speed", "Total speed magnitude √(vx²+vy²+vz²)."),
-                        ("spin",  "Surface speed from angular velocity: ω × r."),
+                        ("speed",    "Total speed magnitude √(vx²+vy²+vz²).  Solid line."),
+                        ("vy",       "Vertical velocity (m/s). Negative while falling.  Dashed."),
+                        ("vz",       "Forward velocity along the chute / arm axis (chute only).  Dotted."),
+                        ("spin",     "Surface speed from angular velocity: ω × r (chute only).  Short dashes."),
+                        ("|a|",      "Smoothed acceleration magnitude in the Y-Z plane (m/s²), \
+                                      10 ms rolling window. Shows ~9.81 during free flight, \
+                                      higher during chute contact, spike at snare impact."),
                     ];
                     for (k, v) in rows {
                         ui.label(egui::RichText::new(*k).strong().monospace());
@@ -624,7 +643,7 @@ fn render_help_panel(ui: &mut egui::Ui) {
                     }
                 });
                 ui.label("Multiple graphs can be open simultaneously. Close via the × button \
-                          or \"Hide Graph\" in the run entry.");
+                          or \"Graph\" toggle in the run entry.");
             });
     });
 }

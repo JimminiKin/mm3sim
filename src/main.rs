@@ -27,7 +27,7 @@ use systems::marble::{
     track_slide_end_system, update_marble_collisions, AutoSpawn,
 };
 use systems::marble_graph::{
-    draw_marble_ghosts_system, marble_graph_ui, record_chute_marble_system,
+    draw_marble_ghosts_system, marble_graph_ui, record_marble_samples_system,
 };
 use systems::setup::setup_system;
 use systems::sound::{setup_snare_sound, snare_hit_sound_system, SnareVolume};
@@ -81,7 +81,7 @@ fn main() {
                 advance_flight_timers_system,
                 track_slide_end_system,
                 record_snare_hit_system,
-                record_chute_marble_system,
+                record_marble_samples_system,
             )
                 .chain()
                 .after(PhysicsSet::Writeback),

@@ -77,6 +77,7 @@ pub fn spawn_snare(
                 angular_damping: ARM_ANGULAR_DAMPING,
             },
             ImpulseJoint::new(anchor, joint),
+            LockedAxes::default(),
         ))
         .with_children(|p| {
             p.spawn((
@@ -92,6 +93,7 @@ pub fn spawn_snare(
                     ..default()
                 },
                 Collider::cylinder(ARM_HALF_LEN, ARM_TUBE_RADIUS),
+                ColliderMassProperties::Mass(ARM_MASS),
             ));
 
             p.spawn((

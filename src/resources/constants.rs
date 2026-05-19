@@ -32,8 +32,9 @@ pub const SNARE_HALF_HEIGHT: f32 = 0.070; // 5.5" depth
 pub const SNARE_MASS: f32 = 4.0; // kg
 
 // ── Pivot arm ─────────────────────────────────────────────────────────────────
-pub const ARM_LENGTH: f32 = 0.80; // 80 cm
+pub const ARM_LENGTH: f32 = 0.60; // 80 cm
 pub const ARM_TUBE_RADIUS: f32 = 0.025; // 2.5 cm radius
+pub const ARM_MASS: f32 = 1.0; // kg
 pub const PIVOT_TO_EDGE_GAP: f32 = 0.20; // 20 cm from snare edge to pivot
 pub const ARM_LINEAR_DAMPING: f32 = 0.0;
 pub const ARM_ANGULAR_DAMPING: f32 = 0.0;
@@ -51,7 +52,7 @@ pub const CW_LOCAL_Z: f32 = ARM_HALF_LEN;
 pub const CW_DISTANCE: f32 = ARM_LENGTH - PIVOT_FROM_SNARE;
 pub const CW_RATIO: f32 = 1.1;
 pub const CW_MASS: f32 = SNARE_MASS * PIVOT_FROM_SNARE / CW_DISTANCE * CW_RATIO;
-pub const CW_RADIUS: f32 = 0.12;
+pub const CW_RADIUS: f32 = 0.02;
 pub const CW_HALF_HEIGHT: f32 = 0.08;
 
 // Arm spawn angle (negative = snare-side down)
@@ -62,7 +63,7 @@ pub const MARBLE_RADIUS: f32 = 0.0075;
 pub const MARBLE_MASS: f32 = 0.014; // kg — steel at 20 mm diameter
 pub const MARBLE_SPAWN_X: f32 = 0.0; // centre of snare
 pub const SPAWN_HEIGHT: f32 = 1.0; // above snare top centre
-pub const MARBLE_SPAWN_JITTER: f32 = 0.001;
+pub const MARBLE_SPAWN_JITTER: f32 = 0.0;
 pub const DESPAWN_Y: f32 = -0.3;
 
 // ── Materials ─────────────────────────────────────────────────────────────────

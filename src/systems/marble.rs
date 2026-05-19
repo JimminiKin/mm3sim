@@ -44,6 +44,44 @@ pub struct SlideRecord {
 
 const GHOST_SAMPLE_INTERVAL: f32 = 0.008; // ~125 Hz — smooth curves without excessive data
 
+// ── Shared marble helpers ─────────────────────────────────────────────────────
+
+fn marble_pbr(
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    position: Vec3,
+    color: (f32, f32, f32),
+) -> PbrBundle {
+    PbrBundle {
+        mesh: meshes.add(Mesh::from(Sphere { radius: MARBLE_RADIUS })),
+        material: materials.add(StandardMaterial {
+            base_color: Color::srgb(color.0, color.1, color.2),
+            metallic: MARBLE_METALLIC,
+            perceptual_roughness: MARBLE_ROUGHNESS,
+            ..default()
+        }),
+        transform: Transform::from_translation(position),
+        ..default()
+    }
+}
+
+fn marble_physics(collide: bool) -> impl Bundle {
+    (
+        RigidBody::Dynamic,
+        Collider::ball(MARBLE_RADIUS),
+        ColliderMassProperties::Mass(MARBLE_MASS),
+        Restitution::coefficient(STEEL_RESTITUTION),
+        Friction::coefficient(STEEL_FRICTION),
+        ActiveEvents::COLLISION_EVENTS,
+        CollisionGroups::new(Group::GROUP_1, marble_filter(collide)),
+        GravityScale::default(),
+        Velocity::default(),
+        Ccd::enabled(),
+    )
+}
+
+// ── Spawn systems ─────────────────────────────────────────────────────────────
+
 pub fn spawn_marble_on_click_system(
     buttons: Res<ButtonInput<MouseButton>>,
     mut commands: Commands,
@@ -85,7 +123,7 @@ pub fn spawn_marble(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     position: Vec3,
-    marble_marble_collide: bool,
+    collide: bool,
     run_idx: usize,
 ) {
     commands.spawn((
@@ -93,27 +131,8 @@ pub fn spawn_marble(
         RunIndex(run_idx),
         FlightTimer(0.0),
         PathTimer(0.0),
-        PbrBundle {
-            mesh: meshes.add(Mesh::from(Sphere { radius: MARBLE_RADIUS })),
-            material: materials.add(StandardMaterial {
-                base_color: Color::srgb(MARBLE_COLOR.0, MARBLE_COLOR.1, MARBLE_COLOR.2),
-                metallic: MARBLE_METALLIC,
-                perceptual_roughness: MARBLE_ROUGHNESS,
-                ..default()
-            }),
-            transform: Transform::from_translation(position),
-            ..default()
-        },
-        RigidBody::Dynamic,
-        Collider::ball(MARBLE_RADIUS),
-        ColliderMassProperties::Mass(MARBLE_MASS),
-        Restitution::coefficient(STEEL_RESTITUTION),
-        Friction::coefficient(STEEL_FRICTION),
-        ActiveEvents::COLLISION_EVENTS,
-        CollisionGroups::new(Group::GROUP_1, marble_filter(marble_marble_collide)),
-        GravityScale::default(),
-        Velocity::default(),
-        Ccd::enabled(),
+        marble_pbr(meshes, materials, position, MARBLE_COLOR),
+        marble_physics(collide),
     ));
 }
 
@@ -122,7 +141,7 @@ pub fn spawn_chute_marble(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     chute_params: &ChuteParams,
-    marble_marble_collide: bool,
+    collide: bool,
     run_idx: usize,
 ) {
     let pts = chute_params.effective_pts();
@@ -135,37 +154,20 @@ pub fn spawn_chute_marble(
 
     let chute_centre = Vec3::new(CHUTE_END_X, p0[1] + CHUTE_ORIGIN_Y, p0[0] + CHUTE_ORIGIN_Z);
 
-    // Embed slightly into the surface: at spawn velocity=0, Rapier's speculative-contact
-    // prediction sees no approaching velocity and skips contact for one frame.
-    // A small penetration depth forces immediate contact resolution.
-    let position = chute_centre + normal * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.004);
+    // Embed 1 mm into the top face so Rapier detects position-based contact immediately
+    // (speculative contact skips a zero-velocity body for one frame without this).
+    // Must be less than CHUTE_THICKNESS (4 mm) or the sphere punches through to the
+    // bottom face, causing ambiguous multi-face contact and non-deterministic initial kicks.
+    let position = chute_centre + normal * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.001);
 
-    // Nest marker components to stay under Bevy's 15-element flat Bundle limit.
     commands.spawn((
         (Marble, ChuteMarble, RunIndex(run_idx), FlightTimer(0.0), PathTimer(0.0), SlideRecord::default()),
-        PbrBundle {
-            mesh: meshes.add(Mesh::from(Sphere { radius: MARBLE_RADIUS })),
-            material: materials.add(StandardMaterial {
-                base_color: Color::srgb(CHUTE_MARBLE_COLOR.0, CHUTE_MARBLE_COLOR.1, CHUTE_MARBLE_COLOR.2),
-                metallic: MARBLE_METALLIC,
-                perceptual_roughness: MARBLE_ROUGHNESS,
-                ..default()
-            }),
-            transform: Transform::from_translation(position),
-            ..default()
-        },
-        RigidBody::Dynamic,
-        Collider::ball(MARBLE_RADIUS),
-        ColliderMassProperties::Mass(MARBLE_MASS),
-        Restitution::coefficient(STEEL_RESTITUTION),
-        Friction::coefficient(STEEL_FRICTION),
-        ActiveEvents::COLLISION_EVENTS,
-        CollisionGroups::new(Group::GROUP_1, marble_filter(marble_marble_collide)),
-        GravityScale::default(),
-        Velocity::default(),
-        Ccd::enabled(),
+        marble_pbr(meshes, materials, position, CHUTE_MARBLE_COLOR),
+        marble_physics(collide),
     ));
 }
+
+// ── Per-frame systems ─────────────────────────────────────────────────────────
 
 pub fn record_marble_paths_system(
     mut all_runs: ResMut<RunHistory>,
@@ -253,7 +255,7 @@ pub fn track_slide_end_system(
 pub fn record_snare_hit_system(
     mut events: EventReader<CollisionEvent>,
     marbles: Query<(&Transform, &Velocity, &FlightTimer, Option<&ChuteMarble>, Option<&SlideRecord>, &RunIndex), With<Marble>>,
-    snares: Query<&GlobalTransform, With<SnareDrum>>,
+    snares: Query<&GlobalTransform, With<crate::components::snare::SnareDrum>>,
     arm_q: Query<&Velocity, With<crate::components::snare::PivotArm>>,
     mut all_runs: ResMut<RunHistory>,
 ) {
