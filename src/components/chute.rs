@@ -1,7 +1,7 @@
 use bevy::prelude::*;
-use bevy::render::mesh::Indices;
-use bevy::render::render_asset::RenderAssetUsages;
 use bevy::render::render_resource::PrimitiveTopology;
+use bevy::mesh::Indices;
+use bevy::asset::RenderAssetUsages;
 use bevy_rapier3d::prelude::*;
 
 use crate::resources::chute_params::ChuteParams;
@@ -67,20 +67,17 @@ pub fn spawn_chute(
     let flags = TriMeshFlags::FIX_INTERNAL_EDGES | TriMeshFlags::MERGE_DUPLICATE_VERTICES;
 
     commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(build_smooth_mesh(pts, &ts)),
-            material: materials.add(StandardMaterial {
-                base_color: Color::srgb(0.55, 0.45, 0.30),
-                metallic: 0.0,
-                perceptual_roughness: 0.65,
-                double_sided: true,
-                cull_mode: None,
-                ..default()
-            }),
+        Mesh3d(meshes.add(build_smooth_mesh(pts, &ts))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgb(0.55, 0.45, 0.30),
+            metallic: 0.0,
+            perceptual_roughness: 0.65,
+            double_sided: true,
+            cull_mode: None,
             ..default()
-        },
+        })),
         RigidBody::Fixed,
-        Collider::trimesh_with_flags(coll_verts, coll_idx, flags),
+        Collider::trimesh_with_flags(coll_verts, coll_idx, flags).expect("valid chute mesh"),
         Restitution {
             coefficient: CHUTE_RESTITUTION,
             combine_rule: CoefficientCombineRule::Min,

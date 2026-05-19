@@ -43,7 +43,7 @@ pub fn setup_snare_sound(
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn snare_hit_sound_system(
-    mut events: EventReader<CollisionEvent>,
+    mut events: MessageReader<CollisionEvent>,
     marbles: Query<&Velocity, With<Marble>>,
     snares: Query<(), With<SnareDrum>>,
     sound: Option<Res<SnareHitSound>>,
@@ -62,16 +62,16 @@ pub fn snare_hit_sound_system(
         };
 
         let speed = marbles.get(marble_entity)
-            .map(|v| v.linvel.length())
+            .map(|v| v.linear.length())
             .unwrap_or(0.0);
 
-        commands.spawn(AudioBundle {
-            source: sound.0.clone(),
-            settings: PlaybackSettings {
-                volume: Volume::new(impact_volume(speed, snare_volume.0)),
+        commands.spawn((
+            AudioPlayer(sound.0.clone()),
+            PlaybackSettings {
+                volume: Volume::Linear(impact_volume(speed, snare_volume.0)),
                 ..PlaybackSettings::ONCE
             },
-        });
+        ));
     }
 }
 
@@ -92,7 +92,7 @@ pub fn setup_snare_sound() {
 
 #[cfg(target_arch = "wasm32")]
 pub fn snare_hit_sound_system(
-    mut events: EventReader<CollisionEvent>,
+    mut events: MessageReader<CollisionEvent>,
     marbles: Query<&Velocity, With<Marble>>,
     snares: Query<(), With<SnareDrum>>,
     snare_volume: Res<SnareVolume>,
@@ -108,7 +108,7 @@ pub fn snare_hit_sound_system(
         };
 
         let speed = marbles.get(marble_entity)
-            .map(|v| v.linvel.length())
+            .map(|v| v.linear.length())
             .unwrap_or(0.0);
 
         play_snare_web_audio(impact_volume(speed, snare_volume.0));

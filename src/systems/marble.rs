@@ -1,7 +1,7 @@
 use bevy::math::primitives::Sphere;
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
-use rand::Rng;
+use rand::RngExt;
 
 use crate::components::snare::SnareDrum;
 use crate::resources::chute_params::ChuteParams;
@@ -12,10 +12,10 @@ use crate::systems::chute_handles::HandleDrag;
 
 fn jittered_spawn(snare_top_y: f32) -> Vec3 {
     let (x_off, z_off) = if MARBLE_SPAWN_JITTER > 0.0 {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         (
-            rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
-            rng.gen_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
+            rng.random_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
+            rng.random_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
         )
     } else {
         (0.0, 0.0)
@@ -78,20 +78,19 @@ fn marble_pbr(
     materials: &mut ResMut<Assets<StandardMaterial>>,
     position: Vec3,
     color: (f32, f32, f32),
-) -> PbrBundle {
-    PbrBundle {
-        mesh: meshes.add(Mesh::from(Sphere {
+) -> (Mesh3d, MeshMaterial3d<StandardMaterial>, Transform) {
+    (
+        Mesh3d(meshes.add(Mesh::from(Sphere {
             radius: MARBLE_RADIUS,
-        })),
-        material: materials.add(StandardMaterial {
+        }))),
+        MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(color.0, color.1, color.2),
             metallic: MARBLE_METALLIC,
             perceptual_roughness: MARBLE_ROUGHNESS,
             ..default()
-        }),
-        transform: Transform::from_translation(position),
-        ..default()
-    }
+        })),
+        Transform::from_translation(position),
+    )
 }
 
 fn marble_physics(collide: bool) -> impl Bundle {
@@ -125,7 +124,7 @@ pub fn spawn_marble_on_click_system(
     mut contexts: bevy_egui::EguiContexts,
     mut all_runs: ResMut<RunHistory>,
 ) {
-    if contexts.ctx_mut().wants_pointer_input() {
+    if contexts.ctx_mut().unwrap().wants_pointer_input() {
         return;
     }
     if drag.active.is_some() {
@@ -136,7 +135,7 @@ pub fn spawn_marble_on_click_system(
     }
 
     let snare_top_y = snare
-        .get_single()
+        .single()
         .map(|gt| gt.translation().y + SNARE_HALF_HEIGHT)
         .unwrap_or(CHUTE_ORIGIN_Y);
 
@@ -229,7 +228,7 @@ pub fn record_marble_paths_system(
     time: Res<Time<Fixed>>,
     mut marbles: Query<(&Transform, Option<&ChuteMarble>, &RunIndex, &mut PathTimer), With<Marble>>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     for (tf, is_chute, run_idx, mut timer) in &mut marbles {
         timer.0 += dt;
         if timer.0 < GHOST_SAMPLE_INTERVAL {
@@ -253,7 +252,7 @@ pub fn despawn_fallen_marbles_system(
 ) {
     for (entity, transform) in &query {
         if transform.translation.y < DESPAWN_Y {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).despawn();
         }
     }
 }
@@ -278,8 +277,8 @@ pub fn capture_prev_velocity_system(
     mut marbles: Query<(&Velocity, &mut PrevVelocity), With<Marble>>,
 ) {
     for (vel, mut prev) in &mut marbles {
-        prev.linvel = vel.linvel;
-        prev.angvel = vel.angvel;
+        prev.linvel = vel.linear;
+        prev.angvel = vel.angular;
     }
 }
 
@@ -289,7 +288,7 @@ pub fn advance_flight_timers_system(
     time: Res<Time<Fixed>>,
     mut marbles: Query<&mut FlightTimer, With<Marble>>,
 ) {
-    let dt = time.delta_seconds();
+    let dt = time.delta_secs();
     for mut timer in &mut marbles {
         timer.0 += dt;
     }
@@ -333,7 +332,7 @@ pub fn track_slide_end_system(
 
         if min_dist > CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS * 2.0 {
             slide.end_time = Some(timer.0);
-            slide.end_vel = Some(vel.linvel);
+            slide.end_vel = Some(vel.linear);
             slide.end_pos = Some(tf.translation);
         }
     }
@@ -341,7 +340,7 @@ pub fn track_slide_end_system(
 
 /// On snare collision, computes and stores the impact record for that marble's run.
 pub fn record_snare_hit_system(
-    mut events: EventReader<CollisionEvent>,
+    mut events: MessageReader<CollisionEvent>,
     marbles: Query<
         (
             &Transform,
@@ -377,8 +376,8 @@ pub fn record_snare_hit_system(
         let snare_normal = snare_rot * Vec3::Y;
         let arm_deg = snare_rot.to_euler(EulerRot::XYZ).0.to_degrees();
         let arm_angvel = arm_q
-            .get_single()
-            .map(|v| v.angvel.x.to_degrees())
+            .single()
+            .map(|v| v.angular.x.to_degrees())
             .unwrap_or(0.0);
 
         let Ok((tf, prev_vel, flight_timer, is_chute, slide, run_idx)) = marbles.get(marble_entity)
@@ -489,7 +488,7 @@ pub fn auto_spawn_system(
     }
 
     let snare_top_y = snare
-        .get_single()
+        .single()
         .map(|gt| gt.translation().y + SNARE_HALF_HEIGHT)
         .unwrap_or(CHUTE_ORIGIN_Y);
 

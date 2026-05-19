@@ -1,9 +1,10 @@
 use bevy::{
     math::primitives::Cuboid,
     prelude::*,
-    render::{camera::Viewport, view::RenderLayers},
     window::{PrimaryWindow, WindowResized},
 };
+use bevy::camera::Viewport;
+use bevy::camera::visibility::RenderLayers;
 
 use crate::systems::camera::OrbitCamera;
 
@@ -26,29 +27,27 @@ pub fn setup_axes_hud(
     mut materials: ResMut<Assets<StandardMaterial>>,
     windows: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let window = windows.single();
+    let window = windows.single().unwrap();
     let pw = window.physical_width();
     let ph = window.physical_height();
 
     // ── Secondary camera — bottom-right corner ────────────────────────────────
     commands.spawn((
-        Camera3dBundle {
-            camera: Camera {
-                order: 1,
-                viewport: Some(Viewport {
-                    physical_position: UVec2::new(
-                        pw.saturating_sub(WIDGET_PX + 10),
-                        ph.saturating_sub(WIDGET_PX + 10),
-                    ),
-                    physical_size: UVec2::new(WIDGET_PX, WIDGET_PX),
-                    ..default()
-                }),
-                clear_color: ClearColorConfig::Custom(Color::srgba(0.06, 0.06, 0.10, 1.0)),
+        Camera3d::default(),
+        Camera {
+            order: 1,
+            viewport: Some(Viewport {
+                physical_position: UVec2::new(
+                    pw.saturating_sub(WIDGET_PX + 10),
+                    ph.saturating_sub(WIDGET_PX + 10),
+                ),
+                physical_size: UVec2::new(WIDGET_PX, WIDGET_PX),
                 ..default()
-            },
-            transform: Transform::from_xyz(0.0, 0.0, CAM_DIST).looking_at(Vec3::ZERO, Vec3::Y),
+            }),
+            clear_color: ClearColorConfig::Custom(Color::srgba(0.06, 0.06, 0.10, 1.0)),
             ..default()
         },
+        Transform::from_xyz(0.0, 0.0, CAM_DIST).looking_at(Vec3::ZERO, Vec3::Y),
         RenderLayers::layer(1),
         AxesCamera,
     ));
@@ -70,23 +69,17 @@ pub fn setup_axes_hud(
 
         let shaft_sz = dir * AXIS_LEN + perp * SHAFT_THICK;
         commands.spawn((
-            PbrBundle {
-                mesh: meshes.add(Mesh::from(Cuboid::new(shaft_sz.x, shaft_sz.y, shaft_sz.z))),
-                material: mat.clone(),
-                transform: Transform::from_translation(dir * (AXIS_LEN * 0.5)),
-                ..default()
-            },
+            Mesh3d(meshes.add(Mesh::from(Cuboid::new(shaft_sz.x, shaft_sz.y, shaft_sz.z)))),
+            MeshMaterial3d(mat.clone()),
+            Transform::from_translation(dir * (AXIS_LEN * 0.5)),
             RenderLayers::layer(1),
         ));
 
         let head_sz = dir * HEAD_LEN + perp * HEAD_WIDE;
         commands.spawn((
-            PbrBundle {
-                mesh: meshes.add(Mesh::from(Cuboid::new(head_sz.x, head_sz.y, head_sz.z))),
-                material: mat,
-                transform: Transform::from_translation(dir * (AXIS_LEN + HEAD_LEN * 0.5)),
-                ..default()
-            },
+            Mesh3d(meshes.add(Mesh::from(Cuboid::new(head_sz.x, head_sz.y, head_sz.z)))),
+            MeshMaterial3d(mat),
+            Transform::from_translation(dir * (AXIS_LEN + HEAD_LEN * 0.5)),
             RenderLayers::layer(1),
         ));
     }
@@ -99,20 +92,18 @@ pub fn setup_axes_hud(
     ];
     for (i, (letter, color)) in ["X", "Y", "Z"].iter().zip(label_colors.iter()).enumerate() {
         commands.spawn((
-            TextBundle::from_section(
-                *letter,
-                TextStyle {
-                    font_size: 13.0,
-                    color: *color,
-                    ..default()
-                },
-            )
-            .with_style(Style {
+            Text::new(*letter),
+            TextFont {
+                font_size: 13.0,
+                ..default()
+            },
+            TextColor(*color),
+            Node {
                 position_type: PositionType::Absolute,
                 top: Val::Px(-100.0),
                 left: Val::Px(-100.0),
                 ..default()
-            }),
+            },
             AxisLabel(i),
         ));
     }
@@ -122,12 +113,12 @@ pub fn update_axes_hud(
     main_cam: Query<&GlobalTransform, With<OrbitCamera>>,
     mut axes_transform_q: Query<&mut Transform, With<AxesCamera>>,
     axes_cam_q: Query<(&Camera, &GlobalTransform), With<AxesCamera>>,
-    mut labels: Query<(&mut Style, &AxisLabel)>,
+    mut labels: Query<(&mut Node, &AxisLabel)>,
     windows: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let Ok(main_gt) = main_cam.get_single() else { return };
-    let Ok(mut axes_tf) = axes_transform_q.get_single_mut() else { return };
-    let Ok((axes_camera, axes_gt)) = axes_cam_q.get_single() else { return };
+    let Ok(main_gt) = main_cam.single() else { return };
+    let Ok(mut axes_tf) = axes_transform_q.single_mut() else { return };
+    let Ok((axes_camera, axes_gt)) = axes_cam_q.single() else { return };
 
     // Mirror main camera orientation: secondary camera orbits the origin identically
     let (_, main_rot, _) = main_gt.to_scale_rotation_translation();
@@ -135,7 +126,7 @@ pub fn update_axes_hud(
     axes_tf.translation = main_rot * (Vec3::Z * CAM_DIST);
 
     // Compute viewport logical offset for label placement
-    let scale = windows.single().scale_factor() as f32;
+    let scale = windows.single().map(|w| w.scale_factor()).unwrap_or(1.0) as f32;
     let vp_offset = axes_camera
         .viewport
         .as_ref()
@@ -152,16 +143,15 @@ pub fn update_axes_hud(
         Vec3::Z * (AXIS_LEN + HEAD_LEN + 0.08),
     ];
 
-    for (mut style, label) in &mut labels {
+    for (mut node, label) in &mut labels {
         match axes_camera.world_to_viewport(axes_gt, tip_positions[label.0]) {
-            Some(pos) => {
-                style.left = Val::Px(vp_offset.x + pos.x - 5.0);
-                style.top = Val::Px(vp_offset.y + pos.y - 7.0);
+            Ok(pos) => {
+                node.left = Val::Px(vp_offset.x + pos.x - 5.0);
+                node.top = Val::Px(vp_offset.y + pos.y - 7.0);
             }
-            None => {
-                // Axis is behind camera — hide label off-screen
-                style.left = Val::Px(-100.0);
-                style.top = Val::Px(-100.0);
+            Err(_) => {
+                node.left = Val::Px(-100.0);
+                node.top = Val::Px(-100.0);
             }
         }
     }
@@ -169,15 +159,15 @@ pub fn update_axes_hud(
 
 /// Keeps the axes widget pinned to the bottom-right corner after a window resize.
 pub fn resize_axes_viewport(
-    mut events: EventReader<WindowResized>,
+    mut events: MessageReader<WindowResized>,
     windows: Query<&Window, With<PrimaryWindow>>,
     mut axes_cam: Query<&mut Camera, With<AxesCamera>>,
 ) {
     for _ in events.read() {
-        let Ok(window) = windows.get_single() else { continue };
+        let Ok(window) = windows.single() else { continue };
         let pw = window.physical_width();
         let ph = window.physical_height();
-        let Ok(mut cam) = axes_cam.get_single_mut() else { continue };
+        let Ok(mut cam) = axes_cam.single_mut() else { continue };
         if let Some(vp) = &mut cam.viewport {
             vp.physical_position = UVec2::new(
                 pw.saturating_sub(WIDGET_PX + 10),

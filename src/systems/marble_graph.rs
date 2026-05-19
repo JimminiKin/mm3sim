@@ -42,10 +42,10 @@ pub fn record_marble_samples_system(
 
         samples.push(MarbleSample {
             t: timer.0,
-            vy: vel.linvel.y,
-            vz: vel.linvel.z,
-            speed: vel.linvel.length(),
-            spin: vel.angvel.length() * MARBLE_RADIUS,
+            vy: vel.linear.y,
+            vz: vel.linear.z,
+            speed: vel.linear.length(),
+            spin: vel.angular.length() * MARBLE_RADIUS,
         });
     }
 }
@@ -64,7 +64,7 @@ pub fn draw_marble_ghosts_system(mut gizmos: Gizmos, all_runs: Res<RunHistory>) 
 }
 
 pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHistory>) {
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().unwrap();
 
     for run in &mut all_runs.runs {
         if !run.graph_open { continue; }
@@ -110,23 +110,23 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
                     .y_axis_label("m/s")
                     .show(ui, |p| {
                         if has_drop {
-                            p.line(Line::new(vel_pts(&run.drop_samples,  |s| s.speed as f64))
-                                .name("drop speed").color(DROP_COLOR));
-                            p.line(Line::new(vel_pts(&run.drop_samples,  |s| s.vy as f64))
-                                .name("drop vy").color(DROP_COLOR)
+                            p.line(Line::new("drop speed", vel_pts(&run.drop_samples, |s| s.speed as f64))
+                                .color(DROP_COLOR));
+                            p.line(Line::new("drop vy", vel_pts(&run.drop_samples, |s| s.vy as f64))
+                                .color(DROP_COLOR)
                                 .style(LineStyle::Dashed { length: 10.0 }));
                         }
                         if has_chute {
-                            p.line(Line::new(vel_pts(&run.chute_samples, |s| s.speed as f64))
-                                .name("chute speed").color(CHUTE_COLOR));
-                            p.line(Line::new(vel_pts(&run.chute_samples, |s| s.vy as f64))
-                                .name("chute vy").color(CHUTE_COLOR)
+                            p.line(Line::new("chute speed", vel_pts(&run.chute_samples, |s| s.speed as f64))
+                                .color(CHUTE_COLOR));
+                            p.line(Line::new("chute vy", vel_pts(&run.chute_samples, |s| s.vy as f64))
+                                .color(CHUTE_COLOR)
                                 .style(LineStyle::Dashed { length: 10.0 }));
-                            p.line(Line::new(vel_pts(&run.chute_samples, |s| s.vz as f64))
-                                .name("chute vz").color(CHUTE_COLOR)
+                            p.line(Line::new("chute vz", vel_pts(&run.chute_samples, |s| s.vz as f64))
+                                .color(CHUTE_COLOR)
                                 .style(LineStyle::Dotted { spacing: 6.0 }));
-                            p.line(Line::new(vel_pts(&run.chute_samples, |s| s.spin as f64))
-                                .name("chute spin").color(CHUTE_COLOR)
+                            p.line(Line::new("chute spin", vel_pts(&run.chute_samples, |s| s.spin as f64))
+                                .color(CHUTE_COLOR)
                                 .style(LineStyle::Dashed { length: 4.0 }));
                         }
                     });
@@ -157,12 +157,12 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
                     .y_axis_label("m/s²")
                     .show(ui, |p| {
                         if has_drop {
-                            p.line(Line::new(accel_pts(&run.drop_samples))
-                                .name("drop |a|").color(DROP_COLOR));
+                            p.line(Line::new("drop |a|", accel_pts(&run.drop_samples))
+                                .color(DROP_COLOR));
                         }
                         if has_chute {
-                            p.line(Line::new(accel_pts(&run.chute_samples))
-                                .name("chute |a|").color(CHUTE_COLOR));
+                            p.line(Line::new("chute |a|", accel_pts(&run.chute_samples))
+                                .color(CHUTE_COLOR));
                         }
                     });
             });

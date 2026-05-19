@@ -44,23 +44,20 @@ pub fn setup_chute_handles(
     let pts = [params.p0, params.cp1, params.cp2, params.p3];
     for (i, (pt, &color)) in pts.iter().zip(COLORS.iter()).enumerate() {
         commands.spawn((
-            PbrBundle {
-                mesh: meshes.add(Mesh::from(Sphere {
-                    radius: HANDLE_RADIUS,
-                })),
-                material: materials.add(StandardMaterial {
-                    base_color: color,
-                    alpha_mode: AlphaMode::Blend,
-                    unlit: true,
-                    ..default()
-                }),
-                transform: Transform::from_xyz(
-                    CHUTE_END_X,
-                    pt[1] + CHUTE_ORIGIN_Y,
-                    pt[0] + CHUTE_ORIGIN_Z,
-                ),
+            Mesh3d(meshes.add(Mesh::from(Sphere {
+                radius: HANDLE_RADIUS,
+            }))),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color: color,
+                alpha_mode: AlphaMode::Blend,
+                unlit: true,
                 ..default()
-            },
+            })),
+            Transform::from_xyz(
+                CHUTE_END_X,
+                pt[1] + CHUTE_ORIGIN_Y,
+                pt[0] + CHUTE_ORIGIN_Z,
+            ),
             ChuteHandle(i),
         ));
     }
@@ -119,7 +116,7 @@ pub fn chute_handle_drag_system(
     mut drag: ResMut<HandleDrag>,
     mut contexts: EguiContexts,
 ) {
-    if contexts.ctx_mut().wants_pointer_input() {
+    if contexts.ctx_mut().unwrap().wants_pointer_input() {
         return;
     }
     let any_visible = params.endpoints_visible || (params.handles_visible && !params.straight);
@@ -128,16 +125,16 @@ pub fn chute_handle_drag_system(
         return;
     }
 
-    let Ok(window) = windows.get_single() else {
+    let Ok(window) = windows.single() else {
         return;
     };
     let Some(cursor) = window.cursor_position() else {
         return;
     };
-    let Ok((camera, cam_gt)) = camera_q.get_single() else {
+    let Ok((camera, cam_gt)) = camera_q.single() else {
         return;
     };
-    let Some(ray) = camera.viewport_to_world(cam_gt, cursor) else {
+    let Ok(ray) = camera.viewport_to_world(cam_gt, cursor) else {
         return;
     };
 

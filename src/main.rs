@@ -3,8 +3,8 @@ mod resources;
 mod systems;
 
 use bevy::prelude::*;
-use bevy_egui::EguiPlugin;
-use bevy_rapier3d::plugin::{PhysicsSet, TimestepMode};
+use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass};
+use bevy_rapier3d::plugin::PhysicsSet;
 use bevy_rapier3d::prelude::*;
 
 use resources::chute_params::ChuteParams;
@@ -53,23 +53,13 @@ fn main() {
     app.add_plugins(DefaultPlugins);
 
     app.add_plugins(RapierPhysicsPlugin::<NoUserData>::default().in_fixed_schedule())
-        .add_plugins(EguiPlugin)
+        .add_plugins(EguiPlugin { ..default() })
+        .insert_resource(EguiGlobalSettings { auto_create_primary_context: false, ..default() })
         // 1000 Hz outer tick × 8 substeps = 8000 effective solver passes/s.
         // The substep dt (0.125 ms) moves a 4.4 m/s marble only 0.55 mm — below
         // Rapier's 1 mm allowed_linear_error, so Baumgarte position correction is
         // never triggered and bounces are driven purely by the restitution coefficient.
         .insert_resource(Time::<Fixed>::from_hz(SIMULATION_TPS.into()))
-        .insert_resource(RapierConfiguration {
-            timestep_mode: TimestepMode::Fixed {
-                dt: 1.0 / SIMULATION_TPS,
-                substeps: 1,
-            },
-            physics_pipeline_active: true,
-            query_pipeline_active: true,
-            scaled_shape_subdivision: 10,
-            force_update_from_transform_changes: false,
-            ..RapierConfiguration::new(1.0)
-        })
         .insert_resource(ClearColor(Color::srgb(BG_COLOR.0, BG_COLOR.1, BG_COLOR.2)))
         .init_resource::<ChuteParams>()
         .init_resource::<MarbleCollisions>()
@@ -125,15 +115,21 @@ fn main() {
                 sync_handle_transforms,
                 sync_handle_visibility,
                 draw_chute_gizmos,
-                // UI
-                hud_panel_ui,
-                chute_editor_ui,
-                marble_graph_ui,
-                // Batch auto-spawner (after UI so Stop/Start clicks register this frame)
-                auto_spawn_system,
                 // Axes overlay
                 update_axes_hud,
                 resize_axes_viewport,
+            ),
+        )
+        // UI systems run inside EguiPrimaryContextPass (PostUpdate), which is when
+        // bevy_egui's multipass mode initialises the context for the current frame.
+        .add_systems(
+            EguiPrimaryContextPass,
+            (
+                hud_panel_ui,
+                chute_editor_ui,
+                marble_graph_ui,
+                // auto_spawn reads Stop/Start state written by chute_editor_ui this same pass
+                auto_spawn_system.after(chute_editor_ui),
             ),
         )
         .run();

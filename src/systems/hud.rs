@@ -15,7 +15,7 @@ pub fn hud_panel_ui(
     chute_params: Res<ChuteParams>,
     mut all_runs: ResMut<RunHistory>,
 ) {
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().unwrap();
 
     // ── Stats panel ───────────────────────────────────────────────────────────
     egui::Window::new("Stats")
@@ -25,7 +25,7 @@ pub fn hud_panel_ui(
         .title_bar(false)
         .show(ctx, |ui| {
             egui::CollapsingHeader::new(egui::RichText::new("Stats").strong())
-                .id_source("stats_header")
+                .id_salt("stats_header")
                 .default_open(true)
                 .show(ui, |ui| {
                     // System info
@@ -33,7 +33,7 @@ pub fn hud_panel_ui(
                         .num_columns(2)
                         .spacing([8.0, 2.0])
                         .show(ui, |ui| {
-                            if let Ok(arm_tf) = arm.get_single() {
+                            if let Ok(arm_tf) = arm.single() {
                                 let deg = arm_tf.rotation.to_euler(EulerRot::XYZ).0.to_degrees();
                                 ui.label("Pivot");
                                 ui.monospace(format!("{:+6.2}°  (− = snare down)", deg));
@@ -67,13 +67,13 @@ pub fn hud_panel_ui(
 
                     // Live marbles
                     let snare_normal = snare
-                        .get_single()
+                        .single()
                         .map(|gt| gt.compute_transform().rotation * Vec3::Y)
                         .unwrap_or(Vec3::Y);
 
                     let mut live: Vec<(bool, Vec3, Vec3)> = marbles
                         .iter()
-                        .map(|(vel, is_chute)| (is_chute.is_some(), vel.linvel, vel.angvel))
+                        .map(|(vel, is_chute)| (is_chute.is_some(), vel.linear, vel.angular))
                         .collect();
                     live.sort_by_key(|(is_chute, _, _)| *is_chute as u8);
 
@@ -83,7 +83,7 @@ pub fn hud_panel_ui(
                         egui::RichText::new(format!("Live ({})", live.len())).strong()
                     };
                     egui::CollapsingHeader::new(live_label)
-                        .id_source("live_header")
+                        .id_salt("live_header")
                         .default_open(false)
                         .show(ui, |ui| {
                             if live.is_empty() {
@@ -124,7 +124,7 @@ pub fn hud_panel_ui(
                     let has_runs = !all_runs.runs.is_empty();
                     if has_runs {
                         egui::CollapsingHeader::new("Summary")
-                            .id_source("summary_header")
+                            .id_salt("summary_header")
                             .default_open(false)
                             .show(ui, |ui| render_summary(ui, &all_runs.runs));
                         ui.separator();
@@ -218,7 +218,7 @@ pub fn hud_panel_ui(
     if !all_runs.help_open {
         help_win = help_win.anchor(egui::Align2::LEFT_BOTTOM, egui::vec2(8.0, -8.0));
     }
-    let help_resp = help_win.show(ctx, |ui| {
+    let help_resp = help_win.show(&*ctx, |ui| {
         egui::CollapsingHeader::new(egui::RichText::new("Help").strong())
             .default_open(false)
             .show(ui, |ui| render_help_panel(ui))
@@ -432,7 +432,7 @@ fn render_help_panel(ui: &mut egui::Ui) {
         ui.add_space(8.0);
 
         egui::CollapsingHeader::new(egui::RichText::new("Controls").strong())
-            .id_source("help_controls")
+            .id_salt("help_controls")
             .default_open(true)
             .show(ui, |ui| {
                 egui::Grid::new("help_controls_grid").num_columns(2).spacing([12.0, 3.0]).show(ui, |ui| {
@@ -455,7 +455,7 @@ fn render_help_panel(ui: &mut egui::Ui) {
         ui.add_space(4.0);
 
         egui::CollapsingHeader::new(egui::RichText::new("The Marbles").strong())
-            .id_source("help_marbles")
+            .id_salt("help_marbles")
             .default_open(true)
             .show(ui, |ui| {
                 egui::Grid::new("help_marbles_grid").num_columns(2).spacing([12.0, 3.0]).show(ui, |ui| {
@@ -476,7 +476,7 @@ fn render_help_panel(ui: &mut egui::Ui) {
         ui.add_space(4.0);
 
         egui::CollapsingHeader::new(egui::RichText::new("Stats Glossary").strong())
-            .id_source("help_stats")
+            .id_salt("help_stats")
             .default_open(true)
             .show(ui, |ui| {
                 egui::Grid::new("help_stats_grid").num_columns(2).spacing([12.0, 4.0]).show(ui, |ui| {
@@ -518,7 +518,7 @@ fn render_help_panel(ui: &mut egui::Ui) {
         ui.add_space(4.0);
 
         egui::CollapsingHeader::new(egui::RichText::new("Chute Editor").strong())
-            .id_source("help_chute")
+            .id_salt("help_chute")
             .default_open(true)
             .show(ui, |ui| {
                 ui.label(
@@ -565,7 +565,7 @@ fn render_help_panel(ui: &mut egui::Ui) {
         ui.add_space(4.0);
 
         egui::CollapsingHeader::new(egui::RichText::new("Pivot Arm").strong())
-            .id_source("help_pivot")
+            .id_salt("help_pivot")
             .default_open(false)
             .show(ui, |ui| {
                 ui.label(
@@ -592,7 +592,7 @@ fn render_help_panel(ui: &mut egui::Ui) {
         ui.add_space(4.0);
 
         egui::CollapsingHeader::new(egui::RichText::new("Summary Statistics").strong())
-            .id_source("help_summary")
+            .id_salt("help_summary")
             .default_open(false)
             .show(ui, |ui| {
                 egui::Grid::new("help_summary_grid").num_columns(2).spacing([12.0, 3.0]).show(ui, |ui| {
@@ -617,7 +617,7 @@ fn render_help_panel(ui: &mut egui::Ui) {
         ui.add_space(4.0);
 
         egui::CollapsingHeader::new(egui::RichText::new("Velocity & Acceleration Graph").strong())
-            .id_source("help_graph")
+            .id_salt("help_graph")
             .default_open(false)
             .show(ui, |ui| {
                 ui.label(

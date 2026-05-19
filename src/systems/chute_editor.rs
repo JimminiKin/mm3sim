@@ -19,7 +19,7 @@ pub fn apply_snare_fixed_system(
     if !snare_fixed.is_changed() {
         return;
     }
-    let Ok((mut rb, mut vel)) = arm.get_single_mut() else {
+    let Ok((mut rb, mut vel)) = arm.single_mut() else {
         return;
     };
     if snare_fixed.0 {
@@ -38,14 +38,14 @@ pub fn chute_editor_ui(
     mut snare_volume: ResMut<SnareVolume>,
     mut auto_spawn: ResMut<AutoSpawn>,
 ) {
-    let ctx = contexts.ctx_mut();
+    let ctx = contexts.ctx_mut().unwrap();
     egui::Window::new("Parameters")
         .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-8.0, 8.0))
         .resizable(false)
         .title_bar(false)
         .show(ctx, |ui| {
             egui::CollapsingHeader::new(egui::RichText::new("Parameters").strong())
-                .id_source("params_header")
+                .id_salt("params_header")
                 .default_open(true)
                 .show(ui, |ui| {
                     let mut changed = false;

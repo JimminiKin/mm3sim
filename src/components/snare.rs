@@ -35,20 +35,19 @@ pub fn spawn_snare(
 
     let anchor = commands
         .spawn((
-            TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, PIVOT_FROM_SNARE)),
+            Transform::from_xyz(0.0, 0.0, PIVOT_FROM_SNARE),
             RigidBody::Fixed,
         ))
         .id();
 
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(Cylinder {
+    commands.spawn((
+        Mesh3d(meshes.add(Mesh::from(Cylinder {
             radius: ARM_TUBE_RADIUS,
             half_height: PIVOT_STAND_HALF_HEIGHT,
-        })),
-        material: dark_steel.clone(),
-        transform: Transform::from_xyz(0.0, -PIVOT_STAND_HALF_HEIGHT, PIVOT_FROM_SNARE),
-        ..default()
-    });
+        }))),
+        MeshMaterial3d(dark_steel.clone()),
+        Transform::from_xyz(0.0, -PIVOT_STAND_HALF_HEIGHT, PIVOT_FROM_SNARE),
+    ));
 
     let joint = RevoluteJointBuilder::new(Vec3::X)
         .local_anchor1(Vec3::ZERO)
@@ -61,10 +60,8 @@ pub fn spawn_snare(
 
     commands
         .spawn((
-            TransformBundle::from_transform(
-                Transform::from_xyz(0.0, arm_spawn_y, arm_spawn_z)
-                    .with_rotation(Quat::from_rotation_x(arm_rad)),
-            ),
+            Transform::from_xyz(0.0, arm_spawn_y, arm_spawn_z)
+                .with_rotation(Quat::from_rotation_x(arm_rad)),
             RigidBody::Dynamic,
             PivotArm,
             Damping {
@@ -76,31 +73,25 @@ pub fn spawn_snare(
         ))
         .with_children(|p| {
             p.spawn((
-                PbrBundle {
-                    mesh: meshes.add(Mesh::from(Cylinder {
-                        radius: ARM_TUBE_RADIUS,
-                        half_height: ARM_HALF_LEN,
-                    })),
-                    material: dark_steel.clone(),
-                    transform: Transform::from_rotation(Quat::from_rotation_x(
-                        -std::f32::consts::FRAC_PI_2,
-                    )),
-                    ..default()
-                },
+                Mesh3d(meshes.add(Mesh::from(Cylinder {
+                    radius: ARM_TUBE_RADIUS,
+                    half_height: ARM_HALF_LEN,
+                }))),
+                MeshMaterial3d(dark_steel.clone()),
+                Transform::from_rotation(Quat::from_rotation_x(
+                    -std::f32::consts::FRAC_PI_2,
+                )),
                 Collider::cylinder(ARM_HALF_LEN, ARM_TUBE_RADIUS),
                 ColliderMassProperties::Mass(ARM_MASS),
             ));
 
             p.spawn((
-                PbrBundle {
-                    mesh: meshes.add(Mesh::from(Cylinder {
-                        radius: SNARE_RADIUS,
-                        half_height: SNARE_HALF_HEIGHT,
-                    })),
-                    material: chrome,
-                    transform: Transform::from_xyz(0.0, 0.0, SNARE_LOCAL_Z),
-                    ..default()
-                },
+                Mesh3d(meshes.add(Mesh::from(Cylinder {
+                    radius: SNARE_RADIUS,
+                    half_height: SNARE_HALF_HEIGHT,
+                }))),
+                MeshMaterial3d(chrome),
+                Transform::from_xyz(0.0, 0.0, SNARE_LOCAL_Z),
                 Collider::cylinder(SNARE_HALF_HEIGHT, SNARE_RADIUS),
                 ColliderMassProperties::Mass(SNARE_MASS),
                 Restitution::coefficient(SNARE_RESTITUTION),
@@ -110,15 +101,12 @@ pub fn spawn_snare(
             ));
 
             p.spawn((
-                PbrBundle {
-                    mesh: meshes.add(Mesh::from(Cylinder {
-                        radius: CW_RADIUS,
-                        half_height: CW_HALF_HEIGHT,
-                    })),
-                    material: dark_steel.clone(),
-                    transform: Transform::from_xyz(0.0, 0.0, CW_LOCAL_Z),
-                    ..default()
-                },
+                Mesh3d(meshes.add(Mesh::from(Cylinder {
+                    radius: CW_RADIUS,
+                    half_height: CW_HALF_HEIGHT,
+                }))),
+                MeshMaterial3d(dark_steel.clone()),
+                Transform::from_xyz(0.0, 0.0, CW_LOCAL_Z),
                 Collider::cylinder(CW_HALF_HEIGHT, CW_RADIUS),
                 ColliderMassProperties::Mass(CW_MASS),
             ));

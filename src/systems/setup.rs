@@ -1,4 +1,6 @@
-use bevy::{prelude::*, render::view::RenderLayers};
+use bevy::prelude::*;
+use bevy::camera::visibility::RenderLayers;
+use bevy_egui::PrimaryEguiContext;
 
 use crate::components::chute::spawn_chute;
 use crate::components::snare::spawn_snare;
@@ -13,32 +15,30 @@ pub fn setup_system(
     chute_params: Res<ChuteParams>,
 ) {
     commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(CAMERA_POS.0, CAMERA_POS.1, CAMERA_POS.2)
-                .looking_at(Vec3::ZERO, Vec3::Y),
-            ..default()
-        },
+        Camera3d::default(),
+        Transform::from_xyz(CAMERA_POS.0, CAMERA_POS.1, CAMERA_POS.2)
+            .looking_at(Vec3::ZERO, Vec3::Y),
         OrbitCamera::default(),
         RenderLayers::layer(0),
         IsDefaultUiCamera,
+        PrimaryEguiContext,
     ));
 
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
+    commands.spawn((
+        DirectionalLight {
             illuminance: LIGHT_ILLUMINANCE,
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_rotation(Quat::from_euler(
+        Transform::from_rotation(Quat::from_euler(
             EulerRot::XYZ,
             LIGHT_ROT_X,
             LIGHT_ROT_Y,
             LIGHT_ROT_Z,
         )),
-        ..default()
-    });
+    ));
 
-    commands.insert_resource(AmbientLight {
+    commands.spawn(AmbientLight {
         brightness: AMBIENT_BRIGHTNESS,
         ..default()
     });

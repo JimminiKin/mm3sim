@@ -25,12 +25,12 @@ impl Default for OrbitCamera {
 
 pub fn orbit_camera_system(
     mouse_buttons: Res<ButtonInput<MouseButton>>,
-    mut motion: EventReader<MouseMotion>,
-    mut scroll: EventReader<MouseWheel>,
+    mut motion: MessageReader<MouseMotion>,
+    mut scroll: MessageReader<MouseWheel>,
     mut query: Query<(&mut OrbitCamera, &mut Transform)>,
     mut contexts: EguiContexts,
 ) {
-    let ui_wants_scroll = contexts.ctx_mut().is_pointer_over_area();
+    let ui_wants_scroll = contexts.ctx_mut().unwrap().is_pointer_over_area();
 
     let orbiting = mouse_buttons.pressed(MouseButton::Right);
     let panning  = mouse_buttons.pressed(MouseButton::Middle);
@@ -58,7 +58,7 @@ pub fn orbit_camera_system(
         }
     }
 
-    let Ok((mut cam, mut transform)) = query.get_single_mut() else { return };
+    let Ok((mut cam, mut transform)) = query.single_mut() else { return };
 
     cam.yaw -= orbit_delta.x * CAMERA_ORBIT_SENSITIVITY;
     cam.pitch = (cam.pitch - orbit_delta.y * CAMERA_ORBIT_SENSITIVITY)
