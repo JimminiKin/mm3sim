@@ -16,8 +16,12 @@ pub fn apply_snare_fixed_system(
     snare_fixed: Res<SnareFixed>,
     mut arm: Query<(&mut RigidBody, &mut Velocity), With<PivotArm>>,
 ) {
-    if !snare_fixed.is_changed() { return; }
-    let Ok((mut rb, mut vel)) = arm.get_single_mut() else { return };
+    if !snare_fixed.is_changed() {
+        return;
+    }
+    let Ok((mut rb, mut vel)) = arm.get_single_mut() else {
+        return;
+    };
     if snare_fixed.0 {
         *rb = RigidBody::Fixed;
         *vel = Velocity::zero();
@@ -47,46 +51,28 @@ pub fn chute_editor_ui(
                     let mut changed = false;
 
                     ui.heading("Options");
-                    if ui.checkbox(&mut params.straight, "Force straight line chute").changed() {
+                    if ui
+                        .checkbox(&mut params.straight, "Force straight line chute")
+                        .changed()
+                    {
                         changed = true;
                     }
                     ui.checkbox(&mut params.handles_visible, "Show curve handles");
                     ui.checkbox(&mut params.endpoints_visible, "Show endpoint handles");
 
-                    ui.horizontal(|ui| {
-                        ui.label("Drag axis:");
-                        ui.radio_value(&mut params.drag_axis, DragAxis::Free,       "Free");
-                        ui.radio_value(&mut params.drag_axis, DragAxis::Vertical,   "Y only");
-                        ui.radio_value(&mut params.drag_axis, DragAxis::Horizontal, "Z only");
-                    });
-
-                    ui.horizontal(|ui| {
-                        ui.label("Shift Y:");
-                        if ui.button("− 1mm").clicked() {
-                            params.p0[1]  -= 0.001;
-                            params.cp1[1] -= 0.001;
-                            params.cp2[1] -= 0.001;
-                            params.p3[1]  -= 0.001;
-                            changed = true;
-                        }
-                        if ui.button("+ 1mm").clicked() {
-                            params.p0[1]  += 0.001;
-                            params.cp1[1] += 0.001;
-                            params.cp2[1] += 0.001;
-                            params.p3[1]  += 0.001;
-                            changed = true;
-                        }
-                    });
-
                     let old_col = marble_col.bypass_change_detection().0;
                     let mut new_col = old_col;
                     ui.checkbox(&mut new_col, "Marble-marble collisions");
-                    if new_col != old_col { marble_col.0 = new_col; }
+                    if new_col != old_col {
+                        marble_col.0 = new_col;
+                    }
 
                     let old_fixed = snare_fixed.bypass_change_detection().0;
                     let mut new_fixed = old_fixed;
                     ui.checkbox(&mut new_fixed, "Fix snare (freeze arm)");
-                    if new_fixed != old_fixed { snare_fixed.0 = new_fixed; }
+                    if new_fixed != old_fixed {
+                        snare_fixed.0 = new_fixed;
+                    }
 
                     ui.horizontal(|ui| {
                         ui.label("Snare volume:");
@@ -95,15 +81,22 @@ pub fn chute_editor_ui(
                     });
 
                     ui.separator();
-                    ui.heading("Extremities");
-                    drag_row(ui, "End", &mut params.p3, &mut changed);
-                    drag_row(ui, "Start", &mut params.p0, &mut changed);
+                    ui.heading("Chute position");
+                    ui.horizontal(|ui| {
+                        ui.label("Drag axis:");
+                        ui.radio_value(&mut params.drag_axis, DragAxis::Free, "Free");
+                        ui.radio_value(&mut params.drag_axis, DragAxis::Vertical, "Y only");
+                        ui.radio_value(&mut params.drag_axis, DragAxis::Horizontal, "Z only");
+                    });
+                    center_drag_row(ui, "Center", &mut params, &mut changed);
+                    point_drag_row(ui, "End point", &mut params.p3, &mut changed);
+                    point_drag_row(ui, "Start point", &mut params.p0, &mut changed);
 
                     ui.separator();
                     ui.heading("Curve Handles");
                     ui.add_enabled_ui(!params.straight, |ui| {
-                        drag_row(ui, "CP2 handle 2", &mut params.cp2, &mut changed);
-                        drag_row(ui, "CP1 handle 1", &mut params.cp1, &mut changed);
+                        point_drag_row(ui, "CP2 handle 2", &mut params.cp2, &mut changed);
+                        point_drag_row(ui, "CP1 handle 1", &mut params.cp1, &mut changed);
                     });
 
                     ui.separator();
@@ -112,7 +105,9 @@ pub fn chute_editor_ui(
                         changed = true;
                     }
 
-                    if changed { params.dirty = true; }
+                    if changed {
+                        params.dirty = true;
+                    }
 
                     ui.separator();
                     ui.heading("Batch Runs");
@@ -140,7 +135,10 @@ pub fn chute_editor_ui(
                                 auto_spawn.waiting_for = None;
                             }
                         } else {
-                            if ui.button(format!("Start {}", auto_spawn.batch_size)).clicked() {
+                            if ui
+                                .button(format!("Start {}", auto_spawn.batch_size))
+                                .clicked()
+                            {
                                 auto_spawn.pending = auto_spawn.batch_size;
                                 auto_spawn.spawned = 0;
                             }
@@ -150,14 +148,43 @@ pub fn chute_editor_ui(
         });
 }
 
-fn drag_row(ui: &mut egui::Ui, label: &str, pt: &mut [f32; 2], changed: &mut bool) {
+fn point_drag_row(ui: &mut egui::Ui, label: &str, pt: &mut [f32; 2], changed: &mut bool) {
     ui.horizontal(|ui| {
         ui.label(label);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            *changed |= ui.add(egui::DragValue::new(&mut pt[1]).prefix("y ").speed(0.05)).changed();
-            *changed |= ui.add(egui::DragValue::new(&mut pt[0]).prefix("z ").speed(0.05)).changed();
+            *changed |= ui
+                .add(egui::DragValue::new(&mut pt[1]).prefix("y ").speed(0.05))
+                .changed();
+            *changed |= ui
+                .add(egui::DragValue::new(&mut pt[0]).prefix("z ").speed(0.05))
+                .changed();
         });
     });
+}
+
+fn center_drag_row(ui: &mut egui::Ui, label: &str, pt: &mut ChuteParams, changed: &mut bool) {
+    let center_z = (pt.p0[0] + pt.p3[0]) / 2.0;
+    let center_y = (pt.p0[1] + pt.p3[1]) / 2.0;
+    let mut new_z = center_z;
+    let mut new_y = center_y;
+
+    ui.horizontal(|ui| {
+        ui.label(label);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.add(egui::DragValue::new(&mut new_y).prefix("y ").speed(0.05));
+            ui.add(egui::DragValue::new(&mut new_z).prefix("z ").speed(0.05));
+        });
+    });
+
+    let dz = new_z - center_z;
+    let dy = new_y - center_y;
+    if dz != 0.0 || dy != 0.0 {
+        for p in [&mut pt.p0, &mut pt.cp1, &mut pt.cp2, &mut pt.p3] {
+            p[0] += dz;
+            p[1] += dy;
+        }
+        *changed = true;
+    }
 }
 
 pub fn rebuild_chute_system(
@@ -167,8 +194,12 @@ pub fn rebuild_chute_system(
     mut params: ResMut<ChuteParams>,
     segments: Query<Entity, With<ChuteSegment>>,
 ) {
-    if !params.dirty { return; }
+    if !params.dirty {
+        return;
+    }
     params.dirty = false;
-    for entity in &segments { commands.entity(entity).despawn(); }
+    for entity in &segments {
+        commands.entity(entity).despawn();
+    }
     spawn_chute(&mut commands, &mut meshes, &mut materials, &params);
 }

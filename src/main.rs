@@ -55,7 +55,7 @@ fn main() {
         .add_plugins(EguiPlugin)
         // 2000 Hz physics: physics runs in FixedUpdate so each step is 0.5 ms,
         // giving ~0.5 ms max collision-time quantization.
-        .insert_resource(Time::<Fixed>::from_hz(2000.0))
+        .insert_resource(Time::<Fixed>::from_hz(20000.0))
         .insert_resource(ClearColor(Color::srgb(BG_COLOR.0, BG_COLOR.1, BG_COLOR.2)))
         .init_resource::<ChuteParams>()
         .init_resource::<MarbleCollisions>()
