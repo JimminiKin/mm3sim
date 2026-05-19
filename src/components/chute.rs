@@ -113,7 +113,7 @@ fn build_trimesh_collider(pts: [[f32; 2]; 4], ts: &[f32]) -> (Vec<Vec3>, Vec<[u3
     for i in 0..n as u32 {
         let a = i * 4;
         let b = (i + 1) * 4;
-        idx.push([a,   b,   b+1]); idx.push([a,   b+1, a+1]);
+        idx.push([a,   b+1, b  ]); idx.push([a,   a+1, b+1]);
         idx.push([a+3, b+3, b+2]); idx.push([a+3, b+2, a+2]);
         idx.push([a,   a+2, b+2]); idx.push([a,   b+2, b  ]);
         idx.push([a+1, b+1, b+3]); idx.push([a+1, b+3, a+3]);

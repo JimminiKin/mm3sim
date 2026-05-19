@@ -95,9 +95,8 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
                 });
                 ui.add_space(2.0);
 
-                let avail_h = ui.available_height();
-                let vel_h   = avail_h * 0.55;
-                let accel_h = avail_h * 0.45 - 6.0;
+                let vel_h   = 200.0_f32;
+                let accel_h = 150.0_f32;
 
                 // ── Velocity panel ────────────────────────────────────────────
                 let vel_pts = |samples: &[MarbleSample], f: fn(&MarbleSample) -> f64| -> PlotPoints {

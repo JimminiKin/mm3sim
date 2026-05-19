@@ -135,8 +135,8 @@ pub fn spawn_snare(
                 },
                 snare_head_collider(),
                 ColliderMassProperties::Mass(SNARE_MASS),
-                Restitution::coefficient(STEEL_RESTITUTION),
-                Friction::coefficient(STEEL_FRICTION),
+                Restitution::coefficient(SNARE_RESTITUTION),
+                Friction::coefficient(SNARE_FRICTION),
                 SnareDrum,
                 ActiveEvents::COLLISION_EVENTS,
             ));
