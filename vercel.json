@@ -1,0 +1,12 @@
+{
+  "framework": null,
+  "buildCommand": null,
+  "headers": [
+    {
+      "source": "/(.*)\\.wasm",
+      "headers": [
+        { "key": "Content-Type", "value": "application/wasm" }
+      ]
+    }
+  ]
+}
