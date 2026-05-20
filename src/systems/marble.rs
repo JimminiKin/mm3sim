@@ -131,7 +131,7 @@ pub fn spawn_marble_on_click_system(
 
     let run_idx = all_runs.push_new_run();
     if let Some(run) = all_runs.get_run_mut(run_idx) {
-        run.chute_exit = Some(chute_params.p3);
+        run.chute_exit = Some(chute_params.exit_pos);
     }
     spawn_marble(
         &mut commands,
@@ -178,15 +178,12 @@ pub fn spawn_chute_marble(
     collide: bool,
     run_idx: usize,
 ) {
-    let pts = chute_params.effective_pts();
-    let p0 = pts[0];
-    let cp1 = pts[1];
+    let geo = chute_params.geometry();
+    let [slope_z, slope_y] = geo.slope_start;
+    let [slope_tz, slope_ty] = geo.slope_tangent;
+    let normal = Vec3::new(0.0, -slope_tz, slope_ty).normalize_or_zero();
 
-    let dz = 3.0 * (cp1[0] - p0[0]);
-    let dy = 3.0 * (cp1[1] - p0[1]);
-    let normal = Vec3::new(0.0, -dz, dy).normalize_or_zero();
-
-    let chute_centre = Vec3::new(CHUTE_END_X, p0[1] + CHUTE_ORIGIN_Y, p0[0] + CHUTE_ORIGIN_Z);
+    let chute_centre = Vec3::new(CHUTE_END_X, slope_y + CHUTE_ORIGIN_Y, slope_z + CHUTE_ORIGIN_Z);
     let position = chute_centre + normal * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.001);
 
     commands.spawn((
@@ -280,7 +277,7 @@ pub fn track_slide_end_system(
         (With<Marble>, With<ChuteMarble>),
     >,
 ) {
-    let pts = chute_params.effective_pts();
+    let geo = chute_params.geometry();
 
     for (tf, vel, timer, mut slide) in &mut marbles {
         if slide.end_time.is_some() {
@@ -289,19 +286,27 @@ pub fn track_slide_end_system(
 
         let marble_yz = (tf.translation.y, tf.translation.z);
 
-        let min_dist = (0u32..=32)
+        let min_dist = (0u32..=48)
             .map(|i| {
-                let t = i as f32 / 32.0;
-                let u = 1.0 - t;
-                let [p0, p1, p2, p3] = pts;
-                let bz = u * u * u * p0[0]
-                    + 3.0 * u * u * t * p1[0]
-                    + 3.0 * u * t * t * p2[0]
-                    + t * t * t * p3[0];
-                let by = u * u * u * p0[1]
-                    + 3.0 * u * u * t * p1[1]
-                    + 3.0 * u * t * t * p2[1]
-                    + t * t * t * p3[1];
+                let t = i as f32 / 48.0;
+                let (bz, by) = if t < 1.0 / 3.0 {
+                    let s = t * 3.0;
+                    let [sz, sy] = geo.slope_start;
+                    let [az, ay] = geo.arc_start;
+                    (sz + s * (az - sz), sy + s * (ay - sy))
+                } else if t < 2.0 / 3.0 {
+                    let s = (t - 1.0 / 3.0) * 3.0;
+                    let theta = geo.theta_start + s * geo.arc_sweep;
+                    (
+                        geo.center[0] + chute_params.curve_radius * theta.cos(),
+                        geo.center[1] + chute_params.curve_radius * theta.sin(),
+                    )
+                } else {
+                    let s = (t - 2.0 / 3.0) * 3.0;
+                    let [es_z, es_y] = geo.exit_start;
+                    let [ee_z, ee_y] = chute_params.exit_pos;
+                    (es_z + s * (ee_z - es_z), es_y + s * (ee_y - es_y))
+                };
                 let dy = marble_yz.0 - (by + CHUTE_ORIGIN_Y);
                 let dz = marble_yz.1 - (bz + CHUTE_ORIGIN_Z);
                 (dy * dy + dz * dz).sqrt()
@@ -400,8 +405,8 @@ pub fn record_snare_hit_system(
 #[derive(Resource)]
 pub struct AutoSpawn {
     pub batch_size: u32,
-    pub step_p3_y_mm: f32,
-    pub step_p0_y_mm: f32,
+    pub step_exit_y_mm: f32,
+    pub step_slope_angle_deg: f32,
     pub pending: u32,
     pub spawned: u32,
     pub waiting_for: Option<usize>,
@@ -411,8 +416,8 @@ impl Default for AutoSpawn {
     fn default() -> Self {
         Self {
             batch_size: 100,
-            step_p3_y_mm: 0.0,
-            step_p0_y_mm: 0.0,
+            step_exit_y_mm: 0.0,
+            step_slope_angle_deg: 0.0,
             pending: 0,
             spawned: 0,
             waiting_for: None,
@@ -446,13 +451,14 @@ pub fn auto_spawn_system(
     }
 
     if auto.spawned > 0 {
-        if auto.step_p3_y_mm != 0.0 {
-            params.p3[1] += auto.step_p3_y_mm * 0.001;
+        if auto.step_exit_y_mm != 0.0 {
+            params.exit_pos[1] += auto.step_exit_y_mm * 0.001;
         }
-        if auto.step_p0_y_mm != 0.0 {
-            params.p0[1] += auto.step_p0_y_mm * 0.001;
+        if auto.step_slope_angle_deg != 0.0 {
+            params.slope_angle =
+                (params.slope_angle + auto.step_slope_angle_deg).clamp(1.0, 85.0);
         }
-        if auto.step_p3_y_mm != 0.0 || auto.step_p0_y_mm != 0.0 {
+        if auto.step_exit_y_mm != 0.0 || auto.step_slope_angle_deg != 0.0 {
             params.dirty = true;
         }
     }
@@ -466,7 +472,7 @@ pub fn auto_spawn_system(
 
     let run_idx = all_runs.push_new_run();
     if let Some(run) = all_runs.get_run_mut(run_idx) {
-        run.chute_exit = Some(params.p3);
+        run.chute_exit = Some(params.exit_pos);
     }
     spawn_marble(
         &mut commands,

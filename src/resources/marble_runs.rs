@@ -65,6 +65,7 @@ pub struct RunHistory {
     /// One-frame override: forces all run CollapsingHeaders open (true) or closed (false).
     pub force_all_open: Option<bool>,
     pub help_open: bool,
+    pub snare_tip_graph_open: bool,
 }
 
 impl RunHistory {

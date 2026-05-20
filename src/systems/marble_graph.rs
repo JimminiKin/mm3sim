@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use avian3d::prelude::*;
-use egui_plot::{Legend, Line, LineStyle, Plot, PlotPoints};
+use egui_plot::{Legend, Line, LineStyle, Plot, PlotPoints, VLine};
 
 const DROP_COLOR:  egui::Color32 = egui::Color32::from_rgb(242, 89,  38);
 const CHUTE_COLOR: egui::Color32 = egui::Color32::from_rgb(51,  115, 230);
@@ -19,7 +19,8 @@ const SAMPLE_INTERVAL: f32 = 0.001;
 /// spikes while still resolving the slide/free-flight phases clearly.
 const ACCEL_SMOOTH: usize = 10;
 
-use crate::resources::constants::MARBLE_RADIUS;
+use crate::components::snare::PivotArm;
+use crate::resources::constants::*;
 use crate::resources::marble_runs::{MarbleSample, RunHistory};
 use crate::systems::marble::{ChuteMarble, FlightTimer, Marble, RunIndex};
 
@@ -74,7 +75,8 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
 
         egui::Window::new(&title)
             .id(egui::Id::new(("graph", run.index)))
-            .default_size([420.0, 400.0])
+            .default_size([420.0, 420.0])
+            .resizable(true)
             .open(&mut open)
             .show(ctx, |ui| {
                 let has_drop  = !run.drop_samples.is_empty();
@@ -95,8 +97,11 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
                 });
                 ui.add_space(2.0);
 
-                let vel_h   = 200.0_f32;
-                let accel_h = 150.0_f32;
+                // Allocate plot heights proportionally to available window height.
+                // Subtract ~30 px for the sample-count label, spacers, and padding.
+                let available_h = (ui.available_height() - 30.0).max(180.0);
+                let vel_h   = available_h * (200.0 / 350.0);
+                let accel_h = available_h * (150.0 / 350.0);
 
                 // ── Velocity panel ────────────────────────────────────────────
                 let vel_pts = |samples: &[MarbleSample], f: fn(&MarbleSample) -> f64| -> PlotPoints {
@@ -168,5 +173,73 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
             });
 
         if !open { run.graph_open = false; }
+    }
+}
+
+/// The world-Y height of the snare drum's top-face rim on the far side from the pivot.
+/// In arm-local the point is (0, +SNARE_HALF_HEIGHT, SNARE_LOCAL_Z − SNARE_RADIUS);
+/// its height is SNARE_HALF_HEIGHT·cos(θ) + (PIVOT_FROM_SNARE + SNARE_RADIUS)·sin(θ).
+fn snare_far_tip_height(deg: f32) -> f32 {
+    let rad = deg.to_radians();
+    SNARE_HALF_HEIGHT * rad.cos() + (PIVOT_FROM_SNARE + SNARE_RADIUS) * rad.sin()
+}
+
+pub fn snare_tip_graph_ui(
+    mut contexts: EguiContexts,
+    mut all_runs: ResMut<RunHistory>,
+    arm: Query<&Transform, With<PivotArm>>,
+) {
+    if !all_runs.snare_tip_graph_open { return; }
+
+    let ctx = contexts.ctx_mut().unwrap();
+    let mut open = true;
+
+    let current_deg = arm
+        .single()
+        .map(|tf| tf.rotation.to_euler(EulerRot::XYZ).0.to_degrees())
+        .unwrap_or(ARM_SPAWN_DEG);
+
+    let curve = PlotPoints::from_iter((-300i32..=300).map(|i| {
+        let deg = i as f32 * 0.1;
+        [deg as f64, (snare_far_tip_height(deg) * 100.0) as f64]
+    }));
+
+    egui::Window::new("Snare Tip Height vs Angle")
+        .id(egui::Id::new("snare_tip_graph"))
+        .default_size([420.0, 280.0])
+        .resizable(true)
+        .open(&mut open)
+        .show(ctx, |ui| {
+            let cur_h_cm = snare_far_tip_height(current_deg) * 100.0;
+
+            Plot::new("snare_tip_angle_plot")
+                .legend(Legend::default())
+                .x_axis_label("arm angle (°)")
+                .y_axis_label("height (cm)")
+                .show(ui, |p| {
+                    p.line(Line::new("tip height", curve).color(CHUTE_COLOR));
+                    // Joint limits
+                    p.vline(
+                        VLine::new("rest", -(SNARE_REST_DEG as f64))
+                            .color(egui::Color32::GRAY)
+                            .style(LineStyle::Dashed { length: 6.0 }),
+                    );
+                    p.vline(
+                        VLine::new("max tilt", -((SNARE_REST_DEG + MAX_TILT_DEG) as f64))
+                            .color(egui::Color32::GRAY)
+                            .style(LineStyle::Dashed { length: 6.0 }),
+                    );
+                    // Current arm angle
+                    p.vline(VLine::new("current", current_deg as f64).color(egui::Color32::YELLOW));
+                });
+
+            ui.monospace(format!(
+                "θ = {:+.2}°   tip h = {:+.1} cm",
+                current_deg, cur_h_cm
+            ));
+        });
+
+    if !open {
+        all_runs.snare_tip_graph_open = false;
     }
 }

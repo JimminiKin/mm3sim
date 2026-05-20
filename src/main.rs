@@ -27,7 +27,7 @@ use systems::marble::{
     spawn_marble_on_click_system, track_slide_end_system, update_marble_collisions, AutoSpawn,
 };
 use systems::marble_graph::{
-    draw_marble_ghosts_system, marble_graph_ui, record_marble_samples_system,
+    draw_marble_ghosts_system, marble_graph_ui, record_marble_samples_system, snare_tip_graph_ui,
 };
 use systems::setup::setup_system;
 use systems::sound::{setup_snare_sound, snare_hit_sound_system, SnareVolume};
@@ -125,6 +125,7 @@ fn main() {
                 hud_panel_ui,
                 chute_editor_ui,
                 marble_graph_ui,
+                snare_tip_graph_ui,
                 auto_spawn_system.after(chute_editor_ui),
             ),
         )

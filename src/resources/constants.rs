@@ -80,9 +80,9 @@ pub const CW_LOCAL_Z: f32 = ARM_HALF_LEN;
 
 // ── Counterweight ─────────────────────────────────────────────────────────────
 pub const CW_DISTANCE: f32 = ARM_LENGTH - PIVOT_FROM_SNARE;
-pub const CW_WEIGHT_RATIO: f32 = 0.10; // fraction above torque balance; > 0 → arm rests at upper joint limit
-pub const CW_MASS: f32 = (SNARE_MASS * PIVOT_FROM_SNARE + ARM_MASS * PIVOT_LOCAL_Z) / CW_DISTANCE
-    * (1.0 + CW_WEIGHT_RATIO);
+pub const CW_WEIGHT_RATIO: f32 = 1.070; // fraction above torque balance; > 0 → arm rests at upper joint limit
+pub const CW_MASS: f32 =
+    (SNARE_MASS * PIVOT_FROM_SNARE + ARM_MASS * PIVOT_LOCAL_Z) / CW_DISTANCE * (CW_WEIGHT_RATIO);
 pub const CW_RADIUS: f32 = 0.02;
 pub const CW_HALF_HEIGHT: f32 = 0.08;
 
@@ -107,14 +107,15 @@ pub const DESPAWN_Y: f32 = -0.3;
 pub const CHUTE_ORIGIN_Y: f32 = SNARE_HALF_HEIGHT; // snare top face above world origin
 pub const CHUTE_ORIGIN_Z: f32 = 0.0; // snare centre is at z=0 when arm is level
 
-// Cubic Bézier profile in the Y-Z plane: P0 → CP1 → CP2 → P3
+// 3-part chute profile in the Y-Z plane: straight slope → circular arc → straight exit
 // (0, 0) = centre of snare top face; positive Y = up, positive Z = away from snare
 pub const CHUTE_END_X: f32 = 0.0;
-pub const CHUTE_END_Y: f32 = 0.40;
-pub const CHUTE_END_Z: f32 = 0.239;
-pub const CHUTE_START_Z: f32 = 0.333;
-pub const CHUTE_START_Y: f32 = 0.478;
-pub const CHUTE_CP1: (f32, f32) = (0.323, 0.440); // (z, y) first inner handle
-pub const CHUTE_CP2: (f32, f32) = (0.28, 0.400); // (z, y) second inner handle
+pub const CHUTE_EXIT_Z: f32 = 0.250; // exit end point Z (near snare)
+pub const CHUTE_EXIT_Y: f32 = 0.075; // exit end point Y (height)
+pub const CHUTE_EXIT_LENGTH: f32 = 0.065; // length of horizontal exit section
+pub const CHUTE_EXIT_ANGLE: f32 = 20.0; // degrees below horizontal (usually 0)
+pub const CHUTE_CURVE_RADIUS: f32 = 0.150; // radius of transition arc
+pub const CHUTE_SLOPE_ANGLE: f32 = 82.0; // degrees below horizontal
+pub const CHUTE_SLOPE_LENGTH: f32 = 0.190; // length of entry slope
 pub const CHUTE_THICKNESS: f32 = 0.01;
 pub const CHUTE_WIDTH: f32 = 0.02;

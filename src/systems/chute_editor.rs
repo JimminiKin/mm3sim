@@ -53,14 +53,7 @@ pub fn chute_editor_ui(
                     let mut changed = false;
 
                     ui.heading("Options");
-                    if ui
-                        .checkbox(&mut params.straight, "Force straight line chute")
-                        .changed()
-                    {
-                        changed = true;
-                    }
-                    ui.checkbox(&mut params.handles_visible, "Show curve handles");
-                    ui.checkbox(&mut params.endpoints_visible, "Show endpoint handles");
+                    ui.checkbox(&mut params.handles_visible, "Show handles");
 
                     let old_col = marble_col.bypass_change_detection().0;
                     let mut new_col = old_col;
@@ -90,16 +83,15 @@ pub fn chute_editor_ui(
                         ui.radio_value(&mut params.drag_axis, DragAxis::Vertical, "Y only");
                         ui.radio_value(&mut params.drag_axis, DragAxis::Horizontal, "Z only");
                     });
-                    center_drag_row(ui, "Center", &mut params, &mut changed);
-                    point_drag_row(ui, "End point", &mut params.p3, &mut changed);
-                    point_drag_row(ui, "Start point", &mut params.p0, &mut changed);
+                    changed |= point_drag_row(ui, "Exit end", &mut params.exit_pos);
 
                     ui.separator();
-                    ui.heading("Curve Handles");
-                    ui.add_enabled_ui(!params.straight, |ui| {
-                        point_drag_row(ui, "CP2 handle 2", &mut params.cp2, &mut changed);
-                        point_drag_row(ui, "CP1 handle 1", &mut params.cp1, &mut changed);
-                    });
+                    ui.heading("Chute shape");
+                    changed |= scalar_drag_row(ui, "Exit length (m)", &mut params.exit_length, 0.001, 0.005..=0.50);
+                    changed |= angle_drag_row(ui, "Exit angle (°)", &mut params.exit_angle, 0.0..=45.0);
+                    changed |= scalar_drag_row(ui, "Curve radius (m)", &mut params.curve_radius, 0.001, 0.005..=1.0);
+                    changed |= angle_drag_row(ui, "Slope angle (°)", &mut params.slope_angle, 1.0..=85.0);
+                    changed |= scalar_drag_row(ui, "Slope length (m)", &mut params.slope_length, 0.001, 0.01..=1.0);
 
                     ui.separator();
                     if ui.button("Reset to defaults").clicked() {
@@ -118,12 +110,12 @@ pub fn chute_editor_ui(
                         ui.add(egui::DragValue::new(&mut auto_spawn.batch_size).range(1..=1000u32));
                     });
                     ui.horizontal(|ui| {
-                        ui.label("Step P3.y (mm):");
-                        ui.add(egui::DragValue::new(&mut auto_spawn.step_p3_y_mm).speed(0.1));
+                        ui.label("Step exit y (mm):");
+                        ui.add(egui::DragValue::new(&mut auto_spawn.step_exit_y_mm).speed(0.1));
                     });
                     ui.horizontal(|ui| {
-                        ui.label("Step P0.y (mm):");
-                        ui.add(egui::DragValue::new(&mut auto_spawn.step_p0_y_mm).speed(0.1));
+                        ui.label("Step slope angle (°):");
+                        ui.add(egui::DragValue::new(&mut auto_spawn.step_slope_angle_deg).speed(0.1));
                     });
 
                     let is_running = auto_spawn.pending > 0 || auto_spawn.waiting_for.is_some();
@@ -136,57 +128,69 @@ pub fn chute_editor_ui(
                                 auto_spawn.pending = 0;
                                 auto_spawn.waiting_for = None;
                             }
-                        } else {
-                            if ui
-                                .button(format!("Start {}", auto_spawn.batch_size))
-                                .clicked()
-                            {
-                                auto_spawn.pending = auto_spawn.batch_size;
-                                auto_spawn.spawned = 0;
-                            }
+                        } else if ui
+                            .button(format!("Start {}", auto_spawn.batch_size))
+                            .clicked()
+                        {
+                            auto_spawn.pending = auto_spawn.batch_size;
+                            auto_spawn.spawned = 0;
                         }
                     });
                 });
         });
 }
 
-fn point_drag_row(ui: &mut egui::Ui, label: &str, pt: &mut [f32; 2], changed: &mut bool) {
+fn point_drag_row(ui: &mut egui::Ui, label: &str, pt: &mut [f32; 2]) -> bool {
+    let mut changed = false;
     ui.horizontal(|ui| {
         ui.label(label);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            *changed |= ui
+            changed |= ui
                 .add(egui::DragValue::new(&mut pt[1]).prefix("y ").speed(0.001))
                 .changed();
-            *changed |= ui
+            changed |= ui
                 .add(egui::DragValue::new(&mut pt[0]).prefix("z ").speed(0.001))
                 .changed();
         });
     });
+    changed
 }
 
-fn center_drag_row(ui: &mut egui::Ui, label: &str, pt: &mut ChuteParams, changed: &mut bool) {
-    let center_z = (pt.p0[0] + pt.p3[0]) / 2.0;
-    let center_y = (pt.p0[1] + pt.p3[1]) / 2.0;
-    let mut new_z = center_z;
-    let mut new_y = center_y;
-
+fn scalar_drag_row(
+    ui: &mut egui::Ui,
+    label: &str,
+    val: &mut f32,
+    speed: f64,
+    range: std::ops::RangeInclusive<f32>,
+) -> bool {
+    let mut changed = false;
     ui.horizontal(|ui| {
         ui.label(label);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.add(egui::DragValue::new(&mut new_y).prefix("y ").speed(0.001));
-            ui.add(egui::DragValue::new(&mut new_z).prefix("z ").speed(0.001));
+            changed = ui
+                .add(egui::DragValue::new(val).speed(speed).range(range))
+                .changed();
         });
     });
+    changed
+}
 
-    let dz = new_z - center_z;
-    let dy = new_y - center_y;
-    if dz != 0.0 || dy != 0.0 {
-        for p in [&mut pt.p0, &mut pt.cp1, &mut pt.cp2, &mut pt.p3] {
-            p[0] += dz;
-            p[1] += dy;
-        }
-        *changed = true;
-    }
+fn angle_drag_row(
+    ui: &mut egui::Ui,
+    label: &str,
+    val: &mut f32,
+    range: std::ops::RangeInclusive<f32>,
+) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.label(label);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            changed = ui
+                .add(egui::DragValue::new(val).speed(0.1).range(range))
+                .changed();
+        });
+    });
+    changed
 }
 
 pub fn rebuild_chute_system(

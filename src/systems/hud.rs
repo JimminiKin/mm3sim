@@ -53,15 +53,30 @@ pub fn hud_panel_ui(
                                 ui.label("Weight");
                                 ui.monospace(format!("{:.2} kg  ({:.1} N)", asm_mass, asm_mass * 9.81));
                                 ui.end_row();
+
+                                let rad = deg.to_radians();
+                                let tip_h = SNARE_HALF_HEIGHT * rad.cos()
+                                    + (PIVOT_FROM_SNARE + SNARE_RADIUS) * rad.sin();
+                                ui.label("Tip H");
+                                ui.monospace(format!("{:+6.1} cm", tip_h * 100.0));
+                                ui.end_row();
                             }
-                            let dz = chute_params.p0[0] - chute_params.p3[0];
-                            let dy = chute_params.p0[1] - chute_params.p3[1];
+                            let geo = chute_params.geometry();
+                            let dz = geo.slope_start[0] - chute_params.exit_pos[0];
+                            let dy = geo.slope_start[1] - chute_params.exit_pos[1];
                             let length = (dz * dz + dy * dy).sqrt();
                             let angle = dy.atan2(dz).to_degrees();
                             ui.label("Ramp");
                             ui.monospace(format!("{:.3} m  {:.1}°", length, angle));
                             ui.end_row();
                         });
+
+                    ui.horizontal(|ui| {
+                        let lbl = if all_runs.snare_tip_graph_open { "Hide Tip Graph" } else { "Tip Graph" };
+                        if ui.small_button(lbl).clicked() {
+                            all_runs.snare_tip_graph_open = !all_runs.snare_tip_graph_open;
+                        }
+                    });
 
                     ui.separator();
 
@@ -234,16 +249,16 @@ fn run_header_label(run: &Run) -> String {
         (Some(d), Some(c)) => {
             let ms = (c.flight_s - d.flight_s) * 1000.0;
             let sign = if ms >= 0.0 { "+" } else { "" };
-            let exit_str = run.chute_exit.map_or(String::new(), |p3| {
-                format!("   P3 y{:+.1} z{:.1}cm", p3[1] * 100.0, p3[0] * 100.0)
+            let exit_str = run.chute_exit.map_or(String::new(), |p| {
+                format!("   Exit y{:+.1} z{:.1}cm", p[1] * 100.0, p[0] * 100.0)
             });
-            let arc_str = run.chute_exit.map_or(String::new(), |p3| {
-                let p3_world = Vec3::new(
+            let arc_str = run.chute_exit.map_or(String::new(), |p| {
+                let exit_world = Vec3::new(
                     CHUTE_END_X,
-                    p3[1] + CHUTE_ORIGIN_Y,
-                    p3[0] + CHUTE_ORIGIN_Z,
+                    p[1] + CHUTE_ORIGIN_Y,
+                    p[0] + CHUTE_ORIGIN_Z,
                 );
-                format!("   arc {:.1}cm", p3_world.distance(c.hit_pos) * 100.0)
+                format!("   arc {:.1}cm", exit_world.distance(c.hit_pos) * 100.0)
             });
             format!("Run {}   Δt {}{:.1} ms   spd {:.2}/{:.2}{}{}",
                 run.index + 1, sign, ms, d.speed, c.speed, exit_str, arc_str)

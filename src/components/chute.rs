@@ -10,45 +10,50 @@ use crate::resources::constants::*;
 #[derive(Component)]
 pub struct ChuteSegment;
 
-fn bz(pts: [[f32; 2]; 4], t: f32) -> (f32, f32) {
-    let u = 1.0 - t;
-    let [p0, p1, p2, p3] = pts;
-    (
-        u*u*u*p0[0] + 3.0*u*u*t*p1[0] + 3.0*u*t*t*p2[0] + t*t*t*p3[0],
-        u*u*u*p0[1] + 3.0*u*u*t*p1[1] + 3.0*u*t*t*p2[1] + t*t*t*p3[1],
-    )
-}
+/// Profile point: (z, y) position and (tz, ty) forward tangent in param space.
+/// Forward = direction marble travels (toward snare).
+type ProfilePt = (f32, f32, f32, f32);
 
-fn surface_normal(pts: [[f32; 2]; 4], t: f32) -> Vec3 {
-    let u = 1.0 - t;
-    let [p0, p1, p2, p3] = pts;
-    let dz = 3.0 * (u*u*(p1[0]-p0[0]) + 2.0*u*t*(p2[0]-p1[0]) + t*t*(p3[0]-p2[0]));
-    let dy = 3.0 * (u*u*(p1[1]-p0[1]) + 2.0*u*t*(p2[1]-p1[1]) + t*t*(p3[1]-p2[1]));
-    Vec3::new(0.0, -dz, dy).normalize_or_zero()
-}
+/// Builds the ordered list of profile points for the 3-part chute.
+/// slope_start → arc_start → arc points → exit_start → exit_end
+fn build_profile(params: &ChuteParams) -> Vec<ProfilePt> {
+    let geo = params.geometry();
+    let [slope_start_z, slope_start_y] = geo.slope_start;
+    let [arc_start_z, arc_start_y] = geo.arc_start;
+    let [center_z, center_y] = geo.center;
+    let [exit_z, exit_y] = params.exit_pos;
+    let [slope_tz, slope_ty] = geo.slope_tangent;
+    let [exit_tz, exit_ty] = geo.exit_tangent;
 
-const FLATNESS: f32 = 0.0002;
+    let sa = params.slope_angle.to_radians();
+    let ea = params.exit_angle.to_radians();
+    let arc_angle = (sa - ea).abs();
+    let arc_len = params.curve_radius * arc_angle;
+    // At least 4 arc segments, ~200 per metre of arc length, capped at 64.
+    let n_arc = 4.max((arc_len * 200.0) as usize).min(64);
 
-fn adaptive_ts(pts: [[f32; 2]; 4]) -> Vec<f32> {
-    let mut ts = vec![0.0f32, 1.0f32];
-    refine(&mut ts, pts, 0.0, 1.0, 0);
-    ts.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    ts
-}
+    let mut pts = Vec::with_capacity(n_arc + 3);
 
-fn refine(ts: &mut Vec<f32>, pts: [[f32; 2]; 4], t0: f32, t1: f32, depth: u32) {
-    if depth >= 12 { return; }
-    let tm = (t0 + t1) * 0.5;
-    let (z0, y0) = bz(pts, t0);
-    let (z1, y1) = bz(pts, t1);
-    let (zm, ym) = bz(pts, tm);
-    let dz = zm - (z0 + z1) * 0.5;
-    let dy = ym - (y0 + y1) * 0.5;
-    if dz * dz + dy * dy > FLATNESS * FLATNESS {
-        ts.push(tm);
-        refine(ts, pts, t0, tm, depth + 1);
-        refine(ts, pts, tm, t1, depth + 1);
+    // Straight slope (2 points)
+    pts.push((slope_start_z, slope_start_y, slope_tz, slope_ty));
+    pts.push((arc_start_z, arc_start_y, slope_tz, slope_ty));
+
+    // Circular arc (n_arc additional points, ending at exit_start)
+    for i in 1..=n_arc {
+        let t = i as f32 / n_arc as f32;
+        let theta = geo.theta_start + t * geo.arc_sweep;
+        let z = center_z + params.curve_radius * theta.cos();
+        let y = center_y + params.curve_radius * theta.sin();
+        // Forward tangent on CW arc: (sin θ, -cos θ)
+        let tz = theta.sin();
+        let ty = -theta.cos();
+        pts.push((z, y, tz, ty));
     }
+
+    // Straight exit (1 more point for exit_end)
+    pts.push((exit_z, exit_y, exit_tz, exit_ty));
+
+    pts
 }
 
 pub fn spawn_chute(
@@ -57,12 +62,11 @@ pub fn spawn_chute(
     materials: &mut ResMut<Assets<StandardMaterial>>,
     params: &ChuteParams,
 ) {
-    let pts = params.effective_pts();
-    let ts = adaptive_ts(pts);
-    let (coll_verts, coll_idx) = build_trimesh_collider(pts, &ts);
+    let profile = build_profile(params);
+    let (coll_verts, coll_idx) = build_trimesh_collider(&profile);
 
     commands.spawn((
-        Mesh3d(meshes.add(build_smooth_mesh(pts, &ts))),
+        Mesh3d(meshes.add(build_smooth_mesh(&profile))),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(0.55, 0.45, 0.30),
             metallic: 0.0,
@@ -79,16 +83,22 @@ pub fn spawn_chute(
     ));
 }
 
-fn build_trimesh_collider(pts: [[f32; 2]; 4], ts: &[f32]) -> (Vec<Vec3>, Vec<[u32; 3]>) {
-    let n = ts.len() - 1;
+/// normal_3d for a point with forward tangent (tz, ty) in (Z, Y) param space.
+/// Derived from CW rotation: normal = (0, -tz, ty) in world (X, Y, Z).
+#[inline]
+fn surface_normal(tz: f32, ty: f32) -> Vec3 {
+    Vec3::new(0.0, -tz, ty).normalize_or_zero()
+}
+
+fn build_trimesh_collider(profile: &[ProfilePt]) -> (Vec<Vec3>, Vec<[u32; 3]>) {
+    let n = profile.len() - 1;
     let w = CHUTE_WIDTH * 0.5;
     let h = CHUTE_THICKNESS * 0.5;
     let x = CHUTE_END_X;
 
     let mut verts: Vec<Vec3> = Vec::with_capacity((n + 1) * 4);
-    for &t in ts {
-        let (z, y) = bz(pts, t);
-        let sn = surface_normal(pts, t);
+    for &(z, y, tz, ty) in profile {
+        let sn = surface_normal(tz, ty);
         let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y, z + CHUTE_ORIGIN_Z);
         let top = centre + sn * h;
         let bot = centre - sn * h;
@@ -111,42 +121,43 @@ fn build_trimesh_collider(pts: [[f32; 2]; 4], ts: &[f32]) -> (Vec<Vec3>, Vec<[u3
     (verts, idx)
 }
 
-fn build_smooth_mesh(pts: [[f32; 2]; 4], ts: &[f32]) -> Mesh {
-    let n = ts.len() - 1;
+fn build_smooth_mesh(profile: &[ProfilePt]) -> Mesh {
+    let n = profile.len() - 1;
     let w = CHUTE_WIDTH * 0.5;
     let h = CHUTE_THICKNESS * 0.5;
     let x = CHUTE_END_X;
 
     const STRIDE: usize = 8;
-
     let cap = (n + 1) * STRIDE;
     let mut positions: Vec<[f32; 3]> = Vec::with_capacity(cap);
     let mut normals:   Vec<[f32; 3]> = Vec::with_capacity(cap);
     let mut uvs:       Vec<[f32; 2]> = Vec::with_capacity(cap);
 
-    for &t in ts {
-        let (z, y) = bz(pts, t);
-        let sn = surface_normal(pts, t);
+    let total_segs = n as f32;
+    for (seg_i, &(z, y, tz, ty)) in profile.iter().enumerate() {
+        let t = seg_i as f32 / total_segs;
+        let sn = surface_normal(tz, ty);
         let bn = -sn;
         let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y, z + CHUTE_ORIGIN_Z);
         let top = centre + sn * h;
         let bot = centre + bn * h;
 
-        let push = |positions: &mut Vec<[f32; 3]>, normals: &mut Vec<[f32; 3]>,
-                    uvs: &mut Vec<[f32; 2]>, p: Vec3, n: Vec3, uv: [f32; 2]| {
-            positions.push(p.to_array());
-            normals.push(n.to_array());
-            uvs.push(uv);
-        };
+        macro_rules! push {
+            ($p:expr, $n:expr, $uv:expr) => {
+                positions.push(($p).to_array());
+                normals.push(($n).to_array());
+                uvs.push($uv);
+            };
+        }
 
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(top.x-w, top.y, top.z), sn,          [t, 0.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(top.x+w, top.y, top.z), sn,          [t, 1.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(bot.x-w, bot.y, bot.z), bn,          [t, 0.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(bot.x+w, bot.y, bot.z), bn,          [t, 1.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(top.x-w, top.y, top.z), Vec3::NEG_X, [t, 1.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(bot.x-w, bot.y, bot.z), Vec3::NEG_X, [t, 0.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(top.x+w, top.y, top.z), Vec3::X,     [t, 1.0]);
-        push(&mut positions, &mut normals, &mut uvs, Vec3::new(bot.x+w, bot.y, bot.z), Vec3::X,     [t, 0.0]);
+        push!(Vec3::new(top.x-w, top.y, top.z), sn,          [t, 0.0]);
+        push!(Vec3::new(top.x+w, top.y, top.z), sn,          [t, 1.0]);
+        push!(Vec3::new(bot.x-w, bot.y, bot.z), bn,          [t, 0.0]);
+        push!(Vec3::new(bot.x+w, bot.y, bot.z), bn,          [t, 1.0]);
+        push!(Vec3::new(top.x-w, top.y, top.z), Vec3::NEG_X, [t, 1.0]);
+        push!(Vec3::new(bot.x-w, bot.y, bot.z), Vec3::NEG_X, [t, 0.0]);
+        push!(Vec3::new(top.x+w, top.y, top.z), Vec3::X,     [t, 1.0]);
+        push!(Vec3::new(bot.x+w, bot.y, bot.z), Vec3::X,     [t, 0.0]);
     }
 
     let mut indices: Vec<u32> = Vec::with_capacity(n * 4 * 6);
