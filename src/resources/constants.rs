@@ -161,11 +161,14 @@ pub const CHUTE_WIDTH: f32 = 0.02;
 // =============================================================================
 
 pub const BARREL_RADIUS: f32 = 0.5;         // 1 m diameter cylinder
-pub const BARREL_N_STEPS: usize = 64;       // subdivisions per revolution
+/// 16 beats × 12 steps/beat = 192; LCM(3,4)=12 lets beats hold duplets (÷6),
+/// triplets (÷4), or 16th notes (÷3) without fractional positions.
+pub const BARREL_N_STEPS: usize = 192;
+pub const BARREL_STEPS_PER_BEAT: usize = 12; // how many steps make one beat
 /// ch 0 = chute drop, ch 1 = vertical snare drop, ch 2..38 = vib bars 0..36
 pub const BARREL_N_CHANNELS: usize = 39;
-/// 120 steps/min ÷ 64 steps/rev = 1.875 RPM  (≈ 120 BPM sequencer)
-pub const BARREL_RPM_DEFAULT: f32 = 1.875;
+/// 120 steps/min ÷ 192 steps/rev = 0.625 RPM  (≈ 120 BPM sequencer)
+pub const BARREL_RPM_DEFAULT: f32 = 0.625;
 pub const BARREL_Z_POS: f32 = 1.4;         // world Z (positive from snare)
 pub const BARREL_Y_POS: f32 = 0.8;         // world Y (cylinder centre)
 pub const BARREL_WIDTH: f32 = 2.2;         // total X span of the barrel

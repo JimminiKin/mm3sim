@@ -40,13 +40,79 @@ impl Default for BarrelParams {
             rpm: BARREL_RPM_DEFAULT,
             angle: start_angle,
             current_step: 0,
-            pattern: vec![vec![false; BARREL_N_CHANNELS]; BARREL_N_STEPS],
+            pattern: marble_machine_default_pattern(),
             drag_paint_val: None,
             editor_open: false,
             show_pegs: true,
             pending_spawns: Vec::new(),
         }
     }
+}
+
+/// Default pattern approximating the Marble Machine (Wintergatan) main loop.
+///
+/// Vibraphone tuning: bar 0 = F3 (174.61 Hz), chromatic semitones up.
+/// Channel = bar_index + BARREL_CH_VIB_FIRST (2).
+///
+/// Notes used (bar → channel):
+///   A3=4→6  D4=9→11  E4=11→13  F4=12→14  G4=14→16
+///   A4=16→18  C5=19→21  D5=21→23  F5=24→26  A5=28→30
+///
+/// Structure (192 steps = 16 beats = 4 bars of 4/4 at 120 BPM):
+///   Kick (ch 0): every beat (quarter notes)
+///   Snare (ch 1): beats 2 & 4 of each bar (backbeat)
+///   Vibraphone: D-minor ascending arpeggio then descending scale, 8-beat
+///               phrase repeated twice.
+fn marble_machine_default_pattern() -> Vec<Vec<bool>> {
+    let mut p = vec![vec![false; BARREL_N_CHANNELS]; BARREL_N_STEPS];
+
+    // Kick: chute on every quarter-note beat
+    for beat in 0..16_usize {
+        p[beat * BARREL_STEPS_PER_BEAT][BARREL_CH_CHUTE] = true;
+    }
+
+    // Snare: drop on beats 2 & 4 of every 4-beat bar (4 bars in the loop)
+    for bar in 0..4_usize {
+        let bar_start = bar * (4 * BARREL_STEPS_PER_BEAT);
+        p[bar_start + BARREL_STEPS_PER_BEAT][BARREL_CH_DROP] = true;     // beat 2
+        p[bar_start + 3 * BARREL_STEPS_PER_BEAT][BARREL_CH_DROP] = true; // beat 4
+    }
+
+    // Vibraphone: 8th-note melody (every 6 steps), 8-beat phrase × 2 reps.
+    // Phrase = ascending Dm7 arpeggio (D4-F4-A4-C5-D5-F5-A5-F5) then
+    //          descending scale (D5-C5-A4-G4-F4-E4-D4-A3).
+    // (step_offset_within_phrase, vib_channel)
+    const HALF: usize = 6; // 8th note = 6 steps
+    let phrase: &[(usize, usize)] = &[
+        (0 * HALF, 11), // D4
+        (1 * HALF, 14), // F4
+        (2 * HALF, 18), // A4
+        (3 * HALF, 21), // C5
+        (4 * HALF, 23), // D5
+        (5 * HALF, 26), // F5
+        (6 * HALF, 30), // A5
+        (7 * HALF, 26), // F5  ← pivot
+        (8 * HALF, 23), // D5
+        (9 * HALF, 21), // C5
+        (10 * HALF, 18), // A4
+        (11 * HALF, 16), // G4
+        (12 * HALF, 14), // F4
+        (13 * HALF, 13), // E4
+        (14 * HALF, 11), // D4
+        (15 * HALF, 6),  // A3
+    ];
+
+    let phrase_len = 8 * BARREL_STEPS_PER_BEAT; // 96 steps = 8 beats
+    for rep in 0..2_usize {
+        for &(offset, ch) in phrase {
+            let step = rep * phrase_len + offset;
+            if step < BARREL_N_STEPS && ch < BARREL_N_CHANNELS {
+                p[step][ch] = true;
+            }
+        }
+    }
+
+    p
 }
 
 impl BarrelParams {

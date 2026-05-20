@@ -247,7 +247,7 @@ pub fn draw_barrel_gizmos(mut gizmos: Gizmos, params: Res<BarrelParams>) {
 
 // ── Pattern editor UI ─────────────────────────────────────────────────────────
 
-const CELL_W: f32 = 11.0;
+const CELL_W: f32 = 5.0; // narrower to fit 192 steps on screen
 const CELL_H: f32 = 11.0;
 const LABEL_W: f32 = 52.0;
 const STEP_HEADER_H: f32 = 18.0;
@@ -358,28 +358,46 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
             let painter = ui.painter_at(outer_rect);
 
             // ── Step header ───────────────────────────────────────────────
+            // Shows beat numbers (1-16) with tick marks for 8th and triplet positions.
             let header_top = outer_rect.min.y;
             for step in 0..BARREL_N_STEPS {
-                if step % 4 == 0 {
-                    let cx = outer_rect.min.x + LABEL_W + step as f32 * CELL_W + CELL_W * 0.5;
-                    let label = format!("{}", step + 1);
+                let x = outer_rect.min.x + LABEL_W + step as f32 * CELL_W;
+                if step % BARREL_STEPS_PER_BEAT == 0 {
+                    // Beat number label
+                    let beat = step / BARREL_STEPS_PER_BEAT + 1;
+                    let cx = x + CELL_W * (BARREL_STEPS_PER_BEAT as f32 * 0.5);
                     painter.text(
-                        egui::pos2(cx, header_top + STEP_HEADER_H * 0.5),
+                        egui::pos2(cx, header_top + STEP_HEADER_H * 0.4),
                         egui::Align2::CENTER_CENTER,
-                        label,
+                        format!("{beat}"),
                         egui::FontId::monospace(8.0),
-                        egui::Color32::from_rgb(160, 160, 160),
+                        egui::Color32::from_rgb(180, 180, 190),
                     );
-                }
-                // Vertical tick at every beat (every 4 steps at 64-step resolution)
-                if step % 4 == 0 {
-                    let x = outer_rect.min.x + LABEL_W + step as f32 * CELL_W;
+                    // Full-height tick for beat
                     painter.line_segment(
                         [
-                            egui::pos2(x, header_top + STEP_HEADER_H - 4.0),
+                            egui::pos2(x, header_top + STEP_HEADER_H - 5.0),
                             egui::pos2(x, header_top + STEP_HEADER_H),
                         ],
-                        egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 100, 110)),
+                        egui::Stroke::new(1.0, egui::Color32::from_rgb(120, 120, 135)),
+                    );
+                } else if step % 6 == 0 {
+                    // 8th-note tick (÷2 within beat)
+                    painter.line_segment(
+                        [
+                            egui::pos2(x, header_top + STEP_HEADER_H - 3.0),
+                            egui::pos2(x, header_top + STEP_HEADER_H),
+                        ],
+                        egui::Stroke::new(1.0, egui::Color32::from_rgb(80, 80, 100)),
+                    );
+                } else if step % 4 == 0 {
+                    // Triplet tick (÷3 within beat)
+                    painter.line_segment(
+                        [
+                            egui::pos2(x, header_top + STEP_HEADER_H - 2.0),
+                            egui::pos2(x, header_top + STEP_HEADER_H),
+                        ],
+                        egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 70, 120)),
                     );
                 }
             }
@@ -464,7 +482,10 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
 
                     let is_active = params.pattern[step][ch];
                     let is_current = step == current_step && params.enabled;
-                    let is_beat = step % 4 == 0;
+                    // Subdivision positions within a beat (beat = BARREL_STEPS_PER_BEAT steps)
+                    let is_beat_start  = step % BARREL_STEPS_PER_BEAT == 0;
+                    let is_eighth      = step % 6 == 0 && !is_beat_start;
+                    let is_triplet     = step % 4 == 0 && step % 6 != 0 && !is_beat_start;
 
                     let color = match (is_active, is_current) {
                         (true, true) => egui::Color32::from_rgb(255, 220, 30), // active + at reader
@@ -474,10 +495,14 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
                         }
                         (false, true) => egui::Color32::from_rgb(80, 65, 20), // cursor bg
                         (false, false) => {
-                            if is_beat {
-                                egui::Color32::from_rgb(35, 35, 45)
+                            if is_beat_start {
+                                egui::Color32::from_rgb(42, 40, 55) // beat: slightly bright
+                            } else if is_eighth {
+                                egui::Color32::from_rgb(30, 30, 44) // 8th note position
+                            } else if is_triplet {
+                                egui::Color32::from_rgb(27, 22, 40) // triplet: slight purple tint
                             } else {
-                                egui::Color32::from_rgb(22, 22, 30)
+                                egui::Color32::from_rgb(18, 18, 26) // other subdivisions
                             }
                         }
                     };
@@ -496,21 +521,25 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
                 }
             }
 
-            // Beat-marker grid lines (vertical, every 4 steps)
-            for beat in 0..=(BARREL_N_STEPS / 4) {
-                let x = outer_rect.min.x + LABEL_W + beat as f32 * 4.0 * CELL_W;
+            // Grid lines — three tiers matching the visual subdivisions in the header
+            let grid_bottom = grid_top + BARREL_N_CHANNELS as f32 * CELL_H + CHANNEL_GROUP_GAP;
+            for step in 0..=BARREL_N_STEPS {
+                let x = outer_rect.min.x + LABEL_W + step as f32 * CELL_W;
+                let (stroke_w, color) = if step % BARREL_STEPS_PER_BEAT == 0 {
+                    // Beat line — solid, most visible
+                    (1.0, egui::Color32::from_rgba_premultiplied(110, 110, 140, 140))
+                } else if step % 6 == 0 {
+                    // 8th-note line (÷2 per beat)
+                    (0.5, egui::Color32::from_rgba_premultiplied(60, 60, 90, 80))
+                } else if step % 4 == 0 {
+                    // Triplet line (÷3 per beat) — purple tint
+                    (0.5, egui::Color32::from_rgba_premultiplied(80, 50, 110, 70))
+                } else {
+                    continue;
+                };
                 painter.line_segment(
-                    [
-                        egui::pos2(x, grid_top),
-                        egui::pos2(
-                            x,
-                            grid_top + BARREL_N_CHANNELS as f32 * CELL_H + CHANNEL_GROUP_GAP,
-                        ),
-                    ],
-                    egui::Stroke::new(
-                        0.5,
-                        egui::Color32::from_rgba_premultiplied(80, 80, 100, 80),
-                    ),
+                    [egui::pos2(x, grid_top), egui::pos2(x, grid_bottom)],
+                    egui::Stroke::new(stroke_w, color),
                 );
             }
         });
@@ -574,22 +603,29 @@ fn cell_at(
 }
 
 fn quick_fill_buttons(ui: &mut egui::Ui, pattern: &mut Vec<Vec<bool>>) {
-    // Fill every 4th step (quarter notes) on the chute channel
-    if ui.small_button("Chute quarter notes").clicked() {
+    // Quarter notes: once per beat (every BARREL_STEPS_PER_BEAT steps)
+    if ui.small_button("Chute quarter").clicked() {
         for step in 0..BARREL_N_STEPS {
-            pattern[step][0] = step % 16 == 0;
+            pattern[step][0] = step % BARREL_STEPS_PER_BEAT == 0;
         }
     }
-    // Eighth notes on drop
-    if ui.small_button("Drop 8th notes").clicked() {
+    // Eighth notes: twice per beat (every 6 steps)
+    if ui.small_button("Drop 8ths").clicked() {
         for step in 0..BARREL_N_STEPS {
-            pattern[step][1] = step % 8 == 0;
+            pattern[step][1] = step % 6 == 0;
+        }
+    }
+    // Triplets: three per beat (every 4 steps)
+    if ui.small_button("Chute triplets").clicked() {
+        for step in 0..BARREL_N_STEPS {
+            pattern[step][0] = step % 4 == 0;
         }
     }
     // C major arpeggio on vibraphone bars 0,4,7,12 (C, E, G, C)
+    // Steps mapped to same fractional positions as before (every 2 beats = every 24 steps)
     if ui.small_button("Vib C-major arp").clicked() {
-        let vib_steps = [0usize, 8, 16, 24, 32, 40, 48, 56];
-        let vib_bars = [2usize, 6, 9, 14]; // offset by BARREL_CH_VIB_FIRST=2: bars 0,4,7,12
+        let vib_steps = [0usize, 24, 48, 72, 96, 120, 144, 168];
+        let vib_bars = [2usize, 6, 9, 14]; // BARREL_CH_VIB_FIRST+offset: bars 0,4,7,12
         for step in 0..BARREL_N_STEPS {
             for ch in 2..BARREL_N_CHANNELS {
                 pattern[step][ch] = false;
