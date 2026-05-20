@@ -10,7 +10,7 @@ const MAX_IMPACT_SPEED: f32 = 4.0; // m/s — marble free-fall from 0.80 m spawn
 pub struct SnareVolume(pub f32);
 
 impl Default for SnareVolume {
-    fn default() -> Self { SnareVolume(1.0) }
+    fn default() -> Self { SnareVolume(0.5) }
 }
 
 fn impact_volume(speed: f32, vol: f32) -> f32 {
