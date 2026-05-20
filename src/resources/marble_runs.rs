@@ -55,6 +55,7 @@ pub struct Run {
     pub graph_open: bool,
     pub drop_path: Vec<Vec3>,
     pub chute_path: Vec<Vec3>,
+    pub vib_path: Vec<Vec3>,
     pub show_ghost: bool,
 }
 
@@ -82,6 +83,7 @@ impl RunHistory {
             graph_open: false,
             drop_path: Vec::new(),
             chute_path: Vec::new(),
+            vib_path: Vec::new(),
             show_ghost: false,
         });
         idx

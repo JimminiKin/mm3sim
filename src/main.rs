@@ -11,10 +11,12 @@ use resources::constants::BG_COLOR;
 use resources::constants::SIMULATION_TPS;
 use resources::marble_collisions::MarbleCollisions;
 use resources::marble_runs::RunHistory;
+use resources::vibraphone_params::VibraphoneParams;
 use systems::axes::{resize_axes_viewport, setup_axes_hud, update_axes_hud};
 use systems::camera::orbit_camera_system;
 use systems::chute_editor::{
-    apply_snare_fixed_system, chute_editor_ui, rebuild_chute_system, SnareFixed,
+    apply_snare_fixed_system, chute_editor_ui, rebuild_chute_system, rebuild_vibraphone_system,
+    SnareFixed,
 };
 use systems::chute_handles::{
     chute_handle_drag_system, draw_chute_gizmos, setup_chute_handles, sync_handle_transforms,
@@ -68,6 +70,7 @@ fn main() {
         .init_resource::<RunHistory>()
         .init_resource::<SnareFixed>()
         .init_resource::<SnareVolume>()
+        .init_resource::<VibraphoneParams>()
         .init_resource::<AutoSpawn>()
         .add_systems(
             Startup,
@@ -111,6 +114,7 @@ fn main() {
                 draw_marble_ghosts_system,
                 // Chute
                 rebuild_chute_system,
+                rebuild_vibraphone_system,
                 sync_handle_transforms,
                 sync_handle_visibility,
                 draw_chute_gizmos,

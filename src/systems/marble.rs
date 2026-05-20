@@ -9,6 +9,7 @@ use crate::resources::constants::*;
 use crate::resources::layers::GameLayer;
 use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::marble_runs::{HitRecord, RunHistory};
+use crate::resources::vibraphone_params::VibraphoneParams;
 use crate::systems::chute_handles::HandleDrag;
 
 fn jittered_spawn(snare_top_y: f32) -> Vec3 {
@@ -37,6 +38,9 @@ pub struct Marble;
 
 #[derive(Component)]
 pub struct ChuteMarble;
+
+#[derive(Component)]
+pub struct VibMarble;
 
 #[derive(Component)]
 pub struct RunIndex(pub usize);
@@ -106,6 +110,7 @@ pub fn spawn_marble_on_click_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     chute_params: Res<ChuteParams>,
+    vib_params: Res<VibraphoneParams>,
     marble_col: Res<MarbleCollisions>,
     drag: Res<HandleDrag>,
     snare: Query<&GlobalTransform, With<SnareDrum>>,
@@ -149,6 +154,10 @@ pub fn spawn_marble_on_click_system(
         marble_col.0,
         run_idx,
     );
+
+    if vib_params.spawn_marble {
+        spawn_vib_marble(&mut commands, &mut meshes, &mut materials, &vib_params, marble_col.0, run_idx);
+    }
 }
 
 pub fn spawn_marble(
@@ -201,22 +210,54 @@ pub fn spawn_chute_marble(
     ));
 }
 
+pub fn spawn_vib_marble(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    params: &VibraphoneParams,
+    collide: bool,
+    run_idx: usize,
+) {
+    let bar_count = VIB_BAR_COUNT;
+    // Drop bar index counts from the high (positive X) end, matching bar order
+    let logical_idx = params.drop_bar_index.min(bar_count - 1);
+    let bar_x = params.row_x_center
+        + ((bar_count - 1 - logical_idx) as f32 - (bar_count - 1) as f32 * 0.5)
+        * params.bar_spacing;
+    let spawn_pos = Vec3::new(bar_x, params.row_y + VIB_SPAWN_HEIGHT, params.row_z);
+    commands.spawn((
+        Marble,
+        VibMarble,
+        FlightTimer(0.0),
+        PathTimer(0.0),
+        PrevVelocity::default(),
+        RunIndex(run_idx),
+        marble_pbr(meshes, materials, spawn_pos, (0.20, 0.80, 0.35)),
+        marble_physics(collide),
+    ));
+}
+
 // ── Per-frame systems ─────────────────────────────────────────────────────────
 
 pub fn record_marble_paths_system(
     mut all_runs: ResMut<RunHistory>,
     time: Res<Time<Fixed>>,
-    mut marbles: Query<(&Transform, Option<&ChuteMarble>, &RunIndex, &mut PathTimer), With<Marble>>,
+    mut marbles: Query<
+        (&Transform, Option<&ChuteMarble>, Option<&VibMarble>, &RunIndex, &mut PathTimer),
+        With<Marble>,
+    >,
 ) {
     let dt = time.delta_secs();
-    for (tf, is_chute, run_idx, mut timer) in &mut marbles {
+    for (tf, is_chute, is_vib, run_idx, mut timer) in &mut marbles {
         timer.0 += dt;
         if timer.0 < GHOST_SAMPLE_INTERVAL {
             continue;
         }
         timer.0 -= GHOST_SAMPLE_INTERVAL;
         if let Some(run) = all_runs.get_run_mut(run_idx.0) {
-            let path = if is_chute.is_some() {
+            let path = if is_vib.is_some() {
+                &mut run.vib_path
+            } else if is_chute.is_some() {
                 &mut run.chute_path
             } else {
                 &mut run.drop_path

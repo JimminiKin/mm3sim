@@ -4,7 +4,9 @@ use bevy_egui::PrimaryEguiContext;
 
 use crate::components::chute::spawn_chute;
 use crate::components::snare::spawn_snare;
+use crate::components::vibraphone::spawn_vibraphone;
 use crate::resources::chute_params::ChuteParams;
+use crate::resources::vibraphone_params::VibraphoneParams;
 use crate::resources::constants::*;
 use crate::systems::camera::OrbitCamera;
 
@@ -13,6 +15,7 @@ pub fn setup_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     chute_params: Res<ChuteParams>,
+    vib_params: Res<VibraphoneParams>,
 ) {
     commands.spawn((
         Camera3d::default(),
@@ -45,4 +48,5 @@ pub fn setup_system(
 
     spawn_snare(&mut commands, &mut meshes, &mut materials);
     spawn_chute(&mut commands, &mut meshes, &mut materials, &chute_params);
+    spawn_vibraphone(&mut commands, &mut meshes, &mut materials, &vib_params);
 }

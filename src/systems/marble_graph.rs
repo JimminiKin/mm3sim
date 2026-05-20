@@ -8,6 +8,7 @@ const CHUTE_COLOR: egui::Color32 = egui::Color32::from_rgb(51,  115, 230);
 
 const DROP_GHOST_COLOR:  Color = Color::srgba(0.95, 0.35, 0.15, 0.75);
 const CHUTE_GHOST_COLOR: Color = Color::srgba(0.20, 0.45, 0.90, 0.75);
+const VIB_GHOST_COLOR:   Color = Color::srgba(0.20, 0.80, 0.35, 0.75);
 
 /// Record one sample per millisecond (1 kHz). At 10 kHz physics this skips 9
 /// out of every 10 steps, keeping each run's sample count under ~2000 even for
@@ -59,6 +60,9 @@ pub fn draw_marble_ghosts_system(mut gizmos: Gizmos, all_runs: Res<RunHistory>) 
             }
             if run.chute_path.len() >= 2 {
                 gizmos.linestrip(run.chute_path.iter().copied(), CHUTE_GHOST_COLOR);
+            }
+            if run.vib_path.len() >= 2 {
+                gizmos.linestrip(run.vib_path.iter().copied(), VIB_GHOST_COLOR);
             }
         }
     }

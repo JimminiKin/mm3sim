@@ -46,12 +46,12 @@ pub const CHUTE_MARBLE_COLOR: (f32, f32, f32) = (0.20, 0.45, 0.90);
 // =============================================================================
 
 // ── Simulation ────────────────────────────────────────────────────────────────
-pub const SIMULATION_TPS: f32 = 4000.0;
+pub const SIMULATION_TPS: f32 = 1000.0;
 
 // ── Surface physics ───────────────────────────────────────────────────────────
 pub const STEEL_RESTITUTION: f32 = 0.60; // marble
 pub const STEEL_FRICTION: f32 = 0.18; // marble
-pub const CHUTE_RESTITUTION: f32 = 0.35;
+pub const CHUTE_RESTITUTION: f32 = 0.25;
 pub const CHUTE_FRICTION: f32 = 0.20; // ABS has moderate grip on steel
 pub const SNARE_RESTITUTION: f32 = 0.60;
 pub const SNARE_FRICTION: f32 = 0.18;
@@ -101,6 +101,41 @@ pub const SPAWN_HEIGHT: f32 = 1.0; // above snare top centre
 pub const MARBLE_SPAWN_JITTER: f32 = 0.001;
 pub const DESPAWN_Y: f32 = -0.3;
 
+// ── Vibraphone ────────────────────────────────────────────────────────────────
+pub const VIB_BAR_COUNT: u32 = 37;
+pub const VIB_BAR_WIDTH: f32 = 0.045;
+pub const VIB_BAR_SPACING: f32 = 0.055;
+pub const VIB_BAR_THICKNESS: f32 = 0.010;
+pub const VIB_BAR_LENGTH_MAX: f32 = 0.390;
+pub const VIB_BAR_LENGTH_MIN: f32 = 0.140;
+pub const VIB_ROW_Z: f32 = -0.435;
+pub const VIB_ROW_Y: f32 = -0.3; // top face Y (snare top = 0.070, slightly lower)
+
+pub const VIB_RESTITUTION: f32 = 0.50;
+pub const VIB_FRICTION: f32 = 0.15;
+pub const VIB_BAR_DENSITY: f32 = 2700.0; // aluminium alloy, kg/m³
+
+// arm_length = bar_length * arm_scale; pivot = bar_length * pivot_frac from bar center toward CW
+pub const VIB_ARM_SCALE: f32 = 0.83;
+pub const VIB_PIVOT_FRAC: f32 = 0.276; // resonance node: 22.4% from far end = 27.6% from center
+pub const VIB_ARM_TUBE_RADIUS: f32 = 0.003;
+pub const VIB_ARM_MASS: f32 = 0.05;
+
+pub const VIB_REST_DEG: f32 = 10.0;
+pub const VIB_MAX_TILT_DEG: f32 = 5.0;
+pub const VIB_LINEAR_DAMPING: f32 = 0.0;
+pub const VIB_ANGULAR_DAMPING: f32 = 0.0;
+pub const VIB_CW_WEIGHT_RATIO: f32 = 1.07;
+pub const VIB_CW_RADIUS: f32 = 0.012;
+pub const VIB_CW_HALF_HEIGHT: f32 = 0.018;
+
+pub const VIB_DROP_BAR_INDEX: u32 = 6;
+pub const VIB_SPAWN_HEIGHT: f32 = 0.80; // height above bar top to spawn marble
+
+pub const VIB_BAR_COLOR: (f32, f32, f32) = (0.82, 0.73, 0.33);
+pub const VIB_BAR_METALLIC: f32 = 0.90;
+pub const VIB_BAR_ROUGHNESS: f32 = 0.20;
+
 // ── Chute ─────────────────────────────────────────────────────────────────────
 // All Y/Z coords are relative to the snare top-face centre at arm θ=0.
 // World position = param + CHUTE_ORIGIN_*.
@@ -110,10 +145,10 @@ pub const CHUTE_ORIGIN_Z: f32 = 0.0; // snare centre is at z=0 when arm is level
 // 3-part chute profile in the Y-Z plane: straight slope → circular arc → straight exit
 // (0, 0) = centre of snare top face; positive Y = up, positive Z = away from snare
 pub const CHUTE_END_X: f32 = 0.0;
-pub const CHUTE_EXIT_Z: f32 = 0.250; // exit end point Z (near snare)
-pub const CHUTE_EXIT_Y: f32 = 0.075; // exit end point Y (height)
+pub const CHUTE_EXIT_Z: f32 = 0.27; // exit end point Z (near snare)
+pub const CHUTE_EXIT_Y: f32 = 0.119; // exit end point Y (height)
 pub const CHUTE_EXIT_LENGTH: f32 = 0.065; // length of horizontal exit section
-pub const CHUTE_EXIT_ANGLE: f32 = 20.0; // degrees below horizontal (usually 0)
+pub const CHUTE_EXIT_ANGLE: f32 = 30.0; // degrees below horizontal (usually 0)
 pub const CHUTE_CURVE_RADIUS: f32 = 0.150; // radius of transition arc
 pub const CHUTE_SLOPE_ANGLE: f32 = 82.0; // degrees below horizontal
 pub const CHUTE_SLOPE_LENGTH: f32 = 0.190; // length of entry slope

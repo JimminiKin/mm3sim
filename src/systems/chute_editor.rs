@@ -4,8 +4,10 @@ use bevy_egui::{egui, EguiContexts};
 
 use crate::components::chute::{spawn_chute, ChuteSegment};
 use crate::components::snare::PivotArm;
+use crate::components::vibraphone::{spawn_vibraphone, VibraphoneEntity};
 use crate::resources::chute_params::{ChuteParams, DragAxis};
 use crate::resources::marble_collisions::MarbleCollisions;
+use crate::resources::vibraphone_params::VibraphoneParams;
 use crate::systems::marble::AutoSpawn;
 use crate::systems::sound::SnareVolume;
 
@@ -35,6 +37,7 @@ pub fn apply_snare_fixed_system(
 pub fn chute_editor_ui(
     mut contexts: EguiContexts,
     mut params: ResMut<ChuteParams>,
+    mut vib: ResMut<VibraphoneParams>,
     mut marble_col: ResMut<MarbleCollisions>,
     mut snare_fixed: ResMut<SnareFixed>,
     mut snare_volume: ResMut<SnareVolume>,
@@ -101,6 +104,41 @@ pub fn chute_editor_ui(
 
                     if changed {
                         params.dirty = true;
+                    }
+
+                    ui.separator();
+                    ui.heading("Vibraphone");
+                    let mut vib_changed = false;
+                    vib_changed |= scalar_drag_row(ui, "Row Z (m)", &mut vib.row_z, 0.001, -2.0..=0.0);
+                    vib_changed |= scalar_drag_row(ui, "Row Y top (m)", &mut vib.row_y, 0.001, -0.5..=0.5);
+                    vib_changed |= scalar_drag_row(ui, "Row X center (m)", &mut vib.row_x_center, 0.001, -1.0..=1.0);
+                    vib_changed |= scalar_drag_row(ui, "Bar width (m)", &mut vib.bar_width, 0.0005, 0.010..=0.10);
+                    vib_changed |= scalar_drag_row(ui, "Bar spacing (m)", &mut vib.bar_spacing, 0.0005, 0.010..=0.20);
+                    vib_changed |= scalar_drag_row(ui, "Bar thickness (m)", &mut vib.bar_thickness, 0.0005, 0.003..=0.05);
+                    vib_changed |= scalar_drag_row(ui, "Bar len max (m)", &mut vib.bar_length_max, 0.001, 0.05..=0.80);
+                    vib_changed |= scalar_drag_row(ui, "Bar len min (m)", &mut vib.bar_length_min, 0.001, 0.05..=0.50);
+                    vib_changed |= scalar_drag_row(ui, "Bar density (kg/m³)", &mut vib.bar_density, 1.0, 500.0..=8000.0);
+                    vib_changed |= scalar_drag_row(ui, "Ang. damping", &mut vib.angular_damping, 0.01, 0.0..=20.0);
+                    vib_changed |= scalar_drag_row(ui, "Restitution", &mut vib.restitution, 0.01, 0.0..=1.0);
+                    vib_changed |= scalar_drag_row(ui, "Friction", &mut vib.friction, 0.01, 0.0..=1.0);
+                    vib_changed |= scalar_drag_row(ui, "Arm scale (×bar len)", &mut vib.arm_scale, 0.01, 0.5..=4.0);
+                    vib_changed |= scalar_drag_row(ui, "Pivot frac (×bar len)", &mut vib.pivot_frac, 0.005, 0.05..=0.48);
+                    vib_changed |= angle_drag_row(ui, "Rest angle (°)", &mut vib.rest_deg, 1.0..=45.0);
+                    vib_changed |= angle_drag_row(ui, "Max tilt (°)", &mut vib.max_tilt_deg, 0.5..=30.0);
+                    vib_changed |= scalar_drag_row(ui, "CW ratio", &mut vib.cw_weight_ratio, 0.001, 0.5..=2.0);
+                    ui.horizontal(|ui| {
+                        ui.label("Drop bar index:");
+                        let old = vib.drop_bar_index;
+                        ui.add(egui::DragValue::new(&mut vib.drop_bar_index).range(0..=36u32));
+                        if vib.drop_bar_index != old { vib_changed = true; }
+                    });
+                    ui.checkbox(&mut vib.spawn_marble, "Spawn vib. marble");
+                    if vib_changed {
+                        vib.dirty = true;
+                    }
+                    if ui.button("Reset vibraphone").clicked() {
+                        *vib = VibraphoneParams::default();
+                        vib.dirty = true;
                     }
 
                     ui.separator();
@@ -191,6 +229,23 @@ fn angle_drag_row(
         });
     });
     changed
+}
+
+pub fn rebuild_vibraphone_system(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut params: ResMut<VibraphoneParams>,
+    entities: Query<Entity, With<VibraphoneEntity>>,
+) {
+    if !params.dirty {
+        return;
+    }
+    params.dirty = false;
+    for entity in &entities {
+        commands.entity(entity).despawn();
+    }
+    spawn_vibraphone(&mut commands, &mut meshes, &mut materials, &params);
 }
 
 pub fn rebuild_chute_system(
