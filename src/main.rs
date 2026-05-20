@@ -37,7 +37,7 @@ use systems::marble_graph::{
     draw_marble_ghosts_system, marble_graph_ui, record_marble_samples_system, snare_tip_graph_ui,
 };
 use systems::setup::setup_system;
-use systems::sound::{setup_snare_sound, snare_hit_sound_system, SnareVolume};
+use systems::sound::{setup_snare_sound, setup_vib_sounds, snare_hit_sound_system, vib_hit_sound_system, SnareVolume};
 
 fn main() {
     let mut app = App::new();
@@ -83,6 +83,7 @@ fn main() {
             (
                 setup_system,
                 setup_snare_sound,
+                setup_vib_sounds,
                 setup_axes_hud,
                 setup_chute_handles,
             ),
@@ -118,6 +119,7 @@ fn main() {
                 despawn_fallen_marbles_system,
                 update_marble_collisions,
                 snare_hit_sound_system,
+                vib_hit_sound_system,
                 draw_marble_ghosts_system,
                 // Chute
                 rebuild_chute_system,

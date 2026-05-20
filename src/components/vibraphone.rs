@@ -7,7 +7,6 @@ use crate::resources::vibraphone_params::VibraphoneParams;
 
 #[derive(Component)]
 pub struct VibraphoneBar {
-    #[allow(dead_code)]
     pub index: u32,
 }
 

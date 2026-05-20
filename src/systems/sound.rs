@@ -2,6 +2,8 @@ use avian3d::prelude::*;
 use bevy::prelude::*;
 
 use crate::components::snare::SnareDrum;
+use crate::components::vibraphone::VibraphoneBar;
+use crate::resources::constants::VIB_BAR_COUNT;
 use crate::systems::marble::Marble;
 
 const MAX_IMPACT_SPEED: f32 = 4.0; // m/s — marble free-fall from 0.80 m spawn height
@@ -75,6 +77,57 @@ pub fn snare_hit_sound_system(
     }
 }
 
+// ── Native: vibraphone – one pre-baked WAV per bar ────────────────────────────
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Resource)]
+pub struct VibHitSounds(pub Vec<Handle<AudioSource>>);
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn setup_vib_sounds(
+    mut audio_sources: ResMut<Assets<AudioSource>>,
+    mut commands: Commands,
+) {
+    let handles = (0..VIB_BAR_COUNT)
+        .map(|i| audio_sources.add(AudioSource {
+            bytes: Arc::from(generate_vib_wav(i)),
+        }))
+        .collect();
+    commands.insert_resource(VibHitSounds(handles));
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn vib_hit_sound_system(
+    mut events: MessageReader<CollisionStart>,
+    marbles: Query<&LinearVelocity, With<Marble>>,
+    bars: Query<&VibraphoneBar>,
+    sounds: Option<Res<VibHitSounds>>,
+    volume: Res<SnareVolume>,
+    mut commands: Commands,
+) {
+    let Some(sounds) = sounds else { return };
+    for event in events.read() {
+        let (e1, e2) = (event.collider1, event.collider2);
+        let (marble_entity, bar_entity) = if marbles.contains(e1) && bars.contains(e2) {
+            (e1, e2)
+        } else if marbles.contains(e2) && bars.contains(e1) {
+            (e2, e1)
+        } else {
+            continue;
+        };
+        let speed = marbles.get(marble_entity).map(|v| v.0.length()).unwrap_or(0.0);
+        let Ok(bar) = bars.get(bar_entity) else { continue };
+        let Some(handle) = sounds.0.get(bar.index as usize) else { continue };
+        commands.spawn((
+            AudioPlayer(handle.clone()),
+            PlaybackSettings {
+                volume: Volume::Linear(impact_volume(speed, volume.0)),
+                ..PlaybackSettings::ONCE
+            },
+        ));
+    }
+}
+
 // ── WASM: Web Audio API via a reused thread-local AudioContext ────────────────
 
 #[cfg(target_arch = "wasm32")]
@@ -140,7 +193,56 @@ fn play_snare_web_audio(volume: f32) {
     });
 }
 
-// ── Shared: deterministic sample generation (no rand dependency) ──────────────
+// ── WASM: vibraphone – synthesize on each hit ─────────────────────────────────
+
+#[cfg(target_arch = "wasm32")]
+pub fn setup_vib_sounds() {
+    // AUDIO_CTX is shared with snare; initialized by setup_snare_sound
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn vib_hit_sound_system(
+    mut events: MessageReader<CollisionStart>,
+    marbles: Query<&LinearVelocity, With<Marble>>,
+    bars: Query<&VibraphoneBar>,
+    volume: Res<SnareVolume>,
+) {
+    for event in events.read() {
+        let (e1, e2) = (event.collider1, event.collider2);
+        let (marble_entity, bar_entity) = if marbles.contains(e1) && bars.contains(e2) {
+            (e1, e2)
+        } else if marbles.contains(e2) && bars.contains(e1) {
+            (e2, e1)
+        } else {
+            continue;
+        };
+        let speed = marbles.get(marble_entity).map(|v| v.0.length()).unwrap_or(0.0);
+        let Ok(bar) = bars.get(bar_entity) else { continue };
+        play_vib_web_audio(bar.index, impact_volume(speed, volume.0));
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn play_vib_web_audio(bar_idx: u32, volume: f32) {
+    AUDIO_CTX.with(|slot| {
+        let borrow = slot.borrow();
+        let Some(ctx) = borrow.as_ref() else { return };
+        let rate = ctx.sample_rate();
+        let n = (rate * 2.0) as u32;
+        let Ok(buf) = ctx.create_buffer(1, n, rate) else { return };
+        let samples = generate_vib_samples_f32(bar_idx, n as usize, rate as u32);
+        let _ = buf.copy_to_channel(&samples, 0);
+        let Ok(source) = ctx.create_buffer_source() else { return };
+        source.set_buffer(Some(&buf));
+        let Ok(gain) = ctx.create_gain() else { return };
+        gain.gain().set_value(volume);
+        let _ = source.connect_with_audio_node(&gain);
+        let _ = gain.connect_with_audio_node(&ctx.destination());
+        let _ = source.start();
+    });
+}
+
+// ── Shared: deterministic sample generation ───────────────────────────────────
 
 fn generate_snare_samples_f32(n: usize, sample_rate: u32) -> Vec<f32> {
     let mut state: u32 = 0xDEAD_BEEF;
@@ -156,11 +258,57 @@ fn generate_snare_samples_f32(n: usize, sample_rate: u32) -> Vec<f32> {
         .collect()
 }
 
+fn vib_bar_freq(bar_idx: u32) -> f32 {
+    // Bar 0 = F3 (174.61 Hz); one equal-temperament semitone per bar.
+    // Derived from bar length L ∝ 2^(-i/24) → f ∝ L^-2 ∝ 2^(i/12).
+    174.61 * 2.0_f32.powf(bar_idx as f32 / 12.0)
+}
+
+fn generate_vib_samples_f32(bar_idx: u32, n: usize, sample_rate: u32) -> Vec<f32> {
+    let freq = vib_bar_freq(bar_idx);
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / sample_rate as f32;
+            let env = (-2.5 * t).exp();
+            let tone = (std::f32::consts::TAU * freq * t).sin() * 0.80
+                + (std::f32::consts::TAU * freq * 2.0 * t).sin() * 0.15
+                + (std::f32::consts::TAU * freq * 3.0 * t).sin() * 0.05;
+            (tone * env).clamp(-1.0, 1.0)
+        })
+        .collect()
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn generate_snare_wav() -> Vec<u8> {
     let sample_rate: u32 = 44100;
     let samples =
         generate_snare_samples_f32((sample_rate as f32 * 0.35) as usize, sample_rate);
+    let data_len = (samples.len() * 2) as u32;
+    let mut wav = Vec::with_capacity(44 + data_len as usize);
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&(36 + data_len).to_le_bytes());
+    wav.extend_from_slice(b"WAVE");
+    wav.extend_from_slice(b"fmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    wav.extend_from_slice(&1u16.to_le_bytes()); // mono
+    wav.extend_from_slice(&sample_rate.to_le_bytes());
+    wav.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+    wav.extend_from_slice(&2u16.to_le_bytes());
+    wav.extend_from_slice(&16u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_len.to_le_bytes());
+    for s in samples {
+        wav.extend_from_slice(&((s * 32767.0) as i16).to_le_bytes());
+    }
+    wav
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn generate_vib_wav(bar_idx: u32) -> Vec<u8> {
+    let sample_rate: u32 = 44100;
+    let samples =
+        generate_vib_samples_f32(bar_idx, (sample_rate as f32 * 2.0) as usize, sample_rate);
     let data_len = (samples.len() * 2) as u32;
     let mut wav = Vec::with_capacity(44 + data_len as usize);
     wav.extend_from_slice(b"RIFF");
