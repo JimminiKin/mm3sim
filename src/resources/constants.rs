@@ -154,3 +154,19 @@ pub const CHUTE_SLOPE_ANGLE: f32 = 82.0; // degrees below horizontal
 pub const CHUTE_SLOPE_LENGTH: f32 = 0.190; // length of entry slope
 pub const CHUTE_THICKNESS: f32 = 0.01;
 pub const CHUTE_WIDTH: f32 = 0.02;
+
+// =============================================================================
+// Barrel Sequencer
+// =============================================================================
+
+pub const BARREL_RADIUS: f32 = 0.5;         // 1 m diameter cylinder
+pub const BARREL_N_STEPS: usize = 64;       // subdivisions per revolution
+/// ch 0 = chute drop, ch 1 = vertical snare drop, ch 2..38 = vib bars 0..36
+pub const BARREL_N_CHANNELS: usize = 39;
+/// 120 steps/min ÷ 64 steps/rev = 1.875 RPM  (≈ 120 BPM sequencer)
+pub const BARREL_RPM_DEFAULT: f32 = 1.875;
+pub const BARREL_Z_POS: f32 = 1.4;         // world Z (positive from snare)
+pub const BARREL_Y_POS: f32 = 0.8;         // world Y (cylinder centre)
+pub const BARREL_WIDTH: f32 = 2.2;         // total X span of the barrel
+pub const BARREL_READER_GAP: f32 = 0.014;  // gap between cylinder surface and reader bar
+pub const BARREL_READER_HALF_H: f32 = 0.012; // reader bar cross-section half-size

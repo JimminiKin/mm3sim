@@ -6,6 +6,7 @@ use avian3d::prelude::*;
 use bevy::prelude::*;
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass};
 
+use resources::barrel_params::BarrelParams;
 use resources::chute_params::ChuteParams;
 use resources::constants::BG_COLOR;
 use resources::constants::SIMULATION_TPS;
@@ -13,6 +14,10 @@ use resources::marble_collisions::MarbleCollisions;
 use resources::marble_runs::RunHistory;
 use resources::vibraphone_params::VibraphoneParams;
 use systems::axes::{resize_axes_viewport, setup_axes_hud, update_axes_hud};
+use systems::barrel::{
+    barrel_editor_ui, barrel_spawn_system, draw_barrel_gizmos, rotate_barrel_system,
+    setup_barrel_system,
+};
 use systems::camera::orbit_camera_system;
 use systems::chute_editor::{
     apply_snare_fixed_system, chute_editor_ui, rebuild_chute_system, rebuild_vibraphone_system,
@@ -64,6 +69,7 @@ fn main() {
         // threshold or Baumgarte tuning is needed.
         .insert_resource(Time::<Fixed>::from_hz(SIMULATION_TPS.into()))
         .insert_resource(ClearColor(Color::srgb(BG_COLOR.0, BG_COLOR.1, BG_COLOR.2)))
+        .init_resource::<BarrelParams>()
         .init_resource::<ChuteParams>()
         .init_resource::<MarbleCollisions>()
         .init_resource::<HandleDrag>()
@@ -81,6 +87,7 @@ fn main() {
                 setup_chute_handles,
             ),
         )
+        .add_systems(PostStartup, setup_barrel_system)
         // Snapshot velocity before physics so impact recording always sees approach speed.
         .add_systems(
             FixedUpdate,
@@ -118,6 +125,9 @@ fn main() {
                 sync_handle_transforms,
                 sync_handle_visibility,
                 draw_chute_gizmos,
+                // Barrel sequencer – rotation writes pending_spawns, spawner reads it
+                (rotate_barrel_system, barrel_spawn_system).chain(),
+                draw_barrel_gizmos,
                 // Axes overlay
                 update_axes_hud,
                 resize_axes_viewport,
@@ -128,6 +138,7 @@ fn main() {
             (
                 hud_panel_ui,
                 chute_editor_ui,
+                barrel_editor_ui,
                 marble_graph_ui,
                 snare_tip_graph_ui,
                 auto_spawn_system.after(chute_editor_ui),

@@ -12,7 +12,7 @@ use crate::resources::marble_runs::{HitRecord, RunHistory};
 use crate::resources::vibraphone_params::VibraphoneParams;
 use crate::systems::chute_handles::HandleDrag;
 
-fn jittered_spawn(snare_top_y: f32) -> Vec3 {
+pub fn jittered_spawn(snare_top_y: f32) -> Vec3 {
     let (x_off, z_off) = if MARBLE_SPAWN_JITTER > 0.0 {
         let mut rng = rand::rng();
         (
@@ -218,9 +218,21 @@ pub fn spawn_vib_marble(
     collide: bool,
     run_idx: usize,
 ) {
+    spawn_vib_marble_for_bar(commands, meshes, materials, params, params.drop_bar_index, collide, run_idx);
+}
+
+/// Spawn a vibraphone marble above a specific bar index (0-based from the high/positive-X end).
+pub fn spawn_vib_marble_for_bar(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    params: &VibraphoneParams,
+    bar_idx: u32,
+    collide: bool,
+    run_idx: usize,
+) {
     let bar_count = VIB_BAR_COUNT;
-    // Drop bar index counts from the high (positive X) end, matching bar order
-    let logical_idx = params.drop_bar_index.min(bar_count - 1);
+    let logical_idx = bar_idx.min(bar_count - 1);
     let bar_x = params.row_x_center
         + ((bar_count - 1 - logical_idx) as f32 - (bar_count - 1) as f32 * 0.5)
         * params.bar_spacing;
