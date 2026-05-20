@@ -19,15 +19,59 @@
         height: 100vh;
         display: block;
       }
+      #loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        background: #090a0f;
+        z-index: 9999;
+        transition: opacity 0.6s ease;
+      }
+      #loader.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .loader-ring {
+        width: 56px;
+        height: 56px;
+        border: 3px solid rgba(255, 255, 255, 0.08);
+        border-top-color: rgba(180, 200, 255, 0.7);
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+      }
+      .loader-label {
+        font-family: sans-serif;
+        font-size: 0.8rem;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        color: rgba(180, 200, 255, 0.4);
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
     </style>
   </head>
   <body>
+    <div id="loader">
+      <div class="loader-ring"></div>
+      <span class="loader-label">Loading</span>
+    </div>
     <script>
       window.va =
         window.va ||
         function () {
           (window.vaq = window.vaq || []).push(arguments);
         };
+
+      window.addEventListener("TrunkApplicationStarted", () => {
+        const loader = document.getElementById("loader");
+        loader.classList.add("hidden");
+        loader.addEventListener("transitionend", () => loader.remove(), { once: true });
+      });
     </script>
   </body>
 </html>
