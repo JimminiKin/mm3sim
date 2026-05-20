@@ -19,7 +19,7 @@ pub fn hud_panel_ui(
 
     // ── Stats panel ───────────────────────────────────────────────────────────
     egui::Window::new("Stats")
-        .default_pos([10.0, 10.0])
+        .anchor(egui::Align2::LEFT_BOTTOM, egui::vec2(90.0, -8.0))
         .default_size([340.0, 460.0])
         .resizable(true)
         .title_bar(false)
@@ -147,7 +147,7 @@ pub fn hud_panel_ui(
 
                     // Run history
                     if !has_runs {
-                        ui.label("No runs yet — click to spawn marbles");
+                        ui.label("No runs yet");
                         return;
                     }
 
@@ -155,7 +155,7 @@ pub fn hud_panel_ui(
                     all_runs.force_all_open = None;
 
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Runs").strong());
+                        ui.label(egui::RichText::new("Drops").strong());
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.small_button("Reset").clicked() {
                                 all_runs.runs.clear();
@@ -183,7 +183,7 @@ pub fn hud_panel_ui(
                         .max_height(ui.available_height())
                         .show(ui, |ui| {
                             for i in (0..run_count).rev() {
-                                let header = run_header_label(&all_runs.runs[i]);
+                                let header = drop_entry_label(&all_runs.runs[i]);
                                 let run_id = all_runs.runs[i].index;
 
                                 let state_id = ui.make_persistent_id(("run_header", run_id));
@@ -201,16 +201,17 @@ pub fn hud_panel_ui(
                                         ui.label(&header);
                                     })
                                     .body(|ui| {
-                                        ui.label(egui::RichText::new("Drop").strong());
-                                        match all_runs.runs[i].drop {
-                                            None => { ui.label("  — in flight"); }
-                                            Some(r) => render_drop_compact(ui, r),
-                                        }
-                                        ui.add_space(3.0);
-                                        ui.label(egui::RichText::new("Chute").strong());
-                                        match all_runs.runs[i].chute {
-                                            None => { ui.label("  — in flight"); }
-                                            Some(r) => render_chute_detail(ui, r),
+                                        if all_runs.runs[i].vib_bar_idx.is_some() {
+                                            let bar_idx = all_runs.runs[i].vib_bar_idx.unwrap_or(0);
+                                            match all_runs.runs[i].vib {
+                                                None => { ui.label("  — in flight"); }
+                                                Some(r) => render_vib_compact(ui, r, bar_idx),
+                                            }
+                                        } else {
+                                            match all_runs.runs[i].drop {
+                                                None => { ui.label("  — in flight"); }
+                                                Some(r) => render_drop_compact(ui, r),
+                                            }
                                         }
                                         ui.add_space(4.0);
                                         ui.horizontal(|ui| {
@@ -244,28 +245,21 @@ pub fn hud_panel_ui(
         .unwrap_or(false);
 }
 
-fn run_header_label(run: &Run) -> String {
-    match (run.drop, run.chute) {
-        (Some(d), Some(c)) => {
-            let ms = (c.flight_s - d.flight_s) * 1000.0;
-            let sign = if ms >= 0.0 { "+" } else { "" };
-            let exit_str = run.chute_exit.map_or(String::new(), |p| {
-                format!("   Exit y{:+.1} z{:.1}cm", p[1] * 100.0, p[0] * 100.0)
-            });
-            let arc_str = run.chute_exit.map_or(String::new(), |p| {
-                let exit_world = Vec3::new(
-                    CHUTE_END_X,
-                    p[1] + CHUTE_ORIGIN_Y,
-                    p[0] + CHUTE_ORIGIN_Z,
-                );
-                format!("   arc {:.1}cm", exit_world.distance(c.hit_pos) * 100.0)
-            });
-            format!("Run {}   Δt {}{:.1} ms   spd {:.2}/{:.2}{}{}",
-                run.index + 1, sign, ms, d.speed, c.speed, exit_str, arc_str)
+fn drop_entry_label(run: &Run) -> String {
+    if let Some(bar_idx) = run.vib_bar_idx {
+        return match run.vib {
+            None => format!("Vib {}   bar {}   — in flight…", run.index + 1, bar_idx + 1),
+            Some(r) => format!("Vib {}   bar {}   fly {:.3} s   spd {:.3}   arm {:+.1}°",
+                run.index + 1, bar_idx + 1, r.flight_s, r.speed, r.arm_deg),
+        };
+    }
+    match run.drop {
+        None => format!("Drop {}   — in flight…", run.index + 1),
+        Some(r) => {
+            let radial = (r.hit_local.x * r.hit_local.x + r.hit_local.z * r.hit_local.z).sqrt();
+            format!("Drop {}   fly {:.3} s   spd {:.3}   arm {:+.1}°   r {:.1} mm",
+                run.index + 1, r.flight_s, r.speed, r.arm_deg, radial * 1000.0)
         }
-        (Some(_), None) => format!("Run {}   drop hit, chute in flight…", run.index + 1),
-        (None, Some(_)) => format!("Run {}   chute hit, drop in flight…", run.index + 1),
-        (None, None)    => format!("Run {}   in flight…", run.index + 1),
     }
 }
 
@@ -285,39 +279,18 @@ fn render_drop_compact(ui: &mut egui::Ui, r: HitRecord) {
     ));
 }
 
-fn render_chute_detail(ui: &mut egui::Ui, r: HitRecord) {
+fn render_vib_compact(ui: &mut egui::Ui, r: HitRecord, bar_idx: u32) {
+    const NOTE_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    let semitone = 5 + bar_idx;
+    let note = format!("{}{}", NOTE_NAMES[(semitone % 12) as usize], 3 + semitone / 12);
     ui.monospace(format!(
-        "  fly {:.3} s   spd {:.3}   AoA {:.1}°   KE {:.2} mJ",
-        r.flight_s, r.speed, r.aoa, r.ke_mj
+        "  {}   fly {:.3} s   spd {:.3}   AoA {:.1}°   KE {:.2} mJ",
+        note, r.flight_s, r.speed, r.aoa, r.ke_mj
     ));
     ui.monospace(format!(
-        "  vx/vy/vz  {:+.3}/{:+.3}/{:+.3}   spin {:.3}   arm {:+.2}° ω{:+.1}°/s",
-        r.vx, r.vy, r.vz, r.spin, r.arm_deg, r.arm_angvel
+        "  vx/vy/vz  {:+.3}/{:+.3}/{:+.3}   spin {:.3}",
+        r.vx, r.vy, r.vz, r.spin
     ));
-    let radial = (r.hit_local.x * r.hit_local.x + r.hit_local.z * r.hit_local.z).sqrt();
-    ui.monospace(format!(
-        "  hit local  y{:+.1}mm  r{:.1}mm",
-        r.hit_local.y * 1000.0, radial * 1000.0
-    ));
-    if let Some(slide) = r.slide_s {
-        let free_s = r.flight_s - slide;
-        if let (Some(end_vy), Some(end_vz)) = (r.slide_end_vy, r.slide_end_vz) {
-            let liftoff = (end_vy * end_vy + end_vz * end_vz).sqrt();
-            ui.monospace(format!(
-                "  slide {:.3} s   free {:.3} s   liftoff vy/vz {:+.3}/{:+.3}  ({:.3} m/s)",
-                slide, free_s, end_vy, end_vz, liftoff
-            ));
-        } else {
-            ui.monospace(format!("  slide {:.3} s   free {:.3} s", slide, free_s));
-        }
-        if let Some(p) = r.slide_end_pos {
-            ui.monospace(format!(
-                "  liftoff y{:+.1}cm  z{:.1}cm",
-                (p.y - CHUTE_ORIGIN_Y) * 100.0,
-                (p.z - CHUTE_ORIGIN_Z) * 100.0,
-            ));
-        }
-    }
 }
 
 struct Agg { n: usize, mean: f32, std: f32, min: f32, max: f32 }
@@ -363,7 +336,7 @@ fn render_summary(ui: &mut egui::Ui, runs: &[Run]) {
         return;
     }
 
-    let delta_ms: Vec<f32> = complete.iter().map(|r| (r.chute.unwrap().flight_s - r.drop.unwrap().flight_s) * 1000.0).collect();
+    let delta_ms: Vec<f32> = complete.iter().map(|r| (r.chute.unwrap().flight_s - DROP_REFERENCE_S) * 1000.0).collect();
     let d_fly:  Vec<f32> = complete.iter().map(|r| r.drop.unwrap().flight_s).collect();
     let d_spd:  Vec<f32> = complete.iter().map(|r| r.drop.unwrap().speed).collect();
     let d_aoa:  Vec<f32> = complete.iter().map(|r| r.drop.unwrap().aoa).collect();
@@ -452,7 +425,6 @@ fn render_help_panel(ui: &mut egui::Ui) {
             .show(ui, |ui| {
                 egui::Grid::new("help_controls_grid").num_columns(2).spacing([12.0, 3.0]).show(ui, |ui| {
                     let rows: &[(&str, &str)] = &[
-                        ("Left Click",              "Spawn a pair of marbles (drop + chute)"),
                         ("Right Click + Drag",      "Orbit camera"),
                         ("Middle Click + Drag",     "Pan camera"),
                         ("Scroll Wheel",            "Zoom in / out (ignored when cursor is over a panel)"),
@@ -497,8 +469,8 @@ fn render_help_panel(ui: &mut egui::Ui) {
                 egui::Grid::new("help_stats_grid").num_columns(2).spacing([12.0, 4.0]).show(ui, |ui| {
                     let rows: &[(&str, &str)] = &[
                         ("Δt",
-                         "Flight-time difference: chute − drop, in ms. \
-                          Negative = chute hit early, positive = chute hit late. Target: 0 ms."),
+                         "Chute flight time minus the 450 ms reference (theoretical 1 m free-fall). \
+                          Negative = chute arrived early, positive = chute arrived late. Target: 0 ms."),
                         ("fly",   "Flight time in seconds from spawn to snare contact."),
                         ("spd",   "Speed magnitude at snare impact (m/s)."),
                         ("AoA",
@@ -626,7 +598,7 @@ fn render_help_panel(ui: &mut egui::Ui) {
                     }
                 });
                 ui.add_space(2.0);
-                ui.label("Goal: minimise |mean Δt| (timing accuracy) and σ Δt (consistency).");
+                ui.label("Goal: minimise |mean Δt| (timing accuracy) and σ Δt (consistency). Δt is relative to the 450 ms reference, not the measured drop time.");
             });
 
         ui.add_space(4.0);

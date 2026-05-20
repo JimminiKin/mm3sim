@@ -8,9 +8,8 @@ use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
 use crate::resources::layers::GameLayer;
 use crate::resources::marble_collisions::MarbleCollisions;
-use crate::resources::marble_runs::{HitRecord, RunHistory};
+use crate::resources::marble_runs::RunHistory;
 use crate::resources::vibraphone_params::VibraphoneParams;
-use crate::systems::chute_handles::HandleDrag;
 
 pub fn jittered_spawn(snare_top_y: f32) -> Vec3 {
     let (x_off, z_off) = if MARBLE_SPAWN_JITTER > 0.0 {
@@ -104,62 +103,6 @@ fn marble_physics(collide: bool) -> impl Bundle {
 
 // ── Spawn systems ─────────────────────────────────────────────────────────────
 
-pub fn spawn_marble_on_click_system(
-    buttons: Res<ButtonInput<MouseButton>>,
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    chute_params: Res<ChuteParams>,
-    vib_params: Res<VibraphoneParams>,
-    marble_col: Res<MarbleCollisions>,
-    drag: Res<HandleDrag>,
-    snare: Query<&GlobalTransform, With<SnareDrum>>,
-    mut contexts: bevy_egui::EguiContexts,
-    mut all_runs: ResMut<RunHistory>,
-) {
-    if contexts.ctx_mut().unwrap().wants_pointer_input() {
-        return;
-    }
-    if drag.active.is_some() {
-        return;
-    }
-    if !buttons.just_pressed(MouseButton::Left) {
-        return;
-    }
-
-    let snare_top_y = snare
-        .single()
-        .map(|gt| gt.translation().y + SNARE_HALF_HEIGHT)
-        .unwrap_or(CHUTE_ORIGIN_Y);
-
-    let spawn_position = jittered_spawn(snare_top_y);
-
-    let run_idx = all_runs.push_new_run();
-    if let Some(run) = all_runs.get_run_mut(run_idx) {
-        run.chute_exit = Some(chute_params.exit_pos);
-    }
-    spawn_marble(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        spawn_position,
-        marble_col.0,
-        run_idx,
-    );
-    spawn_chute_marble(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        &chute_params,
-        marble_col.0,
-        run_idx,
-    );
-
-    if vib_params.spawn_marble {
-        spawn_vib_marble(&mut commands, &mut meshes, &mut materials, &vib_params, marble_col.0, run_idx);
-    }
-}
-
 pub fn spawn_marble(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -208,17 +151,6 @@ pub fn spawn_chute_marble(
         marble_pbr(meshes, materials, position, CHUTE_MARBLE_COLOR),
         marble_physics(collide),
     ));
-}
-
-pub fn spawn_vib_marble(
-    commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-    params: &VibraphoneParams,
-    collide: bool,
-    run_idx: usize,
-) {
-    spawn_vib_marble_for_bar(commands, meshes, materials, params, params.drop_bar_index, collide, run_idx);
 }
 
 /// Spawn a vibraphone marble above a specific bar index (0-based from the high/positive-X end).
@@ -374,86 +306,6 @@ pub fn track_slide_end_system(
     }
 }
 
-pub fn record_snare_hit_system(
-    mut events: MessageReader<CollisionStart>,
-    marbles: Query<
-        (
-            &Transform,
-            &PrevVelocity,
-            &FlightTimer,
-            Option<&ChuteMarble>,
-            Option<&SlideRecord>,
-            &RunIndex,
-        ),
-        With<Marble>,
-    >,
-    snares: Query<&GlobalTransform, With<crate::components::snare::SnareDrum>>,
-    arm_q: Query<&AngularVelocity, With<crate::components::snare::PivotArm>>,
-    mut all_runs: ResMut<RunHistory>,
-) {
-    for event in events.read() {
-        let (e1, e2) = (event.collider1, event.collider2);
-
-        let (marble_entity, snare_entity) = if marbles.contains(e1) && snares.contains(e2) {
-            (e1, e2)
-        } else if marbles.contains(e2) && snares.contains(e1) {
-            (e2, e1)
-        } else {
-            continue;
-        };
-
-        let Ok(snare_gt) = snares.get(snare_entity) else {
-            continue;
-        };
-        let snare_rot = snare_gt.compute_transform().rotation;
-        let snare_normal = snare_rot * Vec3::Y;
-        let arm_deg = snare_rot.to_euler(EulerRot::XYZ).0.to_degrees();
-        let arm_angvel = arm_q
-            .single()
-            .map(|v| v.0.x.to_degrees())
-            .unwrap_or(0.0);
-
-        let Ok((tf, prev_vel, flight_timer, is_chute, slide, run_idx)) = marbles.get(marble_entity)
-        else {
-            continue;
-        };
-
-        let snare_center = snare_gt.translation();
-        let hit_local = snare_rot.inverse() * (tf.translation - snare_center);
-
-        let mut record = HitRecord::new(
-            prev_vel.linvel,
-            prev_vel.angvel,
-            snare_normal,
-            flight_timer.0,
-            MARBLE_RADIUS,
-        );
-        record.hit_pos = tf.translation;
-        record.hit_local = hit_local;
-        record.arm_deg = arm_deg;
-        record.arm_angvel = arm_angvel;
-
-        if is_chute.is_some() {
-            if let Some(s) = slide {
-                record.slide_s = s.end_time;
-                if let Some(lv) = s.end_vel {
-                    record.slide_end_vy = Some(lv.y);
-                    record.slide_end_vz = Some(lv.z);
-                }
-                record.slide_end_pos = s.end_pos;
-            }
-        }
-
-        let Some(run) = all_runs.get_run_mut(run_idx.0) else {
-            continue;
-        };
-        if is_chute.is_some() {
-            run.chute.get_or_insert(record);
-        } else {
-            run.drop.get_or_insert(record);
-        }
-    }
-}
 
 #[derive(Resource)]
 pub struct AutoSpawn {

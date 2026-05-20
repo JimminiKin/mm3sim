@@ -49,6 +49,8 @@ pub struct Run {
     pub index: usize,
     pub drop: Option<HitRecord>,
     pub chute: Option<HitRecord>,
+    pub vib: Option<HitRecord>,
+    pub vib_bar_idx: Option<u32>, // set at spawn time to tag this as a vib run
     pub chute_exit: Option<[f32; 2]>, // p3 at spawn time: [z, y] relative to snare top
     pub drop_samples: Vec<MarbleSample>,
     pub chute_samples: Vec<MarbleSample>,
@@ -77,6 +79,8 @@ impl RunHistory {
             index: idx,
             drop: None,
             chute: None,
+            vib: None,
+            vib_bar_idx: None,
             chute_exit: None,
             drop_samples: Vec::new(),
             chute_samples: Vec::new(),

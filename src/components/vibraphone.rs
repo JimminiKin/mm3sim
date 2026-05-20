@@ -2,11 +2,13 @@ use avian3d::prelude::*;
 use bevy::math::primitives::{Cuboid, Cylinder};
 use bevy::prelude::*;
 
+use crate::components::instrument::Instrument;
 use crate::resources::constants::*;
 use crate::resources::vibraphone_params::VibraphoneParams;
 
 #[derive(Component)]
 pub struct VibraphoneBar {
+    #[allow(dead_code)]
     pub index: u32,
 }
 
@@ -135,6 +137,7 @@ pub fn spawn_vibraphone(
                     Friction::new(params.friction),
                     CollisionEventsEnabled,
                     VibraphoneBar { index: bar_idx },
+                    Instrument { channel: 2 + bar_idx as usize },
                     VibraphoneEntity,
                 ));
 

@@ -1,5 +1,6 @@
 pub mod setup;
 pub mod barrel;
+pub mod instrument;
 pub mod marble;
 pub mod camera;
 pub mod axes;

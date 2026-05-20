@@ -28,16 +28,17 @@ use systems::chute_handles::{
     sync_handle_visibility, HandleDrag,
 };
 use systems::hud::hud_panel_ui;
+use systems::instrument::{detect_instrument_hits, record_instrument_hits, InstrumentHits};
 use systems::marble::{
     advance_flight_timers_system, auto_spawn_system, capture_prev_velocity_system,
-    despawn_fallen_marbles_system, record_marble_paths_system, record_snare_hit_system,
-    spawn_marble_on_click_system, track_slide_end_system, update_marble_collisions, AutoSpawn,
+    despawn_fallen_marbles_system, record_marble_paths_system, track_slide_end_system,
+    update_marble_collisions, AutoSpawn,
 };
 use systems::marble_graph::{
     draw_marble_ghosts_system, marble_graph_ui, record_marble_samples_system, snare_tip_graph_ui,
 };
 use systems::setup::setup_system;
-use systems::sound::{setup_snare_sound, setup_vib_sounds, snare_hit_sound_system, vib_hit_sound_system, SnareVolume};
+use systems::sound::{play_instrument_sounds, setup_sounds, SnareVolume};
 
 fn main() {
     let mut app = App::new();
@@ -78,12 +79,12 @@ fn main() {
         .init_resource::<SnareVolume>()
         .init_resource::<VibraphoneParams>()
         .init_resource::<AutoSpawn>()
+        .init_resource::<InstrumentHits>()
         .add_systems(
             Startup,
             (
                 setup_system,
-                setup_snare_sound,
-                setup_vib_sounds,
+                setup_sounds,
                 setup_axes_hud,
                 setup_chute_handles,
             ),
@@ -100,7 +101,9 @@ fn main() {
             (
                 advance_flight_timers_system,
                 track_slide_end_system,
-                record_snare_hit_system,
+                detect_instrument_hits,
+                record_instrument_hits,
+                play_instrument_sounds,
                 record_marble_samples_system,
                 record_marble_paths_system,
             )
@@ -113,13 +116,10 @@ fn main() {
                 // Input
                 chute_handle_drag_system,
                 orbit_camera_system,
-                spawn_marble_on_click_system.after(chute_handle_drag_system),
                 // Simulation maintenance
                 apply_snare_fixed_system,
                 despawn_fallen_marbles_system,
                 update_marble_collisions,
-                snare_hit_sound_system,
-                vib_hit_sound_system,
                 draw_marble_ghosts_system,
                 // Chute
                 rebuild_chute_system,

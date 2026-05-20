@@ -2,6 +2,7 @@ use avian3d::prelude::*;
 use bevy::math::primitives::Cylinder;
 use bevy::prelude::*;
 
+use crate::components::instrument::Instrument;
 use crate::resources::constants::*;
 
 #[derive(Component)]
@@ -85,6 +86,7 @@ pub fn spawn_snare(
                 Friction::new(SNARE_FRICTION),
                 CollisionEventsEnabled,
                 SnareDrum,
+                Instrument { channel: 1 },
             ));
 
             p.spawn((

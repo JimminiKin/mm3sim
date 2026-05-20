@@ -167,6 +167,9 @@ pub fn barrel_spawn_system(
             c if c >= BARREL_CH_VIB_FIRST => {
                 let bar_idx = (c - BARREL_CH_VIB_FIRST) as u32;
                 let run_idx = all_runs.push_new_run();
+                if let Some(run) = all_runs.get_run_mut(run_idx) {
+                    run.vib_bar_idx = Some(bar_idx);
+                }
                 spawn_vib_marble_for_bar(
                     &mut commands,
                     &mut meshes,
