@@ -108,8 +108,8 @@ pub const VIB_BAR_SPACING: f32 = 0.055;
 pub const VIB_BAR_THICKNESS: f32 = 0.010;
 pub const VIB_BAR_LENGTH_MAX: f32 = 0.390;
 pub const VIB_BAR_LENGTH_MIN: f32 = 0.140;
-pub const VIB_ROW_Z: f32 = -0.435;
-pub const VIB_ROW_Y: f32 = -0.3; // top face Y (snare top = 0.070, slightly lower)
+pub const VIB_ROW_Z: f32 = -0.51;
+pub const VIB_ROW_Y: f32 = -0.2; // top face Y (snare top = 0.070, slightly lower)
 
 pub const VIB_RESTITUTION: f32 = 0.50;
 pub const VIB_FRICTION: f32 = 0.15;
@@ -124,7 +124,7 @@ pub const VIB_ARM_MASS: f32 = 0.05;
 pub const VIB_REST_DEG: f32 = 10.0;
 pub const VIB_MAX_TILT_DEG: f32 = 5.0;
 pub const VIB_LINEAR_DAMPING: f32 = 0.0;
-pub const VIB_ANGULAR_DAMPING: f32 = 0.0;
+pub const VIB_ANGULAR_DAMPING: f32 = 0.3;
 pub const VIB_CW_WEIGHT_RATIO: f32 = 1.07;
 pub const VIB_CW_RADIUS: f32 = 0.012;
 pub const VIB_CW_HALF_HEIGHT: f32 = 0.018;
