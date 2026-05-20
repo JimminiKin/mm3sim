@@ -1,11 +1,12 @@
+use avian3d::prelude::*;
 use bevy::math::primitives::Sphere;
 use bevy::prelude::*;
-use bevy_rapier3d::prelude::*;
 use rand::RngExt;
 
 use crate::components::snare::SnareDrum;
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
+use crate::resources::layers::GameLayer;
 use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::marble_runs::{HitRecord, RunHistory};
 use crate::systems::chute_handles::HandleDrag;
@@ -23,14 +24,11 @@ fn jittered_spawn(snare_top_y: f32) -> Vec3 {
     Vec3::new(MARBLE_SPAWN_X + x_off, snare_top_y + SPAWN_HEIGHT, z_off)
 }
 
-// Marbles live in GROUP_1. Snare/chute use the Rapier default (ALL).
-// When marble-marble collisions are off, the filter only matches GROUP_2 (snare/chute),
-// so marbles pass through each other while still hitting the snare.
-fn marble_filter(collide: bool) -> Group {
+fn marble_layers(collide: bool) -> CollisionLayers {
     if collide {
-        Group::GROUP_1 | Group::GROUP_2
+        CollisionLayers::new(GameLayer::Marble, [GameLayer::Default, GameLayer::Marble])
     } else {
-        Group::GROUP_2
+        CollisionLayers::new(GameLayer::Marble, [GameLayer::Default])
     }
 }
 
@@ -46,16 +44,9 @@ pub struct RunIndex(pub usize);
 #[derive(Component)]
 pub struct PathTimer(pub f32);
 
-/// Accumulates exactly one fixed dt per step — avoids the batch-quantization
-/// problem of Time<Fixed>::elapsed_seconds(), which updates once per frame
-/// batch rather than once per step.
 #[derive(Component)]
 pub struct FlightTimer(pub f32);
 
-/// Marble velocity captured just before the physics step runs.
-/// Used by record_snare_hit_system to record approach velocity,
-/// since the post-step Velocity reflects partial collision response
-/// that varies based on which substep contact first occurs.
 #[derive(Component, Default)]
 pub struct PrevVelocity {
     pub linvel: Vec3,
@@ -69,7 +60,7 @@ pub struct SlideRecord {
     pub end_pos: Option<Vec3>,
 }
 
-const GHOST_SAMPLE_INTERVAL: f32 = 0.008; // ~125 Hz — smooth curves without excessive data
+const GHOST_SAMPLE_INTERVAL: f32 = 0.008;
 
 // ── Shared marble helpers ─────────────────────────────────────────────────────
 
@@ -96,17 +87,14 @@ fn marble_pbr(
 fn marble_physics(collide: bool) -> impl Bundle {
     (
         RigidBody::Dynamic,
-        Collider::ball(MARBLE_RADIUS),
-        ColliderMassProperties::Mass(MARBLE_MASS),
-        Restitution::coefficient(STEEL_RESTITUTION),
-        Friction::coefficient(STEEL_FRICTION),
-        ActiveEvents::COLLISION_EVENTS,
-        CollisionGroups::new(Group::GROUP_1, marble_filter(collide)),
-        GravityScale::default(),
-        Velocity::default(),
-        // CCD with a convex snare target uses exact TOI (not speculative), so the
-        // marble always contacts at zero penetration — no Baumgarte-correction variance.
-        Ccd::enabled(),
+        Collider::sphere(MARBLE_RADIUS),
+        Mass(MARBLE_MASS),
+        Restitution::new(STEEL_RESTITUTION),
+        Friction::new(STEEL_FRICTION),
+        marble_layers(collide),
+        LinearVelocity::ZERO,
+        AngularVelocity::ZERO,
+        SweptCcd::default(),
     )
 }
 
@@ -199,11 +187,6 @@ pub fn spawn_chute_marble(
     let normal = Vec3::new(0.0, -dz, dy).normalize_or_zero();
 
     let chute_centre = Vec3::new(CHUTE_END_X, p0[1] + CHUTE_ORIGIN_Y, p0[0] + CHUTE_ORIGIN_Z);
-
-    // Embed 1 mm into the top face so Rapier detects position-based contact immediately
-    // (speculative contact skips a zero-velocity body for one frame without this).
-    // Must be less than CHUTE_THICKNESS (4 mm) or the sphere punches through to the
-    // bottom face, causing ambiguous multi-face contact and non-deterministic initial kicks.
     let position = chute_centre + normal * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.001);
 
     commands.spawn((
@@ -258,32 +241,28 @@ pub fn despawn_fallen_marbles_system(
 }
 
 pub fn update_marble_collisions(
+    mut commands: Commands,
     settings: Res<MarbleCollisions>,
-    mut marbles: Query<&mut CollisionGroups, With<Marble>>,
+    marbles: Query<Entity, With<Marble>>,
 ) {
     if !settings.is_changed() {
         return;
     }
-    let filter = marble_filter(settings.0);
-    for mut groups in &mut marbles {
-        groups.filters = filter;
+    let layers = marble_layers(settings.0);
+    for entity in &marbles {
+        commands.entity(entity).insert(layers);
     }
 }
 
-/// Copies current velocity to PrevVelocity before the physics step overwrites it.
-/// Must run before PhysicsSet::SyncBackend so PrevVelocity always holds the
-/// approach velocity — consistent regardless of which substep contact first occurs.
 pub fn capture_prev_velocity_system(
-    mut marbles: Query<(&Velocity, &mut PrevVelocity), With<Marble>>,
+    mut marbles: Query<(&LinearVelocity, &AngularVelocity, &mut PrevVelocity), With<Marble>>,
 ) {
-    for (vel, mut prev) in &mut marbles {
-        prev.linvel = vel.linear;
-        prev.angvel = vel.angular;
+    for (lin_vel, ang_vel, mut prev) in &mut marbles {
+        prev.linvel = lin_vel.0;
+        prev.angvel = ang_vel.0;
     }
 }
 
-/// Increments every marble's FlightTimer by exactly one fixed dt per step.
-/// Must run before the recording systems so they see the up-to-date count.
 pub fn advance_flight_timers_system(
     time: Res<Time<Fixed>>,
     mut marbles: Query<&mut FlightTimer, With<Marble>>,
@@ -294,11 +273,10 @@ pub fn advance_flight_timers_system(
     }
 }
 
-/// Detects when a chute marble lifts off the chute surface and records the moment.
 pub fn track_slide_end_system(
     chute_params: Res<ChuteParams>,
     mut marbles: Query<
-        (&Transform, &Velocity, &FlightTimer, &mut SlideRecord),
+        (&Transform, &LinearVelocity, &FlightTimer, &mut SlideRecord),
         (With<Marble>, With<ChuteMarble>),
     >,
 ) {
@@ -332,15 +310,14 @@ pub fn track_slide_end_system(
 
         if min_dist > CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS * 2.0 {
             slide.end_time = Some(timer.0);
-            slide.end_vel = Some(vel.linear);
+            slide.end_vel = Some(vel.0);
             slide.end_pos = Some(tf.translation);
         }
     }
 }
 
-/// On snare collision, computes and stores the impact record for that marble's run.
 pub fn record_snare_hit_system(
-    mut events: MessageReader<CollisionEvent>,
+    mut events: MessageReader<CollisionStart>,
     marbles: Query<
         (
             &Transform,
@@ -353,18 +330,16 @@ pub fn record_snare_hit_system(
         With<Marble>,
     >,
     snares: Query<&GlobalTransform, With<crate::components::snare::SnareDrum>>,
-    arm_q: Query<&Velocity, With<crate::components::snare::PivotArm>>,
+    arm_q: Query<&AngularVelocity, With<crate::components::snare::PivotArm>>,
     mut all_runs: ResMut<RunHistory>,
 ) {
     for event in events.read() {
-        let CollisionEvent::Started(e1, e2, _) = event else {
-            continue;
-        };
+        let (e1, e2) = (event.collider1, event.collider2);
 
-        let (marble_entity, snare_entity) = if marbles.contains(*e1) && snares.contains(*e2) {
-            (*e1, *e2)
-        } else if marbles.contains(*e2) && snares.contains(*e1) {
-            (*e2, *e1)
+        let (marble_entity, snare_entity) = if marbles.contains(e1) && snares.contains(e2) {
+            (e1, e2)
+        } else if marbles.contains(e2) && snares.contains(e1) {
+            (e2, e1)
         } else {
             continue;
         };
@@ -377,7 +352,7 @@ pub fn record_snare_hit_system(
         let arm_deg = snare_rot.to_euler(EulerRot::XYZ).0.to_degrees();
         let arm_angvel = arm_q
             .single()
-            .map(|v| v.angular.x.to_degrees())
+            .map(|v| v.0.x.to_degrees())
             .unwrap_or(0.0);
 
         let Ok((tf, prev_vel, flight_timer, is_chute, slide, run_idx)) = marbles.get(marble_entity)
@@ -414,7 +389,6 @@ pub fn record_snare_hit_system(
         let Some(run) = all_runs.get_run_mut(run_idx.0) else {
             continue;
         };
-        // Only keep the first contact — bounces and rim/head secondary hits must not overwrite.
         if is_chute.is_some() {
             run.chute.get_or_insert(record);
         } else {
@@ -455,12 +429,9 @@ pub fn auto_spawn_system(
     marble_col: Res<MarbleCollisions>,
     snare: Query<&GlobalTransform, With<SnareDrum>>,
     mut all_runs: ResMut<RunHistory>,
-    // Wait until the chute marble from the previous run has left the chute surface.
-    // This lets the next run start while the previous marble is still in the air.
     chute_slides: Query<(&RunIndex, &SlideRecord), (With<Marble>, With<ChuteMarble>)>,
 ) {
     if let Some(waiting_idx) = auto.waiting_for {
-        // Proceed once the chute marble has lifted off, or is already despawned.
         let still_on_chute = chute_slides
             .iter()
             .any(|(ri, slide)| ri.0 == waiting_idx && slide.end_time.is_none());
@@ -474,7 +445,6 @@ pub fn auto_spawn_system(
         return;
     }
 
-    // Advance control points for every run after the first.
     if auto.spawned > 0 {
         if auto.step_p3_y_mm != 0.0 {
             params.p3[1] += auto.step_p3_y_mm * 0.001;

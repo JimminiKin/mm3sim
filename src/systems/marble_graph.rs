@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
-use bevy_rapier3d::prelude::*;
+use avian3d::prelude::*;
 use egui_plot::{Legend, Line, LineStyle, Plot, PlotPoints};
 
 const DROP_COLOR:  egui::Color32 = egui::Color32::from_rgb(242, 89,  38);
@@ -25,9 +25,9 @@ use crate::systems::marble::{ChuteMarble, FlightTimer, Marble, RunIndex};
 
 pub fn record_marble_samples_system(
     mut all_runs: ResMut<RunHistory>,
-    marbles: Query<(&Velocity, &FlightTimer, &RunIndex, Option<&ChuteMarble>), With<Marble>>,
+    marbles: Query<(&LinearVelocity, &AngularVelocity, &FlightTimer, &RunIndex, Option<&ChuteMarble>), With<Marble>>,
 ) {
-    for (vel, timer, run_idx, is_chute) in &marbles {
+    for (lin_vel, ang_vel, timer, run_idx, is_chute) in &marbles {
         let Some(run) = all_runs.get_run_mut(run_idx.0) else { continue };
         let samples = if is_chute.is_some() {
             &mut run.chute_samples
@@ -42,10 +42,10 @@ pub fn record_marble_samples_system(
 
         samples.push(MarbleSample {
             t: timer.0,
-            vy: vel.linear.y,
-            vz: vel.linear.z,
-            speed: vel.linear.length(),
-            spin: vel.angular.length() * MARBLE_RADIUS,
+            vy: lin_vel.0.y,
+            vz: lin_vel.0.z,
+            speed: lin_vel.0.length(),
+            spin: ang_vel.0.length() * MARBLE_RADIUS,
         });
     }
 }

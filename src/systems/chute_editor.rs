@@ -1,6 +1,6 @@
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
-use bevy_rapier3d::prelude::*;
 
 use crate::components::chute::{spawn_chute, ChuteSegment};
 use crate::components::snare::PivotArm;
@@ -13,20 +13,22 @@ use crate::systems::sound::SnareVolume;
 pub struct SnareFixed(pub bool);
 
 pub fn apply_snare_fixed_system(
+    mut commands: Commands,
     snare_fixed: Res<SnareFixed>,
-    mut arm: Query<(&mut RigidBody, &mut Velocity), With<PivotArm>>,
+    mut arm: Query<(Entity, &mut LinearVelocity, &mut AngularVelocity), With<PivotArm>>,
 ) {
     if !snare_fixed.is_changed() {
         return;
     }
-    let Ok((mut rb, mut vel)) = arm.single_mut() else {
+    let Ok((entity, mut lin_vel, mut ang_vel)) = arm.single_mut() else {
         return;
     };
     if snare_fixed.0 {
-        *rb = RigidBody::Fixed;
-        *vel = Velocity::zero();
+        commands.entity(entity).insert(RigidBody::Static);
+        *lin_vel = LinearVelocity::ZERO;
+        *ang_vel = AngularVelocity::ZERO;
     } else {
-        *rb = RigidBody::Dynamic;
+        commands.entity(entity).insert(RigidBody::Dynamic);
     }
 }
 

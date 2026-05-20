@@ -1,6 +1,6 @@
+use avian3d::prelude::*;
 use bevy::math::primitives::Cylinder;
 use bevy::prelude::*;
-use bevy_rapier3d::prelude::*;
 
 use crate::resources::constants::*;
 
@@ -15,7 +15,6 @@ pub fn spawn_snare(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
-    // Arm geometry — derived from degree constants
     let arm_rad = ARM_SPAWN_DEG.to_radians();
     let arm_spawn_y = PIVOT_LOCAL_Z * arm_rad.sin();
     let arm_spawn_z = PIVOT_FROM_SNARE - PIVOT_LOCAL_Z * arm_rad.cos();
@@ -36,7 +35,7 @@ pub fn spawn_snare(
     let anchor = commands
         .spawn((
             Transform::from_xyz(0.0, 0.0, PIVOT_FROM_SNARE),
-            RigidBody::Fixed,
+            RigidBody::Static,
         ))
         .id();
 
@@ -49,27 +48,15 @@ pub fn spawn_snare(
         Transform::from_xyz(0.0, -PIVOT_STAND_HALF_HEIGHT, PIVOT_FROM_SNARE),
     ));
 
-    let joint = RevoluteJointBuilder::new(Vec3::X)
-        .local_anchor1(Vec3::ZERO)
-        .local_anchor2(Vec3::new(0.0, 0.0, PIVOT_LOCAL_Z))
-        .limits([
-            -(SNARE_REST_DEG + MAX_TILT_DEG).to_radians(),
-            -SNARE_REST_DEG.to_radians(),
-        ])
-        .build();
-
-    commands
+    let arm = commands
         .spawn((
             Transform::from_xyz(0.0, arm_spawn_y, arm_spawn_z)
                 .with_rotation(Quat::from_rotation_x(arm_rad)),
+            Visibility::default(),
             RigidBody::Dynamic,
             PivotArm,
-            Damping {
-                linear_damping: ARM_LINEAR_DAMPING,
-                angular_damping: ARM_ANGULAR_DAMPING,
-            },
-            ImpulseJoint::new(anchor, joint),
-            LockedAxes::default(),
+            LinearDamping(ARM_LINEAR_DAMPING),
+            AngularDamping(ARM_ANGULAR_DAMPING),
         ))
         .with_children(|p| {
             p.spawn((
@@ -81,8 +68,8 @@ pub fn spawn_snare(
                 Transform::from_rotation(Quat::from_rotation_x(
                     -std::f32::consts::FRAC_PI_2,
                 )),
-                Collider::cylinder(ARM_HALF_LEN, ARM_TUBE_RADIUS),
-                ColliderMassProperties::Mass(ARM_MASS),
+                Collider::cylinder(ARM_TUBE_RADIUS, ARM_HALF_LEN * 2.0),
+                Mass(ARM_MASS),
             ));
 
             p.spawn((
@@ -92,12 +79,12 @@ pub fn spawn_snare(
                 }))),
                 MeshMaterial3d(chrome),
                 Transform::from_xyz(0.0, 0.0, SNARE_LOCAL_Z),
-                Collider::cylinder(SNARE_HALF_HEIGHT, SNARE_RADIUS),
-                ColliderMassProperties::Mass(SNARE_MASS),
-                Restitution::coefficient(SNARE_RESTITUTION),
-                Friction::coefficient(SNARE_FRICTION),
+                Collider::cylinder(SNARE_RADIUS, SNARE_HALF_HEIGHT * 2.0),
+                Mass(SNARE_MASS),
+                Restitution::new(SNARE_RESTITUTION),
+                Friction::new(SNARE_FRICTION),
+                CollisionEventsEnabled,
                 SnareDrum,
-                ActiveEvents::COLLISION_EVENTS,
             ));
 
             p.spawn((
@@ -107,9 +94,20 @@ pub fn spawn_snare(
                 }))),
                 MeshMaterial3d(dark_steel.clone()),
                 Transform::from_xyz(0.0, 0.0, CW_LOCAL_Z),
-                Collider::cylinder(CW_HALF_HEIGHT, CW_RADIUS),
-                ColliderMassProperties::Mass(CW_MASS),
+                Collider::cylinder(CW_RADIUS, CW_HALF_HEIGHT * 2.0),
+                Mass(CW_MASS),
             ));
-        });
+        })
+        .id();
 
+    commands.spawn(
+        RevoluteJoint::new(anchor, arm)
+            .with_hinge_axis(Vec3::X)
+            .with_local_anchor1(Vec3::ZERO)
+            .with_local_anchor2(Vec3::new(0.0, 0.0, PIVOT_LOCAL_Z))
+            .with_angle_limits(
+                -(SNARE_REST_DEG + MAX_TILT_DEG).to_radians(),
+                -SNARE_REST_DEG.to_radians(),
+            ),
+    );
 }

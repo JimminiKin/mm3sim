@@ -1,8 +1,8 @@
+use avian3d::prelude::*;
+use bevy::asset::RenderAssetUsages;
+use bevy::mesh::Indices;
 use bevy::prelude::*;
 use bevy::render::render_resource::PrimitiveTopology;
-use bevy::mesh::Indices;
-use bevy::asset::RenderAssetUsages;
-use bevy_rapier3d::prelude::*;
 
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
@@ -27,7 +27,6 @@ fn surface_normal(pts: [[f32; 2]; 4], t: f32) -> Vec3 {
     Vec3::new(0.0, -dz, dy).normalize_or_zero()
 }
 
-/// Maximum chord-to-curve deviation in metres before a segment is subdivided.
 const FLATNESS: f32 = 0.0002;
 
 fn adaptive_ts(pts: [[f32; 2]; 4]) -> Vec<f32> {
@@ -62,10 +61,6 @@ pub fn spawn_chute(
     let ts = adaptive_ts(pts);
     let (coll_verts, coll_idx) = build_trimesh_collider(pts, &ts);
 
-    // FIX_INTERNAL_EDGES prevents "ghost" impulses when the ball crosses
-    // the shared edge between two adjacent coplanar or near-smooth triangles.
-    let flags = TriMeshFlags::FIX_INTERNAL_EDGES | TriMeshFlags::MERGE_DUPLICATE_VERTICES;
-
     commands.spawn((
         Mesh3d(meshes.add(build_smooth_mesh(pts, &ts))),
         MeshMaterial3d(materials.add(StandardMaterial {
@@ -76,13 +71,10 @@ pub fn spawn_chute(
             cull_mode: None,
             ..default()
         })),
-        RigidBody::Fixed,
-        Collider::trimesh_with_flags(coll_verts, coll_idx, flags).expect("valid chute mesh"),
-        Restitution {
-            coefficient: CHUTE_RESTITUTION,
-            combine_rule: CoefficientCombineRule::Min,
-        },
-        Friction::coefficient(CHUTE_FRICTION),
+        RigidBody::Static,
+        Collider::trimesh(coll_verts, coll_idx),
+        Restitution::new(CHUTE_RESTITUTION),
+        Friction::new(CHUTE_FRICTION),
         ChuteSegment,
     ));
 }
@@ -125,11 +117,6 @@ fn build_smooth_mesh(pts: [[f32; 2]; 4], ts: &[f32]) -> Mesh {
     let h = CHUTE_THICKNESS * 0.5;
     let x = CHUTE_END_X;
 
-    // 8 vertices per cross-section for correct per-face normals:
-    //   0,1 top   (L,R) normal = +sn
-    //   2,3 bot   (L,R) normal = -sn
-    //   4,5 left  (T,B) normal = -X
-    //   6,7 right (T,B) normal = +X
     const STRIDE: usize = 8;
 
     let cap = (n + 1) * STRIDE;

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
-use bevy_rapier3d::prelude::Velocity;
+use avian3d::prelude::{AngularVelocity, LinearVelocity};
 
 use crate::components::snare::{PivotArm, SnareDrum};
 use crate::resources::chute_params::ChuteParams;
@@ -9,7 +9,7 @@ use crate::resources::marble_runs::{HitRecord, Run, RunHistory};
 use crate::systems::marble::{ChuteMarble, Marble};
 pub fn hud_panel_ui(
     mut contexts: EguiContexts,
-    marbles: Query<(&Velocity, Option<&ChuteMarble>), With<Marble>>,
+    marbles: Query<(&LinearVelocity, &AngularVelocity, Option<&ChuteMarble>), With<Marble>>,
     snare: Query<&GlobalTransform, With<SnareDrum>>,
     arm: Query<&Transform, With<PivotArm>>,
     chute_params: Res<ChuteParams>,
@@ -73,7 +73,7 @@ pub fn hud_panel_ui(
 
                     let mut live: Vec<(bool, Vec3, Vec3)> = marbles
                         .iter()
-                        .map(|(vel, is_chute)| (is_chute.is_some(), vel.linear, vel.angular))
+                        .map(|(lin_vel, ang_vel, is_chute)| (is_chute.is_some(), lin_vel.0, ang_vel.0))
                         .collect();
                     live.sort_by_key(|(is_chute, _, _)| *is_chute as u8);
 

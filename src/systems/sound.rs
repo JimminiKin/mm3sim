@@ -1,5 +1,5 @@
+use avian3d::prelude::*;
 use bevy::prelude::*;
-use bevy_rapier3d::prelude::*;
 
 use crate::components::snare::SnareDrum;
 use crate::systems::marble::Marble;
@@ -43,8 +43,8 @@ pub fn setup_snare_sound(
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn snare_hit_sound_system(
-    mut events: MessageReader<CollisionEvent>,
-    marbles: Query<&Velocity, With<Marble>>,
+    mut events: MessageReader<CollisionStart>,
+    marbles: Query<&LinearVelocity, With<Marble>>,
     snares: Query<(), With<SnareDrum>>,
     sound: Option<Res<SnareHitSound>>,
     snare_volume: Res<SnareVolume>,
@@ -52,17 +52,17 @@ pub fn snare_hit_sound_system(
 ) {
     let Some(sound) = sound else { return };
     for event in events.read() {
-        let CollisionEvent::Started(e1, e2, _) = event else { continue };
-        let marble_entity = if marbles.contains(*e1) && snares.contains(*e2) {
-            *e1
-        } else if marbles.contains(*e2) && snares.contains(*e1) {
-            *e2
+        let (e1, e2) = (event.collider1, event.collider2);
+        let marble_entity = if marbles.contains(e1) && snares.contains(e2) {
+            e1
+        } else if marbles.contains(e2) && snares.contains(e1) {
+            e2
         } else {
             continue;
         };
 
         let speed = marbles.get(marble_entity)
-            .map(|v| v.linear.length())
+            .map(|v| v.0.length())
             .unwrap_or(0.0);
 
         commands.spawn((
@@ -92,23 +92,23 @@ pub fn setup_snare_sound() {
 
 #[cfg(target_arch = "wasm32")]
 pub fn snare_hit_sound_system(
-    mut events: MessageReader<CollisionEvent>,
-    marbles: Query<&Velocity, With<Marble>>,
+    mut events: MessageReader<CollisionStart>,
+    marbles: Query<&LinearVelocity, With<Marble>>,
     snares: Query<(), With<SnareDrum>>,
     snare_volume: Res<SnareVolume>,
 ) {
     for event in events.read() {
-        let CollisionEvent::Started(e1, e2, _) = event else { continue };
-        let marble_entity = if marbles.contains(*e1) && snares.contains(*e2) {
-            *e1
-        } else if marbles.contains(*e2) && snares.contains(*e1) {
-            *e2
+        let (e1, e2) = (event.collider1, event.collider2);
+        let marble_entity = if marbles.contains(e1) && snares.contains(e2) {
+            e1
+        } else if marbles.contains(e2) && snares.contains(e1) {
+            e2
         } else {
             continue;
         };
 
         let speed = marbles.get(marble_entity)
-            .map(|v| v.linear.length())
+            .map(|v| v.0.length())
             .unwrap_or(0.0);
 
         play_snare_web_audio(impact_volume(speed, snare_volume.0));

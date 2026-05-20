@@ -2,10 +2,9 @@ mod components;
 mod resources;
 mod systems;
 
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass};
-use bevy_rapier3d::plugin::PhysicsSet;
-use bevy_rapier3d::prelude::*;
 
 use resources::chute_params::ChuteParams;
 use resources::constants::BG_COLOR;
@@ -52,13 +51,15 @@ fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     app.add_plugins(DefaultPlugins);
 
-    app.add_plugins(RapierPhysicsPlugin::<NoUserData>::default().in_fixed_schedule())
+    app.add_plugins(PhysicsPlugins::default())
         .add_plugins(EguiPlugin { ..default() })
-        .insert_resource(EguiGlobalSettings { auto_create_primary_context: false, ..default() })
-        // 1000 Hz outer tick × 8 substeps = 8000 effective solver passes/s.
-        // The substep dt (0.125 ms) moves a 4.4 m/s marble only 0.55 mm — below
-        // Rapier's 1 mm allowed_linear_error, so Baumgarte position correction is
-        // never triggered and bounces are driven purely by the restitution coefficient.
+        .insert_resource(EguiGlobalSettings {
+            auto_create_primary_context: false,
+            ..default()
+        })
+        // 2000 Hz fixed timestep → 0.5 ms timing resolution for sub-millisecond measurements.
+        // Avian's XPBD solver is unconditionally stable at any timestep, so no CCD
+        // threshold or Baumgarte tuning is needed.
         .insert_resource(Time::<Fixed>::from_hz(SIMULATION_TPS.into()))
         .insert_resource(ClearColor(Color::srgb(BG_COLOR.0, BG_COLOR.1, BG_COLOR.2)))
         .init_resource::<ChuteParams>()
@@ -77,14 +78,12 @@ fn main() {
                 setup_chute_handles,
             ),
         )
-        // Snapshot velocity before physics so impact recording always sees approach speed,
-        // not the partial post-bounce velocity that varies by substep contact phase.
+        // Snapshot velocity before physics so impact recording always sees approach speed.
         .add_systems(
             FixedUpdate,
-            capture_prev_velocity_system.before(PhysicsSet::SyncBackend),
+            capture_prev_velocity_system.before(PhysicsSystems::First),
         )
-        // All physics data collection runs after PhysicsSet::Writeback so collision events
-        // and velocity reads come from the completed step, not a prior tick's state.
+        // All physics data collection runs after physics writeback.
         .add_systems(
             FixedUpdate,
             (
@@ -95,7 +94,7 @@ fn main() {
                 record_marble_paths_system,
             )
                 .chain()
-                .after(PhysicsSet::Writeback),
+                .after(PhysicsSystems::Last),
         )
         .add_systems(
             Update,
@@ -120,15 +119,12 @@ fn main() {
                 resize_axes_viewport,
             ),
         )
-        // UI systems run inside EguiPrimaryContextPass (PostUpdate), which is when
-        // bevy_egui's multipass mode initialises the context for the current frame.
         .add_systems(
             EguiPrimaryContextPass,
             (
                 hud_panel_ui,
                 chute_editor_ui,
                 marble_graph_ui,
-                // auto_spawn reads Stop/Start state written by chute_editor_ui this same pass
                 auto_spawn_system.after(chute_editor_ui),
             ),
         )
