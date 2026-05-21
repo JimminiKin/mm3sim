@@ -87,71 +87,127 @@ impl ProgrammingWheelParams {
     }
 }
 
-/// Wintergatan "Marble Machine" opening melody, converted to beat positions.
-///
-/// 1 revolution = 64 beats = 16 bars of 4/4 at 120 BPM (1.875 RPM).
-/// Old step positions divided by 12 give beat positions.
-///
-/// Vibraphone channels: bar_index + 2 (WHEEL_CH_VIB_FIRST).
-///   E4=ch13  F#4=ch15  G4=ch16  A4=ch18  B4=ch20
-///   C5=ch21  D5=ch23   F#5=ch27 B5=ch32
+/// Full 16-bar (64-beat) programming wheel loop transcribed from the Wintergatan
+/// Marble Machine MusicXML score. One revolution = 64 beats = 16 bars of 4/4 at
+/// 120 BPM. Channels: ch = 2 + semitones_from_F3 (bar 0 = F3, 174.61 Hz).
+///   B4=ch20  C5=ch21  D5=ch23  E5=ch25  F#5=ch27  G5=ch28
+///   A5=ch30  B5=ch32  C6=ch33  D6=ch35  E6=ch37
 fn marble_machine_default_notes() -> Vec<WheelNote> {
     let mut v: Vec<WheelNote> = Vec::new();
 
-    let mel  = |beat: f32, ch: usize| WheelNote::new(ch, beat, 0.45);
-    let perc = |beat: f32, ch: usize| WheelNote::new(ch, beat, 0.2);
-    let tri  = |beat: f32, ch: usize| WheelNote::new(ch, beat, 0.28); // triplet-8th length
-
-    // ── Percussion: kick ch0 on beats 0,2; snare ch1 on beats 1,3 — 4 bars ──
-    for bar in 0..4_usize {
+    // Kick (ch 0) on beats 0,2; snare (ch 1) on beats 1,3 — all 16 bars
+    for bar in 0..16_usize {
         let b = bar as f32 * 4.0;
-        v.push(perc(b + 0.0, WHEEL_CH_CHUTE));
-        v.push(perc(b + 1.0, WHEEL_CH_DROP));
-        v.push(perc(b + 2.0, WHEEL_CH_CHUTE));
-        v.push(perc(b + 3.0, WHEEL_CH_DROP));
+        v.push(WheelNote::new(WHEEL_CH_CHUTE, b + 0.0, 0.2));
+        v.push(WheelNote::new(WHEEL_CH_DROP,  b + 1.0, 0.2));
+        v.push(WheelNote::new(WHEEL_CH_CHUTE, b + 2.0, 0.2));
+        v.push(WheelNote::new(WHEEL_CH_DROP,  b + 3.0, 0.2));
     }
 
-    // ── Bar 1 ─ "e e b e  a g a  e" ─────────────────────────────────────────
-    v.push(mel(0.00, 13)); // E4 — 16th pair opener
-    v.push(mel(0.25, 13)); // E4
-    v.push(mel(1.00, 20)); // B4 — beat 2
-    v.push(mel(1.50, 13)); // E4
-    v.push(mel(2.00, 18)); // A4
-    v.push(mel(2.25, 16)); // G4 — 16th pair
-    v.push(mel(2.75, 18)); // A4
-    v.push(mel(3.50, 13)); // E4 — dotted-8th gap
+    const B4: usize = 20; const C5: usize = 21; const D5: usize = 23;
+    const E5: usize = 25; const FS5: usize = 27; const G5: usize = 28;
+    const A5: usize = 30; const B5: usize = 32; const C6: usize = 33;
+    const D6: usize = 35; const E6: usize = 37;
 
-    // ── Bar 2 ─ "b g  a d d  b d a" ─────────────────────────────────────────
-    v.push(mel(4.00, 20)); // B4
-    v.push(mel(4.50, 16)); // G4
-    v.push(mel(5.00, 18)); // A4
-    v.push(mel(5.50, 23)); // D5
-    v.push(mel(5.75, 23)); // D5 — 16th doublet
-    v.push(mel(6.50, 20)); // B4
-    v.push(mel(7.00, 23)); // D5
-    v.push(mel(7.50, 18)); // A4
+    {
+        let (q, e) = (1.0_f32, 0.5_f32);
+        let mut n = |beat: f32, ch: usize, len: f32| v.push(WheelNote::new(ch, beat, len));
 
-    // ── Bar 3 ─ "g a d F#  g a d F#" — triplet 8ths then 8th notes ──────────
-    let t = 1.0_f32 / 3.0; // triplet 8th = 1/3 beat
-    v.push(tri(8.00,         16)); // G4
-    v.push(tri(8.00 + t,     18)); // A4
-    v.push(tri(8.00 + 2.0*t, 23)); // D5
-    v.push(mel(9.00, 27));         // F#5
-    v.push(mel( 9.50, 16));        // G4
-    v.push(mel(10.00, 18));        // A4
-    v.push(mel(10.50, 23));        // D5
-    v.push(mel(11.00, 27));        // F#5
+        // ── Bars 1–2 (beats 0–7) ──────────────────────────────────────────
+        n( 0.0, E6,  q);
+        n( 1.0, E5,  e);  n( 1.0, B4,  q);  n( 1.5, B5,  e);
+        n( 2.0, B5,  q);
+        n( 3.0, E5,  e);  n( 3.0, B4,  q);  n( 3.5, A5,  e);
 
-    // ── Bar 4 ─ "b5 F#5 d c  b F#4 a g" — climax + descent ──────────────────
-    // 1-beat rest before B5 climax (steps 132-143 → beats 11-12)
-    v.push(mel(12.00, 32)); // B5 — climax
-    v.push(mel(12.50, 27)); // F#5
-    v.push(mel(13.00, 23)); // D5
-    v.push(mel(13.50, 21)); // C5
-    v.push(mel(14.00, 20)); // B4
-    v.push(mel(14.50, 15)); // F#4
-    v.push(mel(15.00, 18)); // A4
-    v.push(mel(15.50, 16)); // G4
+        n( 4.0, G5,  e);  n( 4.5, A5,  e);
+        n( 5.0, E5,  e);  n( 5.0, B4,  q);  n( 5.5, B5,  e);
+        n( 6.0, B5,  e);  n( 6.5, G5,  e);
+        n( 7.0, A5,  e);  n( 7.0, B4,  q);  n( 7.5, D6,  e);
+        n( 8.0, E5,  q);
+
+        // ── Bars 3–4 (beats 8–15) ─────────────────────────────────────────
+        n( 8.0, D6,  q);
+        n( 9.0, D5,  e);  n( 9.0, B4,  q);  n( 9.5, B5,  e);
+        n(10.0, B5,  q);
+        n(11.0, D5,  e);  n(11.0, B4,  q);  n(11.5, A5,  e);
+
+        n(12.0, G5,  e);  n(12.5, A5,  e);
+        n(13.0, D5,  e);  n(13.0, B4,  q);  n(13.5, FS5, e);
+        n(14.0, FS5, e);  n(14.5, G5,  e);
+        n(15.0, A5,  e);  n(15.0, B4,  q);  n(15.5, D6,  e);
+        n(16.0, D5,  q);
+
+        // ── Bars 5–6 (beats 16–23) ────────────────────────────────────────
+        n(16.0, D6,  q);
+        n(17.0, FS5, e);  n(17.0, D5,  q);  n(17.5, B5,  e);
+        n(18.0, B5,  q);
+        n(19.0, FS5, e);  n(19.0, D5,  q);  n(19.5, D6,  e);
+
+        n(20.0, C6,  e);  n(20.5, B5,  e);
+        n(21.0, FS5, e);  n(21.0, D5,  q);  n(21.5, A5,  e);
+        n(22.0, A5,  e);  n(22.5, G5,  e);
+        n(23.0, A5,  e);  n(23.0, D5,  q);  n(23.5, E5,  e);
+        n(24.0, FS5, q);
+
+        // ── Bars 7–8 (beats 24–31) ────────────────────────────────────────
+        n(24.0, E5,  e);  n(24.5, C5,  e);
+        n(25.0, E5,  e);  n(25.5, B5,  e);
+        n(26.0, B4,  e);  n(26.5, C5,  e);
+        n(27.0, D5,  e);  n(27.5, D6,  e);
+
+        n(28.0, C6,  e);  n(28.5, B5,  e);
+        n(29.0, FS5, e);  n(29.0, D5,  q);  n(29.5, A5,  e);
+        n(30.0, A5,  e);  n(30.5, G5,  e);
+        n(31.0, A5,  e);  n(31.5, E6,  e);
+
+        // ── Bars 9–10 (beats 32–39) ───────────────────────────────────────
+        n(32.0, E6,  q);
+        n(33.0, E5,  e);  n(33.0, B4,  q);  n(33.5, B5,  e);
+        n(34.0, B5,  q);
+        n(35.0, E5,  e);  n(35.0, B4,  q);  n(35.5, A5,  e);
+
+        n(36.0, G5,  e);  n(36.5, A5,  e);
+        n(37.0, E5,  e);  n(37.0, B4,  q);  n(37.5, B5,  e);
+        n(38.0, B5,  e);  n(38.5, G5,  e);
+        n(39.0, A5,  e);  n(39.0, B4,  q);  n(39.5, D6,  e);
+        n(40.0, E5,  q);
+
+        // ── Bars 11–12 (beats 40–47) ──────────────────────────────────────
+        n(40.0, D6,  q);
+        n(41.0, D5,  e);  n(41.0, B4,  q);  n(41.5, B5,  e);
+        n(42.0, B5,  q);
+        n(43.0, D5,  e);  n(43.0, B4,  q);  n(43.5, D6,  e);
+
+        n(44.0, C6,  e);  n(44.5, B5,  e);
+        n(45.0, D5,  e);  n(45.0, B4,  q);  n(45.5, A5,  e);
+        n(46.0, A5,  e);  n(46.5, G5,  e);
+        n(47.0, A5,  e);  n(47.0, B4,  q);  n(47.5, D6,  e);
+        n(48.0, D5,  q);
+
+        // ── Bars 13–14 (beats 48–55) ──────────────────────────────────────
+        n(48.0, D6,  q);
+        n(49.0, FS5, e);  n(49.0, D5,  q);  n(49.5, B5,  e);
+        n(50.0, B5,  q);
+        n(51.0, A5,  e);  n(51.0, D5,  q);  n(51.5, E6,  e);
+        n(52.0, FS5, q);
+
+        n(52.0, E6,  e);  n(52.5, B5,  e);
+        n(53.0, D5,  e);  n(53.0, B4,  q);  n(53.5, A5,  e);
+        n(54.0, A5,  e);  n(54.5, G5,  e);
+        n(55.0, FS5, e);  n(55.0, B4,  q);  n(55.5, E5,  e);
+        n(56.0, D5,  q);
+
+        // ── Bars 15–16 (beats 56–63) ──────────────────────────────────────
+        n(56.0, E5,  e);  n(56.5, B4,  e);
+        n(57.0, C5,  e);  n(57.5, FS5, e);
+        n(58.0, C5,  e);  n(58.5, E5,  e);
+        n(59.0, G5,  e);  n(59.5, D5,  e);
+
+        n(60.0, FS5, e);  n(60.5, A5,  e);
+        n(61.0, B4,  e);  n(61.5, B5,  e);
+        n(62.0, D5,  e);  n(62.5, G5,  e);
+        n(63.0, A5,  e);  n(63.5, E6,  e);
+    }
 
     v
 }
