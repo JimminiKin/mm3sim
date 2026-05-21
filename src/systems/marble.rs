@@ -213,10 +213,15 @@ pub fn record_marble_paths_system(
 
 pub fn despawn_fallen_marbles_system(
     mut commands: Commands,
-    query: Query<(Entity, &Transform), With<Marble>>,
+    query: Query<(Entity, &Transform, Option<&ChuteMarble>), With<Marble>>,
+    snare: Query<&GlobalTransform, With<SnareDrum>>,
 ) {
-    for (entity, transform) in &query {
-        if transform.translation.y < DESPAWN_Y {
+    let snare_z = snare.single().map(|gt| gt.translation().z).unwrap_or(0.0);
+    let chute_despawn_z = snare_z - 0.2;
+
+    for (entity, transform, is_chute) in &query {
+        let pos = transform.translation;
+        if pos.y < DESPAWN_Y || (is_chute.is_some() && pos.z < chute_despawn_z) {
             commands.entity(entity).despawn();
         }
     }

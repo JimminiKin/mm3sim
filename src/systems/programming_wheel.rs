@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
-use crate::components::barrel::{spawn_barrel, BarrelCylinder};
+use crate::components::programming_wheel::{spawn_programming_wheel, ProgrammingWheelCylinder};
 use crate::components::snare::SnareDrum;
-use crate::resources::barrel_params::{
-    channel_color_rgb, channel_name, BarrelParams, BARREL_CH_CHUTE, BARREL_CH_DROP,
-    BARREL_CH_VIB_FIRST,
+use crate::resources::programming_wheel_params::{
+    channel_color_rgb, channel_name, ProgrammingWheelParams, WHEEL_CH_CHUTE, WHEEL_CH_DROP,
+    WHEEL_CH_VIB_FIRST,
 };
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
@@ -18,21 +18,21 @@ use crate::systems::marble::{
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
-pub fn setup_barrel_system(
+pub fn setup_programming_wheel_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    spawn_barrel(&mut commands, &mut meshes, &mut materials);
+    spawn_programming_wheel(&mut commands, &mut meshes, &mut materials);
 }
 
 // ── Rotation + step-crossing detection ────────────────────────────────────────
-// Triggers are written to params.pending_spawns and consumed by barrel_spawn_system.
+// Triggers are written to params.pending_spawns and consumed by programming_wheel_spawn_system.
 
-pub fn rotate_barrel_system(
+pub fn rotate_programming_wheel_system(
     time: Res<Time>,
-    mut params: ResMut<BarrelParams>,
-    mut cylinder_q: Query<&mut Transform, With<BarrelCylinder>>,
+    mut params: ResMut<ProgrammingWheelParams>,
+    mut cylinder_q: Query<&mut Transform, With<ProgrammingWheelCylinder>>,
 ) {
     // Always update the cylinder mesh rotation (visible even when paused).
     // Base orientation: rotation_z(π/2) aligns the Bevy cylinder (Y-axis) with world X.
@@ -47,14 +47,14 @@ pub fn rotate_barrel_system(
         return;
     }
 
-    let step_angle = std::f32::consts::TAU / BARREL_N_STEPS as f32;
+    let step_angle = std::f32::consts::TAU / PROGRAMMING_WHEEL_N_STEPS as f32;
     let prev_angle = params.angle;
 
     let delta = std::f32::consts::TAU * (params.rpm / 60.0) * time.delta_secs();
     params.angle = (params.angle + delta).rem_euclid(std::f32::consts::TAU);
 
-    let prev_step = (prev_angle / step_angle) as usize % BARREL_N_STEPS;
-    let curr_step = (params.angle / step_angle) as usize % BARREL_N_STEPS;
+    let prev_step = (prev_angle / step_angle) as usize % PROGRAMMING_WHEEL_N_STEPS;
+    let curr_step = (params.angle / step_angle) as usize % PROGRAMMING_WHEEL_N_STEPS;
     params.current_step = curr_step;
 
     if curr_step == prev_step {
@@ -65,13 +65,13 @@ pub fn rotate_barrel_system(
     let n = if curr_step > prev_step {
         curr_step - prev_step
     } else {
-        BARREL_N_STEPS - prev_step + curr_step
+        PROGRAMMING_WHEEL_N_STEPS - prev_step + curr_step
     };
 
     params.pending_spawns.clear();
     for i in 0..n {
-        let step = (prev_step + 1 + i) % BARREL_N_STEPS;
-        for ch in 0..BARREL_N_CHANNELS {
+        let step = (prev_step + 1 + i) % PROGRAMMING_WHEEL_N_STEPS;
+        for ch in 0..PROGRAMMING_WHEEL_N_CHANNELS {
             if params.pattern[step][ch] {
                 params.pending_spawns.push((step, ch));
             }
@@ -79,11 +79,11 @@ pub fn rotate_barrel_system(
     }
 }
 
-// ── Marble spawning from barrel triggers ──────────────────────────────────────
-// Reads params.pending_spawns written by rotate_barrel_system (must run after it).
+// ── Marble spawning from programming wheel triggers ───────────────────────────
+// Reads params.pending_spawns written by rotate_programming_wheel_system (must run after it).
 
-pub fn barrel_spawn_system(
-    mut params: ResMut<BarrelParams>,
+pub fn programming_wheel_spawn_system(
+    mut params: ResMut<ProgrammingWheelParams>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -107,9 +107,9 @@ pub fn barrel_spawn_system(
 
     // Find steps that have both chute and drop active → pair them in one run for Δt analysis
     let chute_steps: Vec<usize> =
-        triggers.iter().filter(|&&(_, ch)| ch == BARREL_CH_CHUTE).map(|&(s, _)| s).collect();
+        triggers.iter().filter(|&&(_, ch)| ch == WHEEL_CH_CHUTE).map(|&(s, _)| s).collect();
     let drop_steps: Vec<usize> =
-        triggers.iter().filter(|&&(_, ch)| ch == BARREL_CH_DROP).map(|&(s, _)| s).collect();
+        triggers.iter().filter(|&&(_, ch)| ch == WHEEL_CH_DROP).map(|&(s, _)| s).collect();
     let paired_steps: Vec<usize> =
         chute_steps.iter().copied().filter(|s| drop_steps.contains(s)).collect();
 
@@ -138,7 +138,7 @@ pub fn barrel_spawn_system(
 
     for &(step, ch) in &triggers {
         match ch {
-            c if c == BARREL_CH_CHUTE && !fired_chute.contains(&step) => {
+            c if c == WHEEL_CH_CHUTE && !fired_chute.contains(&step) => {
                 let run_idx = all_runs.push_new_run();
                 if let Some(run) = all_runs.get_run_mut(run_idx) {
                     run.chute_exit = Some(chute_params.exit_pos);
@@ -152,7 +152,7 @@ pub fn barrel_spawn_system(
                     run_idx,
                 );
             }
-            c if c == BARREL_CH_DROP && !fired_drop.contains(&step) => {
+            c if c == WHEEL_CH_DROP && !fired_drop.contains(&step) => {
                 let run_idx = all_runs.push_new_run();
                 let pos = jittered_spawn(snare_top_y);
                 spawn_marble(
@@ -164,8 +164,8 @@ pub fn barrel_spawn_system(
                     run_idx,
                 );
             }
-            c if c >= BARREL_CH_VIB_FIRST => {
-                let bar_idx = (c - BARREL_CH_VIB_FIRST) as u32;
+            c if c >= WHEEL_CH_VIB_FIRST => {
+                let bar_idx = (c - WHEEL_CH_VIB_FIRST) as u32;
                 let run_idx = all_runs.push_new_run();
                 if let Some(run) = all_runs.get_run_mut(run_idx) {
                     run.vib_bar_idx = Some(bar_idx);
@@ -187,16 +187,19 @@ pub fn barrel_spawn_system(
 
 // ── Gizmos – active pegs and playhead indicator ───────────────────────────────
 
-pub fn draw_barrel_gizmos(mut gizmos: Gizmos, params: Res<BarrelParams>) {
+pub fn draw_programming_wheel_gizmos(
+    mut gizmos: Gizmos,
+    params: Res<ProgrammingWheelParams>,
+) {
     if !params.show_pegs {
         return;
     }
 
-    let step_angle = std::f32::consts::TAU / BARREL_N_STEPS as f32;
-    let ch_width = BARREL_WIDTH / BARREL_N_CHANNELS as f32;
+    let step_angle = std::f32::consts::TAU / PROGRAMMING_WHEEL_N_STEPS as f32;
+    let ch_width = PROGRAMMING_WHEEL_WIDTH / PROGRAMMING_WHEEL_N_CHANNELS as f32;
 
-    for step in 0..BARREL_N_STEPS {
-        for ch in 0..BARREL_N_CHANNELS {
+    for step in 0..PROGRAMMING_WHEEL_N_STEPS {
+        for ch in 0..PROGRAMMING_WHEEL_N_CHANNELS {
             if !params.pattern[step][ch] {
                 continue;
             }
@@ -204,10 +207,10 @@ pub fn draw_barrel_gizmos(mut gizmos: Gizmos, params: Res<BarrelParams>) {
             // Angular position of peg on cylinder surface relative to reader
             let alpha_rel = step as f32 * step_angle - params.angle;
             // Peg sits slightly proud of the cylinder surface
-            let r = BARREL_RADIUS + 0.010;
-            let y = BARREL_Y_POS + r * alpha_rel.cos();
-            let z = BARREL_Z_POS + r * alpha_rel.sin();
-            let x = (ch as f32 + 0.5) * ch_width - BARREL_WIDTH * 0.5;
+            let r = PROGRAMMING_WHEEL_RADIUS + 0.010;
+            let y = PROGRAMMING_WHEEL_Y_POS + r * alpha_rel.cos();
+            let z = PROGRAMMING_WHEEL_Z_POS + r * alpha_rel.sin();
+            let x = (ch as f32 + 0.5) * ch_width - PROGRAMMING_WHEEL_WIDTH * 0.5;
             let pos = Vec3::new(x, y, z);
 
             let is_current = step == params.current_step;
@@ -233,9 +236,9 @@ pub fn draw_barrel_gizmos(mut gizmos: Gizmos, params: Res<BarrelParams>) {
         for i in 0..=n {
             let t = i as f32 / n as f32 * std::f32::consts::TAU;
             let pt = Vec3::new(
-                BARREL_WIDTH * 0.5 + 0.04,
-                BARREL_Y_POS + (BARREL_RADIUS + 0.020) * t.cos(),
-                BARREL_Z_POS + (BARREL_RADIUS + 0.020) * t.sin(),
+                PROGRAMMING_WHEEL_WIDTH * 0.5 + 0.04,
+                PROGRAMMING_WHEEL_Y_POS + (PROGRAMMING_WHEEL_RADIUS + 0.020) * t.cos(),
+                PROGRAMMING_WHEEL_Z_POS + (PROGRAMMING_WHEEL_RADIUS + 0.020) * t.sin(),
             );
             if let Some(p) = prev {
                 gizmos.line(p, pt, Color::srgba(1.0, 0.5, 0.1, 0.5));
@@ -253,37 +256,28 @@ const LABEL_W: f32 = 52.0;
 const STEP_HEADER_H: f32 = 18.0;
 const CHANNEL_GROUP_GAP: f32 = 3.0; // visual gap between chute/drop and vibs
 
-pub fn barrel_editor_ui(mut contexts: EguiContexts, mut params: ResMut<BarrelParams>) {
+pub fn programming_wheel_editor_ui(
+    mut contexts: EguiContexts,
+    mut params: ResMut<ProgrammingWheelParams>,
+) {
     let ctx = contexts.ctx_mut().unwrap();
 
-    // Small toggle button anchored top-left
-    egui::Window::new("Barrel")
-        .anchor(egui::Align2::LEFT_TOP, egui::vec2(8.0, 8.0))
-        .resizable(false)
-        .title_bar(false)
-        .show(ctx, |ui| {
-            let label = if params.editor_open {
-                "▼ Barrel Sequencer"
-            } else {
-                "► Barrel Sequencer"
-            };
-            if ui.small_button(label).clicked() {
-                params.editor_open = !params.editor_open;
-            }
-        });
+    // LABEL_W + 192 steps × CELL_W + window frame/padding
+    let default_w = LABEL_W + PROGRAMMING_WHEEL_N_STEPS as f32 * CELL_W + 24.0;
+    // header + all rows + gap + transport (~34) + row controls (~62) + padding
+    let default_h = STEP_HEADER_H
+        + PROGRAMMING_WHEEL_N_CHANNELS as f32 * CELL_H
+        + CHANNEL_GROUP_GAP
+        + 34.0 + 62.0 + 24.0;
 
-    if !params.editor_open {
-        return;
-    }
-
-    egui::Window::new("Barrel Sequencer##editor")
-        .default_pos([10.0, 40.0])
-        .default_size([820.0, 560.0])
+    egui::Window::new("Programming Wheel")
+        .default_pos([8.0, 8.0])
+        .default_size([default_w, default_h])
         .resizable(true)
         .title_bar(false)
         .show(ctx, |ui| {
-            egui::CollapsingHeader::new(egui::RichText::new("Barrel Sequencer").strong())
-                .id_salt("barrel_editor_header")
+            egui::CollapsingHeader::new(egui::RichText::new("Programming Wheel").strong())
+                .id_salt("programming_wheel_editor_header")
                 .default_open(true)
                 .show(ui, |ui| {
                     draw_transport(ui, &mut *params);
@@ -293,7 +287,7 @@ pub fn barrel_editor_ui(mut contexts: EguiContexts, mut params: ResMut<BarrelPar
         });
 }
 
-fn draw_transport(ui: &mut egui::Ui, params: &mut BarrelParams) {
+fn draw_transport(ui: &mut egui::Ui, params: &mut ProgrammingWheelParams) {
     ui.horizontal(|ui| {
         // Play / Stop button
         let (btn_label, btn_color) = if params.enabled {
@@ -315,14 +309,16 @@ fn draw_transport(ui: &mut egui::Ui, params: &mut BarrelParams) {
             }
         }
 
-        // BPM (derived from RPM × N_STEPS)
-        let mut bpm = params.rpm * BARREL_N_STEPS as f32;
+        // BPM = musical quarter-note beats per minute.
+        // RPM × steps_per_rev / steps_per_beat = quarter notes per minute.
+        let spb = PROGRAMMING_WHEEL_STEPS_PER_BEAT as f32;
+        let mut bpm = params.rpm * PROGRAMMING_WHEEL_N_STEPS as f32 / spb;
         ui.label("BPM:");
         if ui
             .add(egui::DragValue::new(&mut bpm).speed(0.5).range(10.0..=600.0))
             .changed()
         {
-            params.rpm = bpm / BARREL_N_STEPS as f32;
+            params.rpm = bpm * spb / PROGRAMMING_WHEEL_N_STEPS as f32;
         }
         ui.monospace(format!("({:.3} RPM)", params.rpm));
 
@@ -339,15 +335,14 @@ fn draw_transport(ui: &mut egui::Ui, params: &mut BarrelParams) {
     });
 }
 
-fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
-    // Step-number header row
-    let total_grid_w = LABEL_W + BARREL_N_STEPS as f32 * CELL_W;
+fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut ProgrammingWheelParams) {
+    let total_grid_w = LABEL_W + PROGRAMMING_WHEEL_N_STEPS as f32 * CELL_W;
     let total_grid_h = STEP_HEADER_H
-        + BARREL_N_CHANNELS as f32 * CELL_H
-        + CHANNEL_GROUP_GAP; // gap after row 1
+        + PROGRAMMING_WHEEL_N_CHANNELS as f32 * CELL_H
+        + CHANNEL_GROUP_GAP;
 
     egui::ScrollArea::both()
-        .id_salt("barrel_grid_scroll")
+        .id_salt("programming_wheel_grid_scroll")
         .max_width(ui.available_width())
         .max_height(ui.available_height().min(520.0))
         .show(ui, |ui| {
@@ -358,14 +353,12 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
             let painter = ui.painter_at(outer_rect);
 
             // ── Step header ───────────────────────────────────────────────
-            // Shows beat numbers (1-16) with tick marks for 8th and triplet positions.
             let header_top = outer_rect.min.y;
-            for step in 0..BARREL_N_STEPS {
+            for step in 0..PROGRAMMING_WHEEL_N_STEPS {
                 let x = outer_rect.min.x + LABEL_W + step as f32 * CELL_W;
-                if step % BARREL_STEPS_PER_BEAT == 0 {
-                    // Beat number label
-                    let beat = step / BARREL_STEPS_PER_BEAT + 1;
-                    let cx = x + CELL_W * (BARREL_STEPS_PER_BEAT as f32 * 0.5);
+                if step % PROGRAMMING_WHEEL_STEPS_PER_BEAT == 0 {
+                    let beat = step / PROGRAMMING_WHEEL_STEPS_PER_BEAT + 1;
+                    let cx = x + CELL_W * (PROGRAMMING_WHEEL_STEPS_PER_BEAT as f32 * 0.5);
                     painter.text(
                         egui::pos2(cx, header_top + STEP_HEADER_H * 0.4),
                         egui::Align2::CENTER_CENTER,
@@ -373,7 +366,6 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
                         egui::FontId::monospace(8.0),
                         egui::Color32::from_rgb(180, 180, 190),
                     );
-                    // Full-height tick for beat
                     painter.line_segment(
                         [
                             egui::pos2(x, header_top + STEP_HEADER_H - 5.0),
@@ -382,7 +374,6 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
                         egui::Stroke::new(1.0, egui::Color32::from_rgb(120, 120, 135)),
                     );
                 } else if step % 6 == 0 {
-                    // 8th-note tick (÷2 within beat)
                     painter.line_segment(
                         [
                             egui::pos2(x, header_top + STEP_HEADER_H - 3.0),
@@ -391,7 +382,6 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
                         egui::Stroke::new(1.0, egui::Color32::from_rgb(80, 80, 100)),
                     );
                 } else if step % 4 == 0 {
-                    // Triplet tick (÷3 within beat)
                     painter.line_segment(
                         [
                             egui::pos2(x, header_top + STEP_HEADER_H - 2.0),
@@ -405,24 +395,20 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
             // ── Channel rows ──────────────────────────────────────────────
             let grid_top = outer_rect.min.y + STEP_HEADER_H;
 
-            // Interaction region covering the cells (not the labels)
             let cells_rect = egui::Rect::from_min_size(
                 egui::pos2(outer_rect.min.x + LABEL_W, grid_top),
                 egui::vec2(
-                    BARREL_N_STEPS as f32 * CELL_W,
-                    BARREL_N_CHANNELS as f32 * CELL_H + CHANNEL_GROUP_GAP,
+                    PROGRAMMING_WHEEL_N_STEPS as f32 * CELL_W,
+                    PROGRAMMING_WHEEL_N_CHANNELS as f32 * CELL_H + CHANNEL_GROUP_GAP,
                 ),
             );
-            let interact_resp =
-                ui.allocate_rect(cells_rect, egui::Sense::click_and_drag());
+            let interact_resp = ui.allocate_rect(cells_rect, egui::Sense::click_and_drag());
 
-            // Handle click / drag interactions
             let ptr_pos = interact_resp.interact_pointer_pos();
             let left_down = ui.input(|i| i.pointer.primary_down());
             let right_down = ui.input(|i| i.pointer.secondary_down());
 
             if interact_resp.drag_started() {
-                // Determine paint value from the first cell under the pointer
                 if let Some(pos) = ptr_pos {
                     if let Some((step, ch, row_y)) = cell_at(pos, outer_rect.min, grid_top) {
                         let _ = row_y;
@@ -455,25 +441,20 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
             // ── Draw cells ────────────────────────────────────────────────
             let current_step = params.current_step;
 
-            for ch in 0..BARREL_N_CHANNELS {
-                // Visual gap after the snare-drop row (row index 1)
+            for ch in 0..PROGRAMMING_WHEEL_N_CHANNELS {
                 let y_gap = if ch >= 2 { CHANNEL_GROUP_GAP } else { 0.0 };
                 let row_y = grid_top + y_gap + ch as f32 * CELL_H;
 
-                // Row label
                 let (lr, lg, lb) = channel_color_rgb(ch);
-                let label_color =
-                    egui::Color32::from_rgb(lr, lg, lb);
                 painter.text(
                     egui::pos2(outer_rect.min.x + LABEL_W - 4.0, row_y + CELL_H * 0.5),
                     egui::Align2::RIGHT_CENTER,
                     channel_name(ch),
                     egui::FontId::monospace(9.0),
-                    label_color,
+                    egui::Color32::from_rgb(lr, lg, lb),
                 );
 
-                // Cells
-                for step in 0..BARREL_N_STEPS {
+                for step in 0..PROGRAMMING_WHEEL_N_STEPS {
                     let cell_x = outer_rect.min.x + LABEL_W + step as f32 * CELL_W;
                     let cell_rect = egui::Rect::from_min_size(
                         egui::pos2(cell_x + 0.5, row_y + 0.5),
@@ -482,34 +463,32 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
 
                     let is_active = params.pattern[step][ch];
                     let is_current = step == current_step && params.enabled;
-                    // Subdivision positions within a beat (beat = BARREL_STEPS_PER_BEAT steps)
-                    let is_beat_start  = step % BARREL_STEPS_PER_BEAT == 0;
-                    let is_eighth      = step % 6 == 0 && !is_beat_start;
-                    let is_triplet     = step % 4 == 0 && step % 6 != 0 && !is_beat_start;
+                    let is_beat_start = step % PROGRAMMING_WHEEL_STEPS_PER_BEAT == 0;
+                    let is_eighth     = step % 6 == 0 && !is_beat_start;
+                    let is_triplet    = step % 4 == 0 && step % 6 != 0 && !is_beat_start;
 
                     let color = match (is_active, is_current) {
-                        (true, true) => egui::Color32::from_rgb(255, 220, 30), // active + at reader
+                        (true, true) => egui::Color32::from_rgb(255, 220, 30),
                         (true, false) => {
                             let (r8, g8, b8) = channel_color_rgb(ch);
                             egui::Color32::from_rgb(r8, g8, b8)
                         }
-                        (false, true) => egui::Color32::from_rgb(80, 65, 20), // cursor bg
+                        (false, true) => egui::Color32::from_rgb(80, 65, 20),
                         (false, false) => {
                             if is_beat_start {
-                                egui::Color32::from_rgb(42, 40, 55) // beat: slightly bright
+                                egui::Color32::from_rgb(42, 40, 55)
                             } else if is_eighth {
-                                egui::Color32::from_rgb(30, 30, 44) // 8th note position
+                                egui::Color32::from_rgb(30, 30, 44)
                             } else if is_triplet {
-                                egui::Color32::from_rgb(27, 22, 40) // triplet: slight purple tint
+                                egui::Color32::from_rgb(27, 22, 40)
                             } else {
-                                egui::Color32::from_rgb(18, 18, 26) // other subdivisions
+                                egui::Color32::from_rgb(18, 18, 26)
                             }
                         }
                     };
 
                     painter.rect_filled(cell_rect, 1.0, color);
 
-                    // Highlight current-step column border
                     if is_current {
                         painter.rect_stroke(
                             cell_rect,
@@ -521,18 +500,17 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
                 }
             }
 
-            // Grid lines — three tiers matching the visual subdivisions in the header
-            let grid_bottom = grid_top + BARREL_N_CHANNELS as f32 * CELL_H + CHANNEL_GROUP_GAP;
-            for step in 0..=BARREL_N_STEPS {
+            // Grid lines — three tiers
+            let grid_bottom = grid_top
+                + PROGRAMMING_WHEEL_N_CHANNELS as f32 * CELL_H
+                + CHANNEL_GROUP_GAP;
+            for step in 0..=PROGRAMMING_WHEEL_N_STEPS {
                 let x = outer_rect.min.x + LABEL_W + step as f32 * CELL_W;
-                let (stroke_w, color) = if step % BARREL_STEPS_PER_BEAT == 0 {
-                    // Beat line — solid, most visible
+                let (stroke_w, color) = if step % PROGRAMMING_WHEEL_STEPS_PER_BEAT == 0 {
                     (1.0, egui::Color32::from_rgba_premultiplied(110, 110, 140, 140))
                 } else if step % 6 == 0 {
-                    // 8th-note line (÷2 per beat)
                     (0.5, egui::Color32::from_rgba_premultiplied(60, 60, 90, 80))
                 } else if step % 4 == 0 {
-                    // Triplet line (÷3 per beat) — purple tint
                     (0.5, egui::Color32::from_rgba_premultiplied(80, 50, 110, 70))
                 } else {
                     continue;
@@ -544,7 +522,6 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
             }
         });
 
-    // Row controls below the grid (clear / fill per channel group)
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         ui.label("Row ops:");
@@ -560,7 +537,7 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut BarrelParams) {
         }
         if ui.small_button("Clear all vib rows").clicked() {
             for s in &mut params.pattern {
-                for ch in 2..BARREL_N_CHANNELS {
+                for ch in 2..PROGRAMMING_WHEEL_N_CHANNELS {
                     s[ch] = false;
                 }
             }
@@ -595,7 +572,7 @@ fn cell_at(
     let step = (rel_x / CELL_W) as usize;
     let ch = (adj_y / CELL_H) as usize;
 
-    if step < BARREL_N_STEPS && ch < BARREL_N_CHANNELS {
+    if step < PROGRAMMING_WHEEL_N_STEPS && ch < PROGRAMMING_WHEEL_N_CHANNELS {
         Some((step, ch, grid_top + ch as f32 * CELL_H))
     } else {
         None
@@ -603,37 +580,32 @@ fn cell_at(
 }
 
 fn quick_fill_buttons(ui: &mut egui::Ui, pattern: &mut Vec<Vec<bool>>) {
-    // Quarter notes: once per beat (every BARREL_STEPS_PER_BEAT steps)
     if ui.small_button("Chute quarter").clicked() {
-        for step in 0..BARREL_N_STEPS {
-            pattern[step][0] = step % BARREL_STEPS_PER_BEAT == 0;
+        for step in 0..PROGRAMMING_WHEEL_N_STEPS {
+            pattern[step][0] = step % PROGRAMMING_WHEEL_STEPS_PER_BEAT == 0;
         }
     }
-    // Eighth notes: twice per beat (every 6 steps)
     if ui.small_button("Drop 8ths").clicked() {
-        for step in 0..BARREL_N_STEPS {
+        for step in 0..PROGRAMMING_WHEEL_N_STEPS {
             pattern[step][1] = step % 6 == 0;
         }
     }
-    // Triplets: three per beat (every 4 steps)
     if ui.small_button("Chute triplets").clicked() {
-        for step in 0..BARREL_N_STEPS {
+        for step in 0..PROGRAMMING_WHEEL_N_STEPS {
             pattern[step][0] = step % 4 == 0;
         }
     }
-    // C major arpeggio on vibraphone bars 0,4,7,12 (C, E, G, C)
-    // Steps mapped to same fractional positions as before (every 2 beats = every 24 steps)
     if ui.small_button("Vib C-major arp").clicked() {
         let vib_steps = [0usize, 24, 48, 72, 96, 120, 144, 168];
-        let vib_bars = [2usize, 6, 9, 14]; // BARREL_CH_VIB_FIRST+offset: bars 0,4,7,12
-        for step in 0..BARREL_N_STEPS {
-            for ch in 2..BARREL_N_CHANNELS {
+        let vib_bars = [2usize, 6, 9, 14];
+        for step in 0..PROGRAMMING_WHEEL_N_STEPS {
+            for ch in 2..PROGRAMMING_WHEEL_N_CHANNELS {
                 pattern[step][ch] = false;
             }
         }
         for (i, &step) in vib_steps.iter().enumerate() {
             let ch = vib_bars[i % vib_bars.len()];
-            if ch < BARREL_N_CHANNELS {
+            if ch < PROGRAMMING_WHEEL_N_CHANNELS {
                 pattern[step][ch] = true;
             }
         }

@@ -4,16 +4,16 @@ use bevy::prelude::*;
 use crate::resources::constants::*;
 
 #[derive(Component)]
-pub struct BarrelCylinder;
+pub struct ProgrammingWheelCylinder;
 
 #[derive(Component)]
-pub struct BarrelReaderBar;
+pub struct ProgrammingWheelReaderBar;
 
-/// Marks every entity that belongs to the barrel so they can all be despawned on rebuild.
+/// Marks every entity that belongs to the programming wheel so they can all be despawned on rebuild.
 #[derive(Component)]
-pub struct BarrelEntity;
+pub struct ProgrammingWheelEntity;
 
-pub fn spawn_barrel(
+pub fn spawn_programming_wheel(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
@@ -41,29 +41,32 @@ pub fn spawn_barrel(
     // Rotate 90° around Z so the axis aligns with world X.
     commands.spawn((
         Mesh3d(meshes.add(Mesh::from(Cylinder {
-            radius: BARREL_RADIUS,
-            half_height: BARREL_WIDTH * 0.5,
+            radius: PROGRAMMING_WHEEL_RADIUS,
+            half_height: PROGRAMMING_WHEEL_WIDTH * 0.5,
         }))),
         MeshMaterial3d(cylinder_mat),
-        Transform::from_xyz(0.0, BARREL_Y_POS, BARREL_Z_POS)
+        Transform::from_xyz(0.0, PROGRAMMING_WHEEL_Y_POS, PROGRAMMING_WHEEL_Z_POS)
             .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
-        BarrelCylinder,
-        BarrelEntity,
+        ProgrammingWheelCylinder,
+        ProgrammingWheelEntity,
     ));
 
     // Reader bar — thin rectangular bar just above the cylinder top
-    let reader_y = BARREL_Y_POS + BARREL_RADIUS + BARREL_READER_GAP + BARREL_READER_HALF_H;
+    let reader_y = PROGRAMMING_WHEEL_Y_POS
+        + PROGRAMMING_WHEEL_RADIUS
+        + PROGRAMMING_WHEEL_READER_GAP
+        + PROGRAMMING_WHEEL_READER_HALF_H;
     commands.spawn((
         Mesh3d(meshes.add(Mesh::from(Cuboid {
             half_size: Vec3::new(
-                BARREL_WIDTH * 0.5 + 0.025,
-                BARREL_READER_HALF_H,
-                BARREL_READER_HALF_H,
+                PROGRAMMING_WHEEL_WIDTH * 0.5 + 0.025,
+                PROGRAMMING_WHEEL_READER_HALF_H,
+                PROGRAMMING_WHEEL_READER_HALF_H,
             ),
         }))),
         MeshMaterial3d(reader_mat),
-        Transform::from_xyz(0.0, reader_y, BARREL_Z_POS),
-        BarrelReaderBar,
-        BarrelEntity,
+        Transform::from_xyz(0.0, reader_y, PROGRAMMING_WHEEL_Z_POS),
+        ProgrammingWheelReaderBar,
+        ProgrammingWheelEntity,
     ));
 }
