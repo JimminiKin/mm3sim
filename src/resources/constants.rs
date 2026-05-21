@@ -161,14 +161,13 @@ pub const CHUTE_WIDTH: f32 = 0.02;
 // =============================================================================
 
 pub const PROGRAMMING_WHEEL_RADIUS: f32 = 0.5;         // 1 m diameter cylinder
-/// 16 beats × 12 steps/beat = 192; LCM(3,4)=12 lets beats hold duplets (÷6),
-/// triplets (÷4), or 16th notes (÷3) without fractional positions.
-pub const PROGRAMMING_WHEEL_N_STEPS: usize = 192;
-pub const PROGRAMMING_WHEEL_STEPS_PER_BEAT: usize = 12; // how many steps make one beat
+/// 16 bars × 4 beats/bar = 64 beats per revolution.
+/// At 1.875 RPM: 1.875 × 64 = 120 musical BPM.
+pub const PROGRAMMING_WHEEL_BEATS_PER_REV: f32 = 64.0;
 /// ch 0 = chute drop, ch 1 = vertical snare drop, ch 2..38 = vib bars 0..36
 pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 39;
-/// 120 BPM × 12 steps/beat ÷ 192 steps/rev = 7.5 RPM  (120 musical BPM)
-pub const PROGRAMMING_WHEEL_RPM_DEFAULT: f32 = 7.5;
+/// 120 BPM ÷ 64 beats/rev = 1.875 RPM
+pub const PROGRAMMING_WHEEL_RPM_DEFAULT: f32 = 1.875;
 pub const PROGRAMMING_WHEEL_Z_POS: f32 = 1.4;         // world Z (positive from snare)
 pub const PROGRAMMING_WHEEL_Y_POS: f32 = 0.8;         // world Y (cylinder centre)
 pub const PROGRAMMING_WHEEL_WIDTH: f32 = 2.2;         // total X span of the wheel

@@ -4,8 +4,9 @@ use bevy_egui::{egui, EguiContexts};
 use crate::components::programming_wheel::{spawn_programming_wheel, ProgrammingWheelCylinder};
 use crate::components::snare::SnareDrum;
 use crate::resources::programming_wheel_params::{
-    channel_color_rgb, channel_name, ProgrammingWheelParams, WHEEL_CH_CHUTE, WHEEL_CH_DROP,
-    WHEEL_CH_VIB_FIRST,
+    channel_color_rgb, channel_name, snap_beat, snap_label,
+    DragState, ProgrammingWheelParams, WheelNote,
+    WHEEL_CH_CHUTE, WHEEL_CH_DROP, WHEEL_CH_VIB_FIRST,
 };
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
@@ -26,17 +27,13 @@ pub fn setup_programming_wheel_system(
     spawn_programming_wheel(&mut commands, &mut meshes, &mut materials);
 }
 
-// ── Rotation + step-crossing detection ────────────────────────────────────────
-// Triggers are written to params.pending_spawns and consumed by programming_wheel_spawn_system.
+// ── Rotation + beat-crossing detection ───────────────────────────────────────
 
 pub fn rotate_programming_wheel_system(
     time: Res<Time>,
     mut params: ResMut<ProgrammingWheelParams>,
     mut cylinder_q: Query<&mut Transform, With<ProgrammingWheelCylinder>>,
 ) {
-    // Always update the cylinder mesh rotation (visible even when paused).
-    // Base orientation: rotation_z(π/2) aligns the Bevy cylinder (Y-axis) with world X.
-    // Spin: rotation_y(−angle) in model space rotates it around that X axis.
     if let Ok(mut tf) = cylinder_q.single_mut() {
         let base = Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
         let spin = Quat::from_rotation_y(-params.angle);
@@ -47,40 +44,32 @@ pub fn rotate_programming_wheel_system(
         return;
     }
 
-    let step_angle = std::f32::consts::TAU / PROGRAMMING_WHEEL_N_STEPS as f32;
     let prev_angle = params.angle;
-
     let delta = std::f32::consts::TAU * (params.rpm / 60.0) * time.delta_secs();
     params.angle = (params.angle + delta).rem_euclid(std::f32::consts::TAU);
 
-    let prev_step = (prev_angle / step_angle) as usize % PROGRAMMING_WHEEL_N_STEPS;
-    let curr_step = (params.angle / step_angle) as usize % PROGRAMMING_WHEEL_N_STEPS;
-    params.current_step = curr_step;
+    // Convert angles to beats for musically-natural comparison
+    let bpr = PROGRAMMING_WHEEL_BEATS_PER_REV;
+    let prev_beat = prev_angle / std::f32::consts::TAU * bpr;
+    let curr_beat = params.angle / std::f32::consts::TAU * bpr;
+    params.current_beat = curr_beat;
 
-    if curr_step == prev_step {
-        return;
-    }
-
-    // Number of step boundaries crossed this frame (handles large dt gracefully)
-    let n = if curr_step > prev_step {
-        curr_step - prev_step
-    } else {
-        PROGRAMMING_WHEEL_N_STEPS - prev_step + curr_step
-    };
-
+    let fired: Vec<usize> = params.notes.iter()
+        .filter_map(|note| {
+            let nb = note.beat.rem_euclid(bpr);
+            let crossed = if curr_beat >= prev_beat {
+                nb > prev_beat && nb <= curr_beat
+            } else {
+                nb > prev_beat || nb <= curr_beat
+            };
+            if crossed { Some(note.channel) } else { None }
+        })
+        .collect();
     params.pending_spawns.clear();
-    for i in 0..n {
-        let step = (prev_step + 1 + i) % PROGRAMMING_WHEEL_N_STEPS;
-        for ch in 0..PROGRAMMING_WHEEL_N_CHANNELS {
-            if params.pattern[step][ch] {
-                params.pending_spawns.push((step, ch));
-            }
-        }
-    }
+    params.pending_spawns.extend(fired);
 }
 
-// ── Marble spawning from programming wheel triggers ───────────────────────────
-// Reads params.pending_spawns written by rotate_programming_wheel_system (must run after it).
+// ── Marble spawning ───────────────────────────────────────────────────────────
 
 pub fn programming_wheel_spawn_system(
     mut params: ResMut<ProgrammingWheelParams>,
@@ -102,66 +91,26 @@ pub fn programming_wheel_spawn_system(
         .map(|gt| gt.translation().y + SNARE_HALF_HEIGHT)
         .unwrap_or(CHUTE_ORIGIN_Y);
 
-    // Clone so we can iterate while mutating other parts of params (we only mutate pending later)
-    let triggers: Vec<(usize, usize)> = params.pending_spawns.drain(..).collect();
+    let channels: Vec<usize> = params.pending_spawns.drain(..).collect();
 
-    // Find steps that have both chute and drop active → pair them in one run for Δt analysis
-    let chute_steps: Vec<usize> =
-        triggers.iter().filter(|&&(_, ch)| ch == WHEEL_CH_CHUTE).map(|&(s, _)| s).collect();
-    let drop_steps: Vec<usize> =
-        triggers.iter().filter(|&&(_, ch)| ch == WHEEL_CH_DROP).map(|&(s, _)| s).collect();
-    let paired_steps: Vec<usize> =
-        chute_steps.iter().copied().filter(|s| drop_steps.contains(s)).collect();
-
-    let mut fired_chute: Vec<usize> = Vec::new();
-    let mut fired_drop: Vec<usize> = Vec::new();
-
-    // Paired chute+drop → same run_idx for Δt analysis
-    for &step in &paired_steps {
-        let run_idx = all_runs.push_new_run();
-        if let Some(run) = all_runs.get_run_mut(run_idx) {
-            run.chute_exit = Some(chute_params.exit_pos);
-        }
-        let pos = jittered_spawn(snare_top_y);
-        spawn_marble(&mut commands, &mut meshes, &mut materials, pos, marble_col.0, run_idx);
-        spawn_chute_marble(
-            &mut commands,
-            &mut meshes,
-            &mut materials,
-            &chute_params,
-            marble_col.0,
-            run_idx,
-        );
-        fired_chute.push(step);
-        fired_drop.push(step);
-    }
-
-    for &(step, ch) in &triggers {
+    for ch in channels {
         match ch {
-            c if c == WHEEL_CH_CHUTE && !fired_chute.contains(&step) => {
+            c if c == WHEEL_CH_CHUTE => {
                 let run_idx = all_runs.push_new_run();
                 if let Some(run) = all_runs.get_run_mut(run_idx) {
                     run.chute_exit = Some(chute_params.exit_pos);
                 }
                 spawn_chute_marble(
-                    &mut commands,
-                    &mut meshes,
-                    &mut materials,
-                    &chute_params,
-                    marble_col.0,
-                    run_idx,
+                    &mut commands, &mut meshes, &mut materials,
+                    &chute_params, marble_col.0, run_idx,
                 );
             }
-            c if c == WHEEL_CH_DROP && !fired_drop.contains(&step) => {
+            c if c == WHEEL_CH_DROP => {
                 let run_idx = all_runs.push_new_run();
                 let pos = jittered_spawn(snare_top_y);
                 spawn_marble(
-                    &mut commands,
-                    &mut meshes,
-                    &mut materials,
-                    pos,
-                    marble_col.0,
-                    run_idx,
+                    &mut commands, &mut meshes, &mut materials,
+                    pos, marble_col.0, run_idx,
                 );
             }
             c if c >= WHEEL_CH_VIB_FIRST => {
@@ -171,13 +120,8 @@ pub fn programming_wheel_spawn_system(
                     run.vib_bar_idx = Some(bar_idx);
                 }
                 spawn_vib_marble_for_bar(
-                    &mut commands,
-                    &mut meshes,
-                    &mut materials,
-                    &vib_params,
-                    bar_idx,
-                    marble_col.0,
-                    run_idx,
+                    &mut commands, &mut meshes, &mut materials,
+                    &vib_params, bar_idx, marble_col.0, run_idx,
                 );
             }
             _ => {}
@@ -185,7 +129,7 @@ pub fn programming_wheel_spawn_system(
     }
 }
 
-// ── Gizmos – active pegs and playhead indicator ───────────────────────────────
+// ── Gizmos ────────────────────────────────────────────────────────────────────
 
 pub fn draw_programming_wheel_gizmos(
     mut gizmos: Gizmos,
@@ -195,41 +139,33 @@ pub fn draw_programming_wheel_gizmos(
         return;
     }
 
-    let step_angle = std::f32::consts::TAU / PROGRAMMING_WHEEL_N_STEPS as f32;
+    let bpr = PROGRAMMING_WHEEL_BEATS_PER_REV;
     let ch_width = PROGRAMMING_WHEEL_WIDTH / PROGRAMMING_WHEEL_N_CHANNELS as f32;
 
-    for step in 0..PROGRAMMING_WHEEL_N_STEPS {
-        for ch in 0..PROGRAMMING_WHEEL_N_CHANNELS {
-            if !params.pattern[step][ch] {
-                continue;
-            }
+    for note in &params.notes {
+        let note_angle = note.beat / bpr * std::f32::consts::TAU;
+        let alpha_rel = note_angle - params.angle;
+        let r = PROGRAMMING_WHEEL_RADIUS + 0.010;
+        let y = PROGRAMMING_WHEEL_Y_POS + r * alpha_rel.cos();
+        let z = PROGRAMMING_WHEEL_Z_POS + r * alpha_rel.sin();
+        let x = (note.channel as f32 + 0.5) * ch_width - PROGRAMMING_WHEEL_WIDTH * 0.5;
+        let pos = Vec3::new(x, y, z);
 
-            // Angular position of peg on cylinder surface relative to reader
-            let alpha_rel = step as f32 * step_angle - params.angle;
-            // Peg sits slightly proud of the cylinder surface
-            let r = PROGRAMMING_WHEEL_RADIUS + 0.010;
-            let y = PROGRAMMING_WHEEL_Y_POS + r * alpha_rel.cos();
-            let z = PROGRAMMING_WHEEL_Z_POS + r * alpha_rel.sin();
-            let x = (ch as f32 + 0.5) * ch_width - PROGRAMMING_WHEEL_WIDTH * 0.5;
-            let pos = Vec3::new(x, y, z);
+        let at_reader = (alpha_rel.rem_euclid(std::f32::consts::TAU) < 0.05)
+            || (alpha_rel.rem_euclid(std::f32::consts::TAU) > std::f32::consts::TAU - 0.05);
+        let color = if at_reader {
+            Color::srgb(1.00, 0.85, 0.10)
+        } else {
+            let (r8, g8, b8) = channel_color_rgb(note.channel);
+            Color::srgb(r8 as f32 / 255.0, g8 as f32 / 255.0, b8 as f32 / 255.0)
+        };
 
-            let is_current = step == params.current_step;
-            let color = if is_current {
-                Color::srgb(1.00, 0.85, 0.10) // bright gold when at reader
-            } else {
-                let (r8, g8, b8) = channel_color_rgb(ch);
-                Color::srgb(r8 as f32 / 255.0, g8 as f32 / 255.0, b8 as f32 / 255.0)
-            };
-
-            // Draw a small cross / plus at the peg position
-            let s = if is_current { 0.014_f32 } else { 0.009_f32 };
-            gizmos.line(pos - Vec3::X * s, pos + Vec3::X * s, color);
-            gizmos.line(pos - Vec3::Y * s, pos + Vec3::Y * s, color);
-            gizmos.line(pos - Vec3::Z * s, pos + Vec3::Z * s, color);
-        }
+        let s = if at_reader { 0.014_f32 } else { 0.009_f32 };
+        gizmos.line(pos - Vec3::X * s, pos + Vec3::X * s, color);
+        gizmos.line(pos - Vec3::Y * s, pos + Vec3::Y * s, color);
+        gizmos.line(pos - Vec3::Z * s, pos + Vec3::Z * s, color);
     }
 
-    // Draw a bright circle at the reader bar position showing which angle is "now"
     if params.enabled {
         let n = 64_usize;
         let mut prev = None::<Vec3>;
@@ -248,13 +184,13 @@ pub fn draw_programming_wheel_gizmos(
     }
 }
 
-// ── Pattern editor UI ─────────────────────────────────────────────────────────
+// ── Piano-roll editor UI ──────────────────────────────────────────────────────
 
-const CELL_W: f32 = 5.0; // narrower to fit 192 steps on screen
 const CELL_H: f32 = 11.0;
 const LABEL_W: f32 = 52.0;
-const STEP_HEADER_H: f32 = 18.0;
-const CHANNEL_GROUP_GAP: f32 = 3.0; // visual gap between chute/drop and vibs
+const BEAT_HEADER_H: f32 = 24.0;
+const CHANNEL_GROUP_GAP: f32 = 3.0;
+const RESIZE_HANDLE_PX: f32 = 5.0;
 
 pub fn programming_wheel_editor_ui(
     mut contexts: EguiContexts,
@@ -262,13 +198,11 @@ pub fn programming_wheel_editor_ui(
 ) {
     let ctx = contexts.ctx_mut().unwrap();
 
-    // LABEL_W + 192 steps × CELL_W + window frame/padding
-    let default_w = LABEL_W + PROGRAMMING_WHEEL_N_STEPS as f32 * CELL_W + 24.0;
-    // header + all rows + gap + transport (~34) + row controls (~62) + padding
-    let default_h = STEP_HEADER_H
+    let default_w = LABEL_W + PROGRAMMING_WHEEL_BEATS_PER_REV * params.px_per_beat + 24.0;
+    let default_h = BEAT_HEADER_H
         + PROGRAMMING_WHEEL_N_CHANNELS as f32 * CELL_H
         + CHANNEL_GROUP_GAP
-        + 34.0 + 62.0 + 24.0;
+        + 34.0 + 80.0 + 24.0;
 
     egui::Window::new("Programming Wheel")
         .default_pos([8.0, 8.0])
@@ -282,170 +216,194 @@ pub fn programming_wheel_editor_ui(
                 .show(ui, |ui| {
                     draw_transport(ui, &mut *params);
                     ui.separator();
-                    draw_pattern_grid(ui, &mut *params);
+                    draw_piano_roll(ui, &mut *params);
                 });
         });
 }
 
 fn draw_transport(ui: &mut egui::Ui, params: &mut ProgrammingWheelParams) {
     ui.horizontal(|ui| {
-        // Play / Stop button
         let (btn_label, btn_color) = if params.enabled {
             ("■ Stop", egui::Color32::from_rgb(220, 80, 60))
         } else {
             ("▶ Play", egui::Color32::from_rgb(60, 180, 80))
         };
         if ui
-            .add(
-                egui::Button::new(egui::RichText::new(btn_label).color(btn_color).strong())
-                    .min_size(egui::vec2(70.0, 24.0)),
-            )
+            .add(egui::Button::new(
+                egui::RichText::new(btn_label).color(btn_color).strong()
+            ).min_size(egui::vec2(70.0, 24.0)))
             .clicked()
         {
             params.enabled = !params.enabled;
             if params.enabled {
-                // Restart from just before step 0
                 params.reset_position();
             }
         }
 
-        // BPM = musical quarter-note beats per minute.
-        // RPM × steps_per_rev / steps_per_beat = quarter notes per minute.
-        let spb = PROGRAMMING_WHEEL_STEPS_PER_BEAT as f32;
-        let mut bpm = params.rpm * PROGRAMMING_WHEEL_N_STEPS as f32 / spb;
+        let bpr = PROGRAMMING_WHEEL_BEATS_PER_REV;
+        let mut bpm = params.rpm * bpr;
         ui.label("BPM:");
-        if ui
-            .add(egui::DragValue::new(&mut bpm).speed(0.5).range(10.0..=600.0))
-            .changed()
-        {
-            params.rpm = bpm * spb / PROGRAMMING_WHEEL_N_STEPS as f32;
+        if ui.add(egui::DragValue::new(&mut bpm).speed(0.5).range(10.0..=600.0)).changed() {
+            params.rpm = bpm / bpr;
         }
-        ui.monospace(format!("({:.3} RPM)", params.rpm));
+        ui.monospace(format!("({:.4} RPM)", params.rpm));
 
         ui.separator();
-        ui.checkbox(&mut params.show_pegs, "Show 3D pegs");
+        ui.label("Snap:");
+        egui::ComboBox::from_id_salt("snap_select")
+            .selected_text(snap_label(params.snap_beats))
+            .width(55.0)
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut params.snap_beats, 0.0,       "Free");
+                ui.selectable_value(&mut params.snap_beats, 0.25,      "1/16");
+                ui.selectable_value(&mut params.snap_beats, 1.0/3.0,   "1/8T");
+                ui.selectable_value(&mut params.snap_beats, 0.5,       "1/8");
+                ui.selectable_value(&mut params.snap_beats, 1.0,       "1/4");
+            });
+
+        ui.label("Zoom:");
+        ui.add(egui::Slider::new(&mut params.px_per_beat, 5.0..=60.0).show_value(false));
 
         ui.separator();
-        if ui.small_button("Reset pos").clicked() {
-            params.reset_position();
-        }
-        if ui.small_button("Clear all").clicked() {
-            params.clear_pattern();
-        }
+        ui.checkbox(&mut params.show_pegs, "3D pegs");
+        ui.separator();
+        if ui.small_button("Reset pos").clicked() { params.reset_position(); }
+        if ui.small_button("Clear all").clicked()  { params.clear_notes(); }
     });
 }
 
-fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut ProgrammingWheelParams) {
-    let total_grid_w = LABEL_W + PROGRAMMING_WHEEL_N_STEPS as f32 * CELL_W;
-    let total_grid_h = STEP_HEADER_H
-        + PROGRAMMING_WHEEL_N_CHANNELS as f32 * CELL_H
-        + CHANNEL_GROUP_GAP;
+fn channel_row_y(ch: usize, grid_top: f32) -> f32 {
+    let gap = if ch >= 2 { CHANNEL_GROUP_GAP } else { 0.0 };
+    grid_top + gap + ch as f32 * CELL_H
+}
+
+fn y_to_channel(y: f32, grid_top: f32) -> usize {
+    let rel = y - grid_top;
+    let adj = if rel >= 2.0 * CELL_H + CHANNEL_GROUP_GAP {
+        rel - CHANNEL_GROUP_GAP
+    } else {
+        rel
+    };
+    ((adj / CELL_H) as usize).min(PROGRAMMING_WHEEL_N_CHANNELS - 1)
+}
+
+fn note_screen_rect(
+    note: &WheelNote,
+    grid_left: f32,
+    grid_top: f32,
+    px_per_beat: f32,
+) -> egui::Rect {
+    let x = grid_left + note.beat * px_per_beat;
+    let w = (note.length * px_per_beat).max(2.0);
+    let y = channel_row_y(note.channel, grid_top);
+    egui::Rect::from_min_size(egui::pos2(x, y + 0.5), egui::vec2(w, CELL_H - 1.0))
+}
+
+enum NoteHit { Body, RightEdge }
+
+fn find_note_at(
+    pos: egui::Pos2,
+    notes: &[WheelNote],
+    grid_left: f32,
+    grid_top: f32,
+    px_per_beat: f32,
+) -> Option<(usize, NoteHit)> {
+    for (i, note) in notes.iter().enumerate().rev() {
+        let r = note_screen_rect(note, grid_left, grid_top, px_per_beat);
+        if r.contains(pos) {
+            let hit = if pos.x >= r.max.x - RESIZE_HANDLE_PX {
+                NoteHit::RightEdge
+            } else {
+                NoteHit::Body
+            };
+            return Some((i, hit));
+        }
+    }
+    None
+}
+
+fn draw_piano_roll(ui: &mut egui::Ui, params: &mut ProgrammingWheelParams) {
+    let px = params.px_per_beat;
+    let bpr = PROGRAMMING_WHEEL_BEATS_PER_REV;
+    let n_ch = PROGRAMMING_WHEEL_N_CHANNELS;
+
+    let total_w = LABEL_W + bpr * px;
+    let total_h = BEAT_HEADER_H + n_ch as f32 * CELL_H + CHANNEL_GROUP_GAP;
 
     egui::ScrollArea::both()
-        .id_salt("programming_wheel_grid_scroll")
+        .id_salt("programming_wheel_roll_scroll")
         .max_width(ui.available_width())
-        .max_height(ui.available_height().min(520.0))
+        .max_height(ui.available_height().min(500.0))
         .show(ui, |ui| {
             let (outer_rect, _) = ui.allocate_exact_size(
-                egui::vec2(total_grid_w, total_grid_h),
+                egui::vec2(total_w, total_h),
                 egui::Sense::hover(),
             );
             let painter = ui.painter_at(outer_rect);
+            let grid_left = outer_rect.min.x + LABEL_W;
+            let grid_top  = outer_rect.min.y + BEAT_HEADER_H;
 
-            // ── Step header ───────────────────────────────────────────────
-            let header_top = outer_rect.min.y;
-            for step in 0..PROGRAMMING_WHEEL_N_STEPS {
-                let x = outer_rect.min.x + LABEL_W + step as f32 * CELL_W;
-                if step % PROGRAMMING_WHEEL_STEPS_PER_BEAT == 0 {
-                    let beat = step / PROGRAMMING_WHEEL_STEPS_PER_BEAT + 1;
-                    let cx = x + CELL_W * (PROGRAMMING_WHEEL_STEPS_PER_BEAT as f32 * 0.5);
+            // ── Beat / bar header ─────────────────────────────────────────
+            let hdr_top = outer_rect.min.y;
+            let n_beats = bpr as usize;
+            // Bar numbers centred over each 4-beat span
+            for bar in 0..n_beats / 4 {
+                let bar_x = grid_left + bar as f32 * 4.0 * px;
+                let cx    = bar_x + 2.0 * px;
+                painter.text(
+                    egui::pos2(cx, hdr_top + 7.0),
+                    egui::Align2::CENTER_CENTER,
+                    format!("{}", bar + 1),
+                    egui::FontId::proportional(10.0),
+                    egui::Color32::from_rgb(200, 200, 215),
+                );
+                painter.line_segment(
+                    [egui::pos2(bar_x, hdr_top + 14.0), egui::pos2(bar_x, hdr_top + BEAT_HEADER_H)],
+                    egui::Stroke::new(1.0, egui::Color32::from_rgb(130, 130, 155)),
+                );
+            }
+            // Beat ticks within bars
+            for b in 0..n_beats {
+                let x = grid_left + b as f32 * px;
+                if b % 4 != 0 {
+                    let beat_in_bar = b % 4 + 1;
                     painter.text(
-                        egui::pos2(cx, header_top + STEP_HEADER_H * 0.4),
-                        egui::Align2::CENTER_CENTER,
-                        format!("{beat}"),
-                        egui::FontId::monospace(8.0),
-                        egui::Color32::from_rgb(180, 180, 190),
+                        egui::pos2(x + 2.0, hdr_top + BEAT_HEADER_H - 3.0),
+                        egui::Align2::LEFT_BOTTOM,
+                        format!("{beat_in_bar}"),
+                        egui::FontId::monospace(7.0),
+                        egui::Color32::from_rgb(120, 120, 140),
                     );
                     painter.line_segment(
-                        [
-                            egui::pos2(x, header_top + STEP_HEADER_H - 5.0),
-                            egui::pos2(x, header_top + STEP_HEADER_H),
-                        ],
-                        egui::Stroke::new(1.0, egui::Color32::from_rgb(120, 120, 135)),
-                    );
-                } else if step % 6 == 0 {
-                    painter.line_segment(
-                        [
-                            egui::pos2(x, header_top + STEP_HEADER_H - 3.0),
-                            egui::pos2(x, header_top + STEP_HEADER_H),
-                        ],
-                        egui::Stroke::new(1.0, egui::Color32::from_rgb(80, 80, 100)),
-                    );
-                } else if step % 4 == 0 {
-                    painter.line_segment(
-                        [
-                            egui::pos2(x, header_top + STEP_HEADER_H - 2.0),
-                            egui::pos2(x, header_top + STEP_HEADER_H),
-                        ],
-                        egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 70, 120)),
+                        [egui::pos2(x, hdr_top + 16.0), egui::pos2(x, hdr_top + BEAT_HEADER_H)],
+                        egui::Stroke::new(0.8, egui::Color32::from_rgb(90, 90, 115)),
                     );
                 }
+                // 8th-note marks
+                let xh = grid_left + (b as f32 + 0.5) * px;
+                painter.line_segment(
+                    [egui::pos2(xh, hdr_top + 20.0), egui::pos2(xh, hdr_top + BEAT_HEADER_H)],
+                    egui::Stroke::new(0.5, egui::Color32::from_rgb(60, 60, 80)),
+                );
             }
 
-            // ── Channel rows ──────────────────────────────────────────────
-            let grid_top = outer_rect.min.y + STEP_HEADER_H;
-
-            let cells_rect = egui::Rect::from_min_size(
-                egui::pos2(outer_rect.min.x + LABEL_W, grid_top),
-                egui::vec2(
-                    PROGRAMMING_WHEEL_N_STEPS as f32 * CELL_W,
-                    PROGRAMMING_WHEEL_N_CHANNELS as f32 * CELL_H + CHANNEL_GROUP_GAP,
-                ),
-            );
-            let interact_resp = ui.allocate_rect(cells_rect, egui::Sense::click_and_drag());
-
-            let ptr_pos = interact_resp.interact_pointer_pos();
-            let left_down = ui.input(|i| i.pointer.primary_down());
-            let right_down = ui.input(|i| i.pointer.secondary_down());
-
-            if interact_resp.drag_started() {
-                if let Some(pos) = ptr_pos {
-                    if let Some((step, ch, row_y)) = cell_at(pos, outer_rect.min, grid_top) {
-                        let _ = row_y;
-                        if left_down {
-                            let current = params.pattern[step][ch];
-                            params.drag_paint_val = Some(!current);
-                            params.pattern[step][ch] = !current;
-                        } else if right_down {
-                            params.drag_paint_val = Some(false);
-                            params.pattern[step][ch] = false;
-                        }
-                    }
-                }
-            } else if interact_resp.dragged() {
-                if let (Some(pos), Some(paint_val)) = (ptr_pos, params.drag_paint_val) {
-                    if let Some((step, ch, _)) = cell_at(pos, outer_rect.min, grid_top) {
-                        params.pattern[step][ch] = paint_val;
-                    }
-                }
-            } else if interact_resp.drag_stopped() {
-                params.drag_paint_val = None;
-            } else if interact_resp.clicked() {
-                if let Some(pos) = ptr_pos {
-                    if let Some((step, ch, _)) = cell_at(pos, outer_rect.min, grid_top) {
-                        params.pattern[step][ch] ^= true;
-                    }
-                }
-            }
-
-            // ── Draw cells ────────────────────────────────────────────────
-            let current_step = params.current_step;
-
-            for ch in 0..PROGRAMMING_WHEEL_N_CHANNELS {
-                let y_gap = if ch >= 2 { CHANNEL_GROUP_GAP } else { 0.0 };
-                let row_y = grid_top + y_gap + ch as f32 * CELL_H;
-
+            // ── Channel row backgrounds and labels ────────────────────────
+            for ch in 0..n_ch {
+                let row_y = channel_row_y(ch, grid_top);
                 let (lr, lg, lb) = channel_color_rgb(ch);
+                // Alternating row bg
+                let row_bg = if ch % 2 == 0 {
+                    egui::Color32::from_rgb(22, 22, 30)
+                } else {
+                    egui::Color32::from_rgb(18, 18, 25)
+                };
+                painter.rect_filled(
+                    egui::Rect::from_min_size(
+                        egui::pos2(grid_left, row_y),
+                        egui::vec2(bpr * px, CELL_H),
+                    ),
+                    0.0, row_bg,
+                );
                 painter.text(
                     egui::pos2(outer_rect.min.x + LABEL_W - 4.0, row_y + CELL_H * 0.5),
                     egui::Align2::RIGHT_CENTER,
@@ -453,161 +411,204 @@ fn draw_pattern_grid(ui: &mut egui::Ui, params: &mut ProgrammingWheelParams) {
                     egui::FontId::monospace(9.0),
                     egui::Color32::from_rgb(lr, lg, lb),
                 );
+            }
 
-                for step in 0..PROGRAMMING_WHEEL_N_STEPS {
-                    let cell_x = outer_rect.min.x + LABEL_W + step as f32 * CELL_W;
-                    let cell_rect = egui::Rect::from_min_size(
-                        egui::pos2(cell_x + 0.5, row_y + 0.5),
-                        egui::vec2(CELL_W - 1.0, CELL_H - 1.0),
+            // ── Beat grid lines ───────────────────────────────────────────
+            let grid_bottom = grid_top + n_ch as f32 * CELL_H + CHANNEL_GROUP_GAP;
+            for b in 0..=n_beats {
+                let x = grid_left + b as f32 * px;
+                let (sw, col) = if b % 4 == 0 {
+                    (1.0, egui::Color32::from_rgba_premultiplied(110, 110, 140, 120))
+                } else {
+                    (0.5, egui::Color32::from_rgba_premultiplied(55, 55, 80, 80))
+                };
+                painter.line_segment(
+                    [egui::pos2(x, grid_top), egui::pos2(x, grid_bottom)],
+                    egui::Stroke::new(sw, col),
+                );
+            }
+            // 8th-note grid lines (every 0.5 beats)
+            for b2 in 0..n_beats * 2 {
+                if b2 % 2 != 0 {
+                    let x = grid_left + b2 as f32 * px * 0.5;
+                    painter.line_segment(
+                        [egui::pos2(x, grid_top), egui::pos2(x, grid_bottom)],
+                        egui::Stroke::new(0.5, egui::Color32::from_rgba_premultiplied(40, 40, 65, 60)),
                     );
+                }
+            }
 
-                    let is_active = params.pattern[step][ch];
-                    let is_current = step == current_step && params.enabled;
-                    let is_beat_start = step % PROGRAMMING_WHEEL_STEPS_PER_BEAT == 0;
-                    let is_eighth     = step % 6 == 0 && !is_beat_start;
-                    let is_triplet    = step % 4 == 0 && step % 6 != 0 && !is_beat_start;
+            // ── Interaction area ──────────────────────────────────────────
+            let cells_rect = egui::Rect::from_min_size(
+                egui::pos2(grid_left, grid_top),
+                egui::vec2(bpr * px, n_ch as f32 * CELL_H + CHANNEL_GROUP_GAP),
+            );
+            let resp = ui.allocate_rect(cells_rect, egui::Sense::click_and_drag());
+            let ptr  = resp.interact_pointer_pos();
+            let snap = params.snap_beats;
 
-                    let color = match (is_active, is_current) {
-                        (true, true) => egui::Color32::from_rgb(255, 220, 30),
-                        (true, false) => {
-                            let (r8, g8, b8) = channel_color_rgb(ch);
-                            egui::Color32::from_rgb(r8, g8, b8)
-                        }
-                        (false, true) => egui::Color32::from_rgb(80, 65, 20),
-                        (false, false) => {
-                            if is_beat_start {
-                                egui::Color32::from_rgb(42, 40, 55)
-                            } else if is_eighth {
-                                egui::Color32::from_rgb(30, 30, 44)
-                            } else if is_triplet {
-                                egui::Color32::from_rgb(27, 22, 40)
-                            } else {
-                                egui::Color32::from_rgb(18, 18, 26)
-                            }
-                        }
-                    };
-
-                    painter.rect_filled(cell_rect, 1.0, color);
-
-                    if is_current {
-                        painter.rect_stroke(
-                            cell_rect,
-                            1.0,
-                            egui::Stroke::new(1.0, egui::Color32::from_rgb(255, 200, 0)),
-                            egui::StrokeKind::Outside,
-                        );
+            // Right-click: delete note
+            if resp.secondary_clicked() {
+                if let Some(pos) = ptr {
+                    if let Some((idx, _)) = find_note_at(pos, &params.notes, grid_left, grid_top, px) {
+                        params.notes.remove(idx);
+                        params.drag_state = DragState::None;
                     }
                 }
             }
 
-            // Grid lines — three tiers
-            let grid_bottom = grid_top
-                + PROGRAMMING_WHEEL_N_CHANNELS as f32 * CELL_H
-                + CHANNEL_GROUP_GAP;
-            for step in 0..=PROGRAMMING_WHEEL_N_STEPS {
-                let x = outer_rect.min.x + LABEL_W + step as f32 * CELL_W;
-                let (stroke_w, color) = if step % PROGRAMMING_WHEEL_STEPS_PER_BEAT == 0 {
-                    (1.0, egui::Color32::from_rgba_premultiplied(110, 110, 140, 140))
-                } else if step % 6 == 0 {
-                    (0.5, egui::Color32::from_rgba_premultiplied(60, 60, 90, 80))
-                } else if step % 4 == 0 {
-                    (0.5, egui::Color32::from_rgba_premultiplied(80, 50, 110, 70))
+            // Left drag start
+            if resp.drag_started() && ui.input(|i| i.pointer.primary_down()) {
+                if let Some(pos) = ptr {
+                    let raw_beat = (pos.x - grid_left) / px;
+                    let beat = snap_beat(raw_beat, snap).clamp(0.0, bpr - 0.001);
+                    let ch = y_to_channel(pos.y, grid_top);
+                    match find_note_at(pos, &params.notes, grid_left, grid_top, px) {
+                        Some((idx, NoteHit::RightEdge)) => {
+                            params.drag_state = DragState::Resizing { note_idx: idx };
+                        }
+                        Some((idx, NoteHit::Body)) => {
+                            let offset = raw_beat - params.notes[idx].beat;
+                            params.drag_state = DragState::Moving { note_idx: idx, beat_offset: offset };
+                        }
+                        None => {
+                            let default_len = if snap > 0.0 { snap } else { 0.25 };
+                            params.drag_state = DragState::Creating {
+                                channel: ch,
+                                start_beat: beat,
+                                end_beat: beat + default_len,
+                            };
+                        }
+                    }
+                }
+            }
+
+            // Left drag ongoing
+            if resp.dragged() {
+                if let Some(pos) = ptr {
+                    let raw_beat = (pos.x - grid_left) / px;
+                    let beat = snap_beat(raw_beat, snap).clamp(0.0, bpr);
+                    match &mut params.drag_state {
+                        DragState::Creating { end_beat, .. } => {
+                            *end_beat = beat;
+                        }
+                        DragState::Moving { note_idx, beat_offset } => {
+                            let idx = *note_idx;
+                            let offset = *beat_offset;
+                            let new_beat = snap_beat(raw_beat - offset, snap).rem_euclid(bpr);
+                            params.notes[idx].beat = new_beat;
+                        }
+                        DragState::Resizing { note_idx } => {
+                            let idx = *note_idx;
+                            let start = params.notes[idx].beat;
+                            let new_len = (beat - start).max(0.01);
+                            params.notes[idx].length = new_len;
+                        }
+                        DragState::None => {}
+                    }
+                }
+            }
+
+            // Left drag released
+            if resp.drag_stopped() {
+                if let DragState::Creating { channel, start_beat, end_beat } = params.drag_state {
+                    let len = (end_beat - start_beat).abs().max(0.01);
+                    let beat = start_beat.min(end_beat);
+                    params.notes.push(WheelNote::new(channel, beat, len));
+                }
+                params.drag_state = DragState::None;
+            }
+
+            // Single click on empty: create note with default length
+            if resp.clicked() && ui.input(|i| i.pointer.primary_pressed()) {
+                if let Some(pos) = ptr {
+                    if find_note_at(pos, &params.notes, grid_left, grid_top, px).is_none() {
+                        let raw_beat = (pos.x - grid_left) / px;
+                        let beat = snap_beat(raw_beat, snap).clamp(0.0, bpr - 0.001);
+                        let ch = y_to_channel(pos.y, grid_top);
+                        let default_len = if snap > 0.0 { snap } else { 0.25 };
+                        params.notes.push(WheelNote::new(ch, beat, default_len));
+                    }
+                }
+            }
+
+            // ── Draw notes ────────────────────────────────────────────────
+            // Preview note being created
+            if let DragState::Creating { channel, start_beat, end_beat } = params.drag_state {
+                let preview_beat = start_beat.min(end_beat);
+                let preview_len  = (end_beat - start_beat).abs().max(0.01);
+                let preview = WheelNote::new(channel, preview_beat, preview_len);
+                let r = note_screen_rect(&preview, grid_left, grid_top, px);
+                let (cr, cg, cb) = channel_color_rgb(channel);
+                painter.rect_filled(r, 2.0, egui::Color32::from_rgba_premultiplied(cr, cg, cb, 140));
+                painter.rect_stroke(r, 2.0, egui::Stroke::new(1.0, egui::Color32::from_rgb(cr, cg, cb)), egui::StrokeKind::Outside);
+            }
+
+            for (i, note) in params.notes.iter().enumerate() {
+                let r = note_screen_rect(note, grid_left, grid_top, px);
+                let (cr, cg, cb) = channel_color_rgb(note.channel);
+
+                let is_moving   = matches!(&params.drag_state, DragState::Moving   { note_idx, .. } if *note_idx == i);
+                let is_resizing = matches!(&params.drag_state, DragState::Resizing { note_idx }      if *note_idx == i);
+
+                let fill = if is_moving || is_resizing {
+                    egui::Color32::from_rgba_premultiplied(
+                        cr.saturating_add(40), cg.saturating_add(40), cb.saturating_add(40), 220,
+                    )
                 } else {
-                    continue;
+                    egui::Color32::from_rgb(cr, cg, cb)
                 };
+                painter.rect_filled(r, 2.0, fill);
+
+                // Bright left-edge marker (note-on accent)
                 painter.line_segment(
-                    [egui::pos2(x, grid_top), egui::pos2(x, grid_bottom)],
-                    egui::Stroke::new(stroke_w, color),
+                    [egui::pos2(r.min.x, r.min.y), egui::pos2(r.min.x, r.max.y)],
+                    egui::Stroke::new(2.0, egui::Color32::WHITE),
+                );
+
+                // Resize handle — darker right strip
+                let handle_rect = egui::Rect::from_min_max(
+                    egui::pos2(r.max.x - RESIZE_HANDLE_PX, r.min.y),
+                    r.max,
+                );
+                painter.rect_filled(handle_rect, 0.0, egui::Color32::from_rgba_premultiplied(0, 0, 0, 60));
+            }
+
+            // ── Playhead ──────────────────────────────────────────────────
+            if params.enabled {
+                let ph_x = grid_left + params.current_beat * px;
+                painter.line_segment(
+                    [egui::pos2(ph_x, grid_top - BEAT_HEADER_H), egui::pos2(ph_x, grid_bottom)],
+                    egui::Stroke::new(1.5, egui::Color32::from_rgba_premultiplied(255, 220, 50, 200)),
                 );
             }
         });
 
+    // Row-level quick-fill ops
     ui.add_space(4.0);
     ui.horizontal(|ui| {
-        ui.label("Row ops:");
-        if ui.small_button("Clear chute row").clicked() {
-            for s in &mut params.pattern {
-                s[0] = false;
+        ui.label("Fill:");
+        if ui.small_button("Default melody").clicked() {
+            use crate::resources::programming_wheel_params::*;
+            params.notes = marble_machine_default_notes_pub();
+        }
+        if ui.small_button("Kick quarter").clicked() {
+            params.notes.retain(|n| n.channel != WHEEL_CH_CHUTE);
+            let bpr = PROGRAMMING_WHEEL_BEATS_PER_REV as usize;
+            for b in (0..bpr).step_by(1) {
+                params.notes.push(WheelNote::new(WHEEL_CH_CHUTE, b as f32, 0.2));
             }
         }
-        if ui.small_button("Clear drop row").clicked() {
-            for s in &mut params.pattern {
-                s[1] = false;
+        if ui.small_button("Snare 2+4").clicked() {
+            params.notes.retain(|n| n.channel != WHEEL_CH_DROP);
+            for bar in 0..16_usize {
+                let b = bar as f32 * 4.0;
+                params.notes.push(WheelNote::new(WHEEL_CH_DROP, b + 1.0, 0.2));
+                params.notes.push(WheelNote::new(WHEEL_CH_DROP, b + 3.0, 0.2));
             }
         }
-        if ui.small_button("Clear all vib rows").clicked() {
-            for s in &mut params.pattern {
-                for ch in 2..PROGRAMMING_WHEEL_N_CHANNELS {
-                    s[ch] = false;
-                }
-            }
+        if ui.small_button("Clear vibs").clicked() {
+            params.notes.retain(|n| n.channel < WHEEL_CH_VIB_FIRST);
         }
     });
-    ui.horizontal(|ui| {
-        ui.label("Quick fill:");
-        quick_fill_buttons(ui, &mut params.pattern);
-    });
-}
-
-/// Convert pointer position to (step, channel, row_y) within the grid, or None.
-fn cell_at(
-    pos: egui::Pos2,
-    outer_min: egui::Pos2,
-    grid_top: f32,
-) -> Option<(usize, usize, f32)> {
-    let rel_x = pos.x - (outer_min.x + LABEL_W);
-    let rel_y = pos.y - grid_top;
-
-    if rel_x < 0.0 || rel_y < 0.0 {
-        return None;
-    }
-
-    // Account for the visual gap inserted after channel 1
-    let adj_y = if rel_y >= 2.0 * CELL_H + CHANNEL_GROUP_GAP {
-        rel_y - CHANNEL_GROUP_GAP
-    } else {
-        rel_y
-    };
-
-    let step = (rel_x / CELL_W) as usize;
-    let ch = (adj_y / CELL_H) as usize;
-
-    if step < PROGRAMMING_WHEEL_N_STEPS && ch < PROGRAMMING_WHEEL_N_CHANNELS {
-        Some((step, ch, grid_top + ch as f32 * CELL_H))
-    } else {
-        None
-    }
-}
-
-fn quick_fill_buttons(ui: &mut egui::Ui, pattern: &mut Vec<Vec<bool>>) {
-    if ui.small_button("Chute quarter").clicked() {
-        for step in 0..PROGRAMMING_WHEEL_N_STEPS {
-            pattern[step][0] = step % PROGRAMMING_WHEEL_STEPS_PER_BEAT == 0;
-        }
-    }
-    if ui.small_button("Drop 8ths").clicked() {
-        for step in 0..PROGRAMMING_WHEEL_N_STEPS {
-            pattern[step][1] = step % 6 == 0;
-        }
-    }
-    if ui.small_button("Chute triplets").clicked() {
-        for step in 0..PROGRAMMING_WHEEL_N_STEPS {
-            pattern[step][0] = step % 4 == 0;
-        }
-    }
-    if ui.small_button("Vib C-major arp").clicked() {
-        let vib_steps = [0usize, 24, 48, 72, 96, 120, 144, 168];
-        let vib_bars = [2usize, 6, 9, 14];
-        for step in 0..PROGRAMMING_WHEEL_N_STEPS {
-            for ch in 2..PROGRAMMING_WHEEL_N_CHANNELS {
-                pattern[step][ch] = false;
-            }
-        }
-        for (i, &step) in vib_steps.iter().enumerate() {
-            let ch = vib_bars[i % vib_bars.len()];
-            if ch < PROGRAMMING_WHEEL_N_CHANNELS {
-                pattern[step][ch] = true;
-            }
-        }
-    }
 }
