@@ -1,6 +1,10 @@
 {
   "framework": null,
-  "buildCommand": null,
+  "buildCommand": "",
+  "outputDirectory": "dist",
+  "env": {
+    "TRUNK_NO_HOT_RELOAD": "true"
+  },
   "headers": [
     {
       "source": "/(.*)\\.wasm",
