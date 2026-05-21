@@ -24,4 +24,9 @@ node_modules/
 .idea/
 .vscode/
 .claude/
+
+# Vercel
 .vercel
+
+# Git
+.DS_Store

@@ -1,0 +1,205 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 0.1.0)'
+        required: true
+        default: '0.1.0'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-macos-universal:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain with targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+
+      - name: Cache cargo dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: target
+
+      - name: Build release binaries for both architectures
+        run: |
+          echo "Building for x86_64 (Intel)..."
+          cargo build --release --target x86_64-apple-darwin
+
+          echo "Building for aarch64 (Apple Silicon)..."
+          cargo build --release --target aarch64-apple-darwin
+
+      - name: Create universal binary using lipo
+        run: |
+          # Combine both architectures into a single universal binary
+          lipo -create \
+            target/x86_64-apple-darwin/release/mm3sim \
+            target/aarch64-apple-darwin/release/mm3sim \
+            -output target/universal-apple-darwin/release/mm3sim
+
+      - name: Verify universal binary
+        run: |
+          file target/universal-apple-darwin/release/mm3sim
+          lipo -info target/universal-apple-darwin/release/mm3sim
+
+      - name: Upload macOS Universal artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mm3sim-macos-universal
+          path: target/universal-apple-darwin/release/mm3sim
+
+  build-macos-arm64:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache cargo dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: target
+
+      - name: Build release binary (macOS Apple Silicon native)
+        run: cargo build --release --target aarch64-apple-darwin
+
+      - name: Upload macOS ARM64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mm3sim-macos-arm64
+          path: target/aarch64-apple-darwin/release/mm3sim
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: target
+
+      - name: Build release binary (Windows)
+        run: |
+          cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mm3sim-windows
+          path: target/x86_64-pc-windows-msvc/release/mm3sim.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libx11-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libasound2-dev \
+            libudev-dev \
+            libwayland-dev \
+            wayland-protocols \
+            libssl-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache cargo dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: target
+
+      - name: Build release binary (Linux)
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mm3sim-linux
+          path: target/x86_64-unknown-linux-gnu/release/mm3sim
+
+  create-release:
+    needs: [build-macos-universal, build-macos-arm64, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && github.event_name != 'pull_request')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mm3sim-*
+          merge-multiple: true
+          path: dist/
+
+      - name: List downloaded files
+        run: ls -la dist/
+
+      # Get version from tag or workflow input
+      - name: Determine release version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" == "refs/tags/*" ]; then
+            # Extract version from git tag (e.g., v0.1.0 -> 0.1.0)
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            # Fallback for branch pushes
+            TAG=$(git describe --tags --exact-match 2>/dev/null || echo "v0.1.0")
+            VERSION="${TAG#v}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/mm3sim-macos-universal/*
+            dist/mm3sim-macos-arm64/*
+            dist/mm3sim-windows/*
+            dist/mm3sim-linux/*
+          generate_release_notes: true
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}

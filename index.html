@@ -67,11 +67,57 @@
           (window.vaq = window.vaq || []).push(arguments);
         };
 
-      window.addEventListener("TrunkApplicationStarted", () => {
+      // Handle WASM loading and hide loader when app is ready
+      async function handleWasmLoading() {
         const loader = document.getElementById("loader");
-        loader.classList.add("hidden");
-        loader.addEventListener("transitionend", () => loader.remove(), { once: true });
-      });
+
+        try {
+          // Set a timeout to eventually hide the loader (failsafe)
+          const loadPromise = new Promise((resolve, reject) => {
+            const script = document.currentScript;
+
+            // Listen for script load/error events
+            script.addEventListener('load', resolve);
+            script.addEventListener('error', reject);
+
+            // Failsafe: hide loader after 30 seconds if still loading
+            setTimeout(() => {
+              console.warn("WASM load timeout (30s), hiding loader");
+              if (loader && !loader.classList.contains('hidden')) {
+                loader.classList.add("hidden");
+                loader.addEventListener("transitionend", () => loader.remove(), { once: true });
+              }
+            }, 30000);
+          });
+
+          await loadPromise;
+          console.log("WASM application loaded successfully");
+        } catch (error) {
+          console.error("Failed to load WASM application:", error);
+
+          // Hide loader on error after a short delay
+          setTimeout(() => {
+            if (loader && !loader.classList.contains('hidden')) {
+              loader.classList.add("hidden");
+              loader.addEventListener("transitionend", () => loader.remove(), { once: true });
+            }
+          }, 2000);
+        }
+      }
+
+      // Also listen for TrunkApplicationStarted event for local dev
+      if (window.TrunkApplicationStarted) {
+        window.addEventListener("TrunkApplicationStarted", () => {
+          const loader = document.getElementById("loader");
+          if (loader && !loader.classList.contains('hidden')) {
+            loader.classList.add("hidden");
+            loader.addEventListener("transitionend", () => loader.remove(), { once: true });
+          }
+        });
+      }
+
+      // Start loading when DOM is ready
+      document.addEventListener("DOMContentLoaded", handleWasmLoading);
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
   </body>
