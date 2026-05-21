@@ -409,12 +409,10 @@ fn render_summary(ui: &mut egui::Ui, runs: &[Run]) {
 
 fn render_help_panel(ui: &mut egui::Ui) {
     egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.heading("Overview");
+        ui.heading("MM3Sim — Marble Machine Trigger Simulator");
         ui.label(
-            "MM3Sim models a marble-machine trigger for a snare drum: a ball rolled down a \
-             shaped chute and a ball dropped from above must arrive at the snare head \
-             simultaneously. Tune the chute geometry until Δt is as close to zero — and \
-             as consistent — as possible."
+            "Tune a snare drum trigger so two marbles arrive simultaneously. Click to spawn pairs, \
+             then adjust the chute until Δt ≈ 0 ms with minimal variance."
         );
 
         ui.add_space(8.0);
@@ -423,20 +421,19 @@ fn render_help_panel(ui: &mut egui::Ui) {
             .id_salt("help_controls")
             .default_open(true)
             .show(ui, |ui| {
-                egui::Grid::new("help_controls_grid").num_columns(2).spacing([12.0, 3.0]).show(ui, |ui| {
-                    let rows: &[(&str, &str)] = &[
-                        ("Right Click + Drag",      "Orbit camera"),
-                        ("Middle Click + Drag",     "Pan camera"),
-                        ("Scroll Wheel",            "Zoom in / out (ignored when cursor is over a panel)"),
-                        ("Drag handle sphere",      "Move that Bézier control point"),
-                        ("Drag chute body",         "Translate the entire chute curve as a unit"),
-                    ];
-                    for (key, desc) in rows {
-                        ui.monospace(*key);
-                        ui.label(*desc);
-                        ui.end_row();
-                    }
-                });
+                let rows: &[(&str, &str)] = &[
+                    ("Left Click",          "Spawn marble pair"),
+                    ("Right Click + Drag",  "Orbit camera"),
+                    ("Middle Click + Drag", "Pan camera"),
+                    ("Scroll Wheel",        "Zoom in / out"),
+                    ("Drag handle sphere",  "Move Bézier control point"),
+                    ("Drag chute body",     "Translate entire curve"),
+                ];
+                for (key, desc) in rows {
+                    ui.label(egui::RichText::new(*key).monospace());
+                    ui.label(*desc);
+                    ui.end_row();
+                }
             });
 
         ui.add_space(4.0);
@@ -445,19 +442,21 @@ fn render_help_panel(ui: &mut egui::Ui) {
             .id_salt("help_marbles")
             .default_open(true)
             .show(ui, |ui| {
-                egui::Grid::new("help_marbles_grid").num_columns(2).spacing([12.0, 3.0]).show(ui, |ui| {
-                    ui.label(egui::RichText::new("Drop marble").color(egui::Color32::from_rgb(242, 89, 38)).strong());
-                    ui.label("Falls vertically ~1 m above the snare centre with a small random \
-                              lateral jitter. Its flight time is nearly fixed by gravity.");
+                let rows: &[(&str, &str, Option<egui::Color32>)] = &[
+                    ("Drop marble", "Falls ~1 m with small random lateral jitter. Flight time nearly fixed by gravity.", Some(egui::Color32::from_rgb(242, 89, 38))),
+                    ("Chute marble", "Slides down the chute, lifts off, then flies to snare. Chute shape controls slide duration and liftoff velocity.", Some(egui::Color32::from_rgb(51, 115, 230))),
+                ];
+                for (label, desc, color) in rows {
+                    if let Some(c) = color {
+                        ui.label(egui::RichText::new(*label).weak().color(*c));
+                    } else {
+                        ui.label(*label);
+                        ui.label(*desc);
+                    }
                     ui.end_row();
-                    ui.label(egui::RichText::new("Chute marble").color(egui::Color32::from_rgb(51, 115, 230)).strong());
-                    ui.label("Starts at rest at the top of the Bézier chute, slides down, \
-                              leaves the surface, then flies to the snare. Chute shape \
-                              controls both slide duration and liftoff velocity.");
-                    ui.end_row();
-                });
+                }
                 ui.add_space(2.0);
-                ui.label("Both marbles are steel: 20 mm diameter, 14 g, restitution 0.60, friction 0.18.");
+                ui.label("Both: 20 mm steel marbles, 14 g mass, restitution 0.60, friction 0.18.");
             });
 
         ui.add_space(4.0);
@@ -466,40 +465,22 @@ fn render_help_panel(ui: &mut egui::Ui) {
             .id_salt("help_stats")
             .default_open(true)
             .show(ui, |ui| {
-                egui::Grid::new("help_stats_grid").num_columns(2).spacing([12.0, 4.0]).show(ui, |ui| {
-                    let rows: &[(&str, &str)] = &[
-                        ("Δt",
-                         "Chute flight time minus the 450 ms reference (theoretical 1 m free-fall). \
-                          Negative = chute arrived early, positive = chute arrived late. Target: 0 ms."),
-                        ("fly",   "Flight time in seconds from spawn to snare contact."),
-                        ("spd",   "Speed magnitude at snare impact (m/s)."),
-                        ("AoA",
-                         "Angle of Attack: angle between the marble's velocity vector and the \
-                          snare surface normal at impact. 0° = perfectly perpendicular \
-                          (maximum energy transfer). 90° = grazing."),
-                        ("KE",
-                         "Kinetic energy at impact: ½mv² in millijoules. Marble mass = 14 g."),
-                        ("vx / vy / vz",
-                         "Velocity components at impact. x = lateral (across snare), \
-                          y = vertical (down = negative), z = along the arm."),
-                        ("spin",
-                         "Surface speed from angular velocity: ω × r (m/s). \
-                          Indicates how much the marble is spinning at impact."),
-                        ("slide",
-                         "Duration (s) the chute marble stayed in contact with the chute \
-                          surface before lifting off."),
-                        ("liftoff vy / vz",
-                         "Velocity components at the moment the chute marble detaches from \
-                          the chute. Determines the free-flight trajectory to the snare."),
-                        ("liftoff spd",  "Speed magnitude at liftoff: √(vy² + vz²)."),
-                        ("vh (live only)", "Horizontal speed in the XZ plane while in flight."),
-                    ];
-                    for (term, desc) in rows {
-                        ui.label(egui::RichText::new(*term).strong().monospace());
-                        ui.label(*desc);
-                        ui.end_row();
-                    }
-                });
+                let rows: &[(&str, &str)] = &[
+                    ("Δt", "Chute flight − 450 ms reference (theoretical 1 m free-fall). Target: 0 ms."),
+                    ("fly", "Flight time from spawn to snare impact (s)."),
+                    ("spd", "Impact speed magnitude (m/s)."),
+                    ("AoA", "Angle of Attack at impact. 0° = perpendicular (ideal), 90° = grazing."),
+                    ("KE", "Kinetic energy at impact in mJ: ½mv², marble mass = 14 g."),
+                    ("vx/vy/vz", "Velocity components at impact. y is vertical (down = negative)."),
+                    ("spin", "Surface speed ω × r (m/s) — spin rate at impact."),
+                    ("slide", "Time (s) chute marble stayed in contact before liftoff."),
+                    ("liftoff spd", "Liftoff velocity √(vy² + vz²) — determines free-flight path."),
+                ];
+                for (term, desc) in rows {
+                    ui.label(egui::RichText::new(*term).monospace().strong());
+                    ui.label(*desc);
+                    ui.end_row();
+                }
             });
 
         ui.add_space(4.0);
@@ -508,45 +489,26 @@ fn render_help_panel(ui: &mut egui::Ui) {
             .id_salt("help_chute")
             .default_open(true)
             .show(ui, |ui| {
-                ui.label(
-                    "The chute is a cubic Bézier curve in the Y–Z plane (height × depth). \
-                     All coordinates are relative to the snare top-face centre."
-                );
+                ui.label("Cubic Bézier curve in Y–Z plane; coordinates relative to snare centre.");
                 ui.add_space(4.0);
-                egui::Grid::new("help_chute_grid").num_columns(2).spacing([12.0, 3.0]).show(ui, |ui| {
-                    let rows: &[(&str, &str)] = &[
-                        ("P3  exit",
-                         "Bottom exit point — where the marble leaves the chute."),
-                        ("CP2 handle 2",
-                         "Second Bézier control point. Controls curvature near the exit."),
-                        ("CP1 handle 1",
-                         "First Bézier control point. Controls curvature near the entry."),
-                        ("P0  entry",
-                         "Top entry point — where the marble is spawned."),
-                        ("Straight line",
-                         "Collapses CP1/CP2 onto the P0–P3 line (pure ramp). \
-                          Curve handle spheres are hidden automatically in this mode."),
-                        ("Show curve handles",
-                         "Toggle the yellow (CP1) and orange (CP2) control-point spheres \
-                          in the 3D viewport. Has no effect in straight-line mode."),
-                        ("Show endpoint handles",
-                         "Toggle the green (P0 entry) and red (P3 exit) endpoint spheres."),
-                        ("Marble collisions",
-                         "Enable physical marble–marble interaction (off by default)."),
-                        ("Reset",
-                         "Restore all Bézier points to their factory defaults."),
-                    ];
-                    for (key, desc) in rows {
-                        ui.label(egui::RichText::new(*key).strong());
-                        ui.label(*desc);
-                        ui.end_row();
-                    }
-                });
+                let rows: &[(&str, &str)] = &[
+                    ("P3 exit", "Bottom exit — where marbles leave the chute."),
+                    ("CP2 handle 2", "Second control point — curvature near exit."),
+                    ("CP1 handle 1", "First control point — curvature near entry."),
+                    ("P0 entry", "Top entry — where marbles spawn."),
+                    ("Straight line", "Pure ramp mode: collapses curve handles to P0–P3 line."),
+                    ("Show curve handles", "Toggle yellow (CP2) and orange (CP1) spheres. Hidden in straight-line mode."),
+                    ("Show endpoint handles", "Toggle green (P0) and red (P3) endpoints."),
+                    ("Marble collisions", "Enable marble–marble physics (off by default)."),
+                    ("Reset", "Restore factory Bézier defaults."),
+                ];
+                for (key, desc) in rows {
+                    ui.label(egui::RichText::new(*key).strong());
+                    ui.label(*desc);
+                    ui.end_row();
+                }
                 ui.add_space(2.0);
-                ui.label(
-                    "Tip: drag a handle sphere directly in the 3D view to reshape the curve, \
-                     or drag anywhere on the chute body to translate the entire curve at once."
-                );
+                ui.label("Tip: drag handle spheres directly in 3D to reshape the curve.");
             });
 
         ui.add_space(4.0);
@@ -555,25 +517,17 @@ fn render_help_panel(ui: &mut egui::Ui) {
             .id_salt("help_pivot")
             .default_open(false)
             .show(ui, |ui| {
-                ui.label(
-                    "The snare drum is mounted on a counterweighted pivot arm. The arm angle \
-                     (Pivot θ in the Stats panel) determines the tilt of the snare head, \
-                     which affects AoA."
-                );
-                ui.add_space(2.0);
-                egui::Grid::new("help_pivot_grid").num_columns(2).spacing([12.0, 3.0]).show(ui, |ui| {
-                    let rows: &[(&str, &str)] = &[
-                        ("θ < 0", "Snare-side of the arm is lower (snare tilted toward chute)."),
-                        ("θ = 0", "Arm level; snare head is horizontal."),
-                        ("θ > 0", "Counterweight side is lower; snare tilted away from chute."),
-                        ("Limits", "Revolute joint limits: arm rests at the upper limit (−SNARE_REST_DEG) and can tilt up to MAX_TILT_DEG further on impact."),
-                    ];
-                    for (k, v) in rows {
-                        ui.label(egui::RichText::new(*k).monospace().strong());
-                        ui.label(*v);
-                        ui.end_row();
-                    }
-                });
+                ui.label("Counterweighted arm angle controls snare tilt and affects AoA.");
+                let rows: &[(&str, &str)] = &[
+                    ("θ < 0", "Snare side lower — tilted toward chute."),
+                    ("θ = 0", "Arm level; snare head horizontal."),
+                    ("θ > 0", "Counterweight side lower — tilted away from chute."),
+                ];
+                for (k, v) in rows {
+                    ui.label(egui::RichText::new(*k).monospace().strong());
+                    ui.label(*v);
+                    ui.end_row();
+                }
             });
 
         ui.add_space(4.0);
@@ -582,23 +536,19 @@ fn render_help_panel(ui: &mut egui::Ui) {
             .id_salt("help_summary")
             .default_open(false)
             .show(ui, |ui| {
-                egui::Grid::new("help_summary_grid").num_columns(2).spacing([12.0, 3.0]).show(ui, |ui| {
-                    let rows: &[(&str, &str)] = &[
-                        ("n",       "Number of complete runs (both marbles reached the snare)."),
-                        ("mean",    "Arithmetic average over all complete runs."),
-                        ("σ (std)", "Sample standard deviation (divides by n−1). \
-                                     Shown as ± after the mean."),
-                        ("[a … b]", "Min and max observed values. Only shown for Δt."),
-                        ("Reset",   "Clears all run history and resets the run counter to 1."),
-                    ];
-                    for (k, v) in rows {
-                        ui.label(egui::RichText::new(*k).strong().monospace());
-                        ui.label(*v);
-                        ui.end_row();
-                    }
-                });
+                let rows: &[(&str, &str)] = &[
+                    ("n", "Complete runs (both marbles hit snare)."),
+                    ("mean", "Average across all complete runs."),
+                    ("σ std", "Sample standard deviation (÷ n−1), shown as ± after mean."),
+                    ("[min … max]", "Range for Δt only."),
+                ];
+                for (k, v) in rows {
+                    ui.label(egui::RichText::new(*k).monospace().strong());
+                    ui.label(*v);
+                    ui.end_row();
+                }
                 ui.add_space(2.0);
-                ui.label("Goal: minimise |mean Δt| (timing accuracy) and σ Δt (consistency). Δt is relative to the 450 ms reference, not the measured drop time.");
+                ui.label("Goal: minimise |mean Δt| and σ Δt for tight, consistent triggers.");
             });
 
         ui.add_space(4.0);
@@ -624,13 +574,25 @@ fn render_help_panel(ui: &mut egui::Ui) {
                                       higher during chute contact, spike at snare impact."),
                     ];
                     for (k, v) in rows {
-                        ui.label(egui::RichText::new(*k).strong().monospace());
+                        ui.label(egui::RichText::new(*k).monospace().strong());
                         ui.label(*v);
                         ui.end_row();
                     }
                 });
                 ui.label("Multiple graphs can be open simultaneously. Close via the × button \
                           or \"Graph\" toggle in the run entry.");
+            });
+
+        ui.add_space(4.0);
+
+        egui::CollapsingHeader::new(egui::RichText::new("Vibraphone Mode").strong())
+            .id_salt("help_vib")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.label(
+                    "Click the \"Vib\" dropdown in Stats to switch modes. Each run selects one of 37 \
+                     bars (F3–E5). Hit location determines which note plays via a physical node system."
+                );
             });
     });
 }
