@@ -131,7 +131,7 @@ pub const VIB_CW_RADIUS: f32 = 0.012;
 pub const VIB_CW_HALF_HEIGHT: f32 = 0.018;
 
 pub const VIB_DROP_BAR_INDEX: u32 = 6;
-pub const VIB_SPAWN_HEIGHT: f32 = 0.80; // height above bar top to spawn marble
+pub const VIB_SPAWN_HEIGHT: f32 = 1.0; // height above bar top to spawn marble
 
 pub const VIB_BAR_COLOR: (f32, f32, f32) = (0.82, 0.73, 0.33);
 pub const VIB_BAR_METALLIC: f32 = 0.90;
@@ -160,7 +160,7 @@ pub const CHUTE_WIDTH: f32 = 0.02;
 // Programming Wheel
 // =============================================================================
 
-pub const PROGRAMMING_WHEEL_RADIUS: f32 = 0.5;         // 1 m diameter cylinder
+pub const PROGRAMMING_WHEEL_RADIUS: f32 = 0.5; // 1 m diameter cylinder
 /// 16 bars × 4 beats/bar = 64 beats per revolution.
 /// At 1.875 RPM: 1.875 × 64 = 120 musical BPM.
 pub const PROGRAMMING_WHEEL_BEATS_PER_REV: f32 = 64.0;
@@ -168,8 +168,8 @@ pub const PROGRAMMING_WHEEL_BEATS_PER_REV: f32 = 64.0;
 pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 39;
 /// 120 BPM ÷ 64 beats/rev = 1.875 RPM
 pub const PROGRAMMING_WHEEL_RPM_DEFAULT: f32 = 1.875;
-pub const PROGRAMMING_WHEEL_Z_POS: f32 = 1.4;         // world Z (positive from snare)
-pub const PROGRAMMING_WHEEL_Y_POS: f32 = 0.8;         // world Y (cylinder centre)
-pub const PROGRAMMING_WHEEL_WIDTH: f32 = 2.2;         // total X span of the wheel
-pub const PROGRAMMING_WHEEL_READER_GAP: f32 = 0.014;  // gap between cylinder surface and reader bar
+pub const PROGRAMMING_WHEEL_Z_POS: f32 = 1.4; // world Z (positive from snare)
+pub const PROGRAMMING_WHEEL_Y_POS: f32 = 0.8; // world Y (cylinder centre)
+pub const PROGRAMMING_WHEEL_WIDTH: f32 = 2.2; // total X span of the wheel
+pub const PROGRAMMING_WHEEL_READER_GAP: f32 = 0.014; // gap between cylinder surface and reader bar
 pub const PROGRAMMING_WHEEL_READER_HALF_H: f32 = 0.012; // reader bar cross-section half-size

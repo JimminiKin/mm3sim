@@ -217,21 +217,23 @@ pub fn marble_machine_default_notes_pub() -> Vec<WheelNote> {
     marble_machine_default_notes()
 }
 
-pub fn channel_name(ch: usize) -> &'static str {
+/// Convert vibraphone channel to musical note name.
+/// Channel 2 = bar 0 = F3, each subsequent channel is +1 semitone.
+pub fn channel_name(ch: usize) -> String {
     match ch {
-        WHEEL_CH_CHUTE => "Chute",
-        WHEEL_CH_DROP => "Drop",
-        2  => "Vib 00", 3  => "Vib 01", 4  => "Vib 02", 5  => "Vib 03",
-        6  => "Vib 04", 7  => "Vib 05", 8  => "Vib 06", 9  => "Vib 07",
-        10 => "Vib 08", 11 => "Vib 09", 12 => "Vib 10", 13 => "Vib 11",
-        14 => "Vib 12", 15 => "Vib 13", 16 => "Vib 14", 17 => "Vib 15",
-        18 => "Vib 16", 19 => "Vib 17", 20 => "Vib 18", 21 => "Vib 19",
-        22 => "Vib 20", 23 => "Vib 21", 24 => "Vib 22", 25 => "Vib 23",
-        26 => "Vib 24", 27 => "Vib 25", 28 => "Vib 26", 29 => "Vib 27",
-        30 => "Vib 28", 31 => "Vib 29", 32 => "Vib 30", 33 => "Vib 31",
-        34 => "Vib 32", 35 => "Vib 33", 36 => "Vib 34", 37 => "Vib 35",
-        38 => "Vib 36",
-        _ => "?",
+        WHEEL_CH_CHUTE => "Chute".to_string(),
+        WHEEL_CH_DROP => "Drop".to_string(),
+        // Vibraphone bars (channels 2-38 = bars 0-36)
+        ch if ch >= WHEEL_CH_VIB_FIRST => {
+            const NOTE_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+            let bar_idx = ch - WHEEL_CH_VIB_FIRST;
+            // Bar 0 = F3 (semitone 5), each bar is +1 semitone
+            let semitone = 5 + bar_idx;
+            let note_name = NOTE_NAMES[(semitone % 12) as usize];
+            let octave = 3 + semitone / 12;
+            format!("{}{}", note_name, octave)
+        },
+        _ => "?".to_string(),
     }
 }
 
