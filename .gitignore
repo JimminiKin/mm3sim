@@ -6,13 +6,6 @@
 /dist/
 /pkg/
 
-# Bevy and WASM
-*.wasm
-*.js
-*.ts
-*.js.map
-*.wasm.map
-
 # Misc
 .DS_Store
 node_modules/
