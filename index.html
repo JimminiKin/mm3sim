@@ -2,123 +2,38 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>MM3Sim - Marble Vibraphone</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      html,
-      body {
-        width: 100%;
-        height: 100%;
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        background: #090a0f;
-      }
-      canvas {
-        width: 100vw;
-        height: 100vh;
-        display: block;
-      }
-      #loader {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 1.5rem;
-        background: #090a0f;
-        z-index: 9999;
-        transition: opacity 0.6s ease;
-      }
-      #loader.hidden {
-        opacity: 0;
-        pointer-events: none;
-      }
-      .loader-ring {
-        width: 56px;
-        height: 56px;
-        border: 3px solid rgba(255, 255, 255, 0.08);
-        border-top-color: rgba(180, 200, 255, 0.7);
-        border-radius: 50%;
-        animation: spin 0.9s linear infinite;
-      }
-      .loader-label {
-        font-family: sans-serif;
-        font-size: 0.8rem;
-        letter-spacing: 0.15em;
-        text-transform: uppercase;
-        color: rgba(180, 200, 255, 0.4);
-      }
-      @keyframes spin {
-        to { transform: rotate(360deg); }
-      }
-    </style>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>MM3Sim - Marble Machine 3 Simulator</title>
+
+    <link data-trunk rel="css" href="assets/style.css" />
   </head>
   <body>
-    <div id="loader">
-      <div class="loader-ring"></div>
-      <span class="loader-label">Loading</span>
-    </div>
+    <link
+      data-trunk
+      rel="rust"
+      href="Cargo.toml"
+      data-wasm-opt="0"
+      data-bin="mm3sim"
+      data-initializer="assets/initializer.js"
+    />
     <script>
       window.va =
         window.va ||
         function () {
           (window.vaq = window.vaq || []).push(arguments);
         };
-
-      // Handle WASM loading and hide loader when app is ready
-      async function handleWasmLoading() {
-        const loader = document.getElementById("loader");
-
-        try {
-          // Set a timeout to eventually hide the loader (failsafe)
-          const loadPromise = new Promise((resolve, reject) => {
-            const script = document.currentScript;
-
-            // Listen for script load/error events
-            script.addEventListener('load', resolve);
-            script.addEventListener('error', reject);
-
-            // Failsafe: hide loader after 30 seconds if still loading
-            setTimeout(() => {
-              console.warn("WASM load timeout (30s), hiding loader");
-              if (loader && !loader.classList.contains('hidden')) {
-                loader.classList.add("hidden");
-                loader.addEventListener("transitionend", () => loader.remove(), { once: true });
-              }
-            }, 30000);
-          });
-
-          await loadPromise;
-          console.log("WASM application loaded successfully");
-        } catch (error) {
-          console.error("Failed to load WASM application:", error);
-
-          // Hide loader on error after a short delay
-          setTimeout(() => {
-            if (loader && !loader.classList.contains('hidden')) {
-              loader.classList.add("hidden");
-              loader.addEventListener("transitionend", () => loader.remove(), { once: true });
-            }
-          }, 2000);
-        }
-      }
-
-      // Also listen for TrunkApplicationStarted event for local dev
-      if (window.TrunkApplicationStarted) {
-        window.addEventListener("TrunkApplicationStarted", () => {
-          const loader = document.getElementById("loader");
-          if (loader && !loader.classList.contains('hidden')) {
-            loader.classList.add("hidden");
-            loader.addEventListener("transitionend", () => loader.remove(), { once: true });
-          }
-        });
-      }
-
-      // Start loading when DOM is ready
-      document.addEventListener("DOMContentLoaded", handleWasmLoading);
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
+    <script>
+      window.si =
+        window.si ||
+        function () {
+          (window.siq = window.siq || []).push(arguments);
+        };
+    </script>
+    <script defer src="/_vercel/speed-insights/script.js"></script>
   </body>
 </html>
