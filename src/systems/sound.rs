@@ -1,15 +1,19 @@
 use bevy::prelude::*;
 
-use crate::resources::constants::VIB_BAR_COUNT;
 use crate::systems::instrument::{InstrumentHits, CH_SNARE, CH_VIB_FIRST};
 
 const MAX_IMPACT_SPEED: f32 = 4.0;
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::resources::constants::VIB_BAR_COUNT;
 
 #[derive(Resource)]
 pub struct SnareVolume(pub f32);
 
 impl Default for SnareVolume {
-    fn default() -> Self { SnareVolume(0.5) }
+    fn default() -> Self {
+        SnareVolume(0.5)
+    }
 }
 
 fn impact_volume(speed: f32, vol: f32) -> f32 {
@@ -34,11 +38,17 @@ pub(crate) struct VibHitSounds(Vec<Handle<AudioSource>>);
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn setup_sounds(mut audio_sources: ResMut<Assets<AudioSource>>, mut commands: Commands) {
-    let snare = audio_sources.add(AudioSource { bytes: Arc::from(generate_snare_wav()) });
+    let snare = audio_sources.add(AudioSource {
+        bytes: Arc::from(generate_snare_wav()),
+    });
     commands.insert_resource(SnareHitSound(snare));
 
     let vib: Vec<_> = (0..VIB_BAR_COUNT)
-        .map(|i| audio_sources.add(AudioSource { bytes: Arc::from(generate_vib_wav(i)) }))
+        .map(|i| {
+            audio_sources.add(AudioSource {
+                bytes: Arc::from(generate_vib_wav(i)),
+            })
+        })
         .collect();
     commands.insert_resource(VibHitSounds(vib));
 }
@@ -54,18 +64,30 @@ pub fn play_instrument_sounds(
     for hit in &hits.0 {
         let vol = impact_volume(hit.speed, volume.0);
         if hit.channel == CH_SNARE {
-            let Some(s) = snare_sound.as_ref() else { continue };
+            let Some(s) = snare_sound.as_ref() else {
+                continue;
+            };
             commands.spawn((
                 AudioPlayer(s.0.clone()),
-                PlaybackSettings { volume: Volume::Linear(vol), ..PlaybackSettings::ONCE },
+                PlaybackSettings {
+                    volume: Volume::Linear(vol),
+                    ..PlaybackSettings::ONCE
+                },
             ));
         } else if hit.channel >= CH_VIB_FIRST {
-            let Some(sounds) = vib_sounds.as_ref() else { continue };
+            let Some(sounds) = vib_sounds.as_ref() else {
+                continue;
+            };
             let bar_idx = hit.channel - CH_VIB_FIRST;
-            let Some(handle) = sounds.0.get(bar_idx) else { continue };
+            let Some(handle) = sounds.0.get(bar_idx) else {
+                continue;
+            };
             commands.spawn((
                 AudioPlayer(handle.clone()),
-                PlaybackSettings { volume: Volume::Linear(vol), ..PlaybackSettings::ONCE },
+                PlaybackSettings {
+                    volume: Volume::Linear(vol),
+                    ..PlaybackSettings::ONCE
+                },
             ));
         }
     }
@@ -81,7 +103,9 @@ thread_local! {
 
 #[cfg(target_arch = "wasm32")]
 pub fn setup_sounds() {
-    AUDIO_CTX.with(|slot| { *slot.borrow_mut() = web_sys::AudioContext::new().ok(); });
+    AUDIO_CTX.with(|slot| {
+        *slot.borrow_mut() = web_sys::AudioContext::new().ok();
+    });
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -103,10 +127,14 @@ fn play_snare_web_audio(volume: f32) {
         let Some(ctx) = borrow.as_ref() else { return };
         let rate = ctx.sample_rate();
         let n = (rate * 0.35) as u32;
-        let Ok(buf) = ctx.create_buffer(1, n, rate) else { return };
+        let Ok(buf) = ctx.create_buffer(1, n, rate) else {
+            return;
+        };
         let samples = generate_snare_samples_f32(n as usize, rate as u32);
         let _ = buf.copy_to_channel(&samples, 0);
-        let Ok(source) = ctx.create_buffer_source() else { return };
+        let Ok(source) = ctx.create_buffer_source() else {
+            return;
+        };
         source.set_buffer(Some(&buf));
         let Ok(gain) = ctx.create_gain() else { return };
         gain.gain().set_value(volume);
@@ -123,10 +151,14 @@ fn play_vib_web_audio(bar_idx: u32, volume: f32) {
         let Some(ctx) = borrow.as_ref() else { return };
         let rate = ctx.sample_rate();
         let n = (rate * 2.0) as u32;
-        let Ok(buf) = ctx.create_buffer(1, n, rate) else { return };
+        let Ok(buf) = ctx.create_buffer(1, n, rate) else {
+            return;
+        };
         let samples = generate_vib_samples_f32(bar_idx, n as usize, rate as u32);
         let _ = buf.copy_to_channel(&samples, 0);
-        let Ok(source) = ctx.create_buffer_source() else { return };
+        let Ok(source) = ctx.create_buffer_source() else {
+            return;
+        };
         source.set_buffer(Some(&buf));
         let Ok(gain) = ctx.create_gain() else { return };
         gain.gain().set_value(volume);
