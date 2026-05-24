@@ -145,9 +145,9 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v3
         with:
-          working_directory: target
+          working_directory: target/artifacts
           files: |
-            target/artifacts/mm3sim-macos/mm3sim-macos-arm64
-            target/artifacts/mm3sim-windows/mm3sim-windows.exe
-            target/artifacts/mm3sim-linux/mm3sim-linux
+            mm3sim-macos/mm3sim-macos-arm64
+            mm3sim-windows/mm3sim-windows.exe
+            mm3sim-linux/mm3sim-linux
           generate_release_notes: true
