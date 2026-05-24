@@ -1,6 +1,8 @@
 {
   "framework": null,
-  "buildCommand": "",
+  "buildCommand": "./install.sh",
+  "devCommand": null,
+  "installCommand": null,
   "outputDirectory": "dist",
   "env": {
     "TRUNK_NO_HOT_RELOAD": "true"
@@ -9,15 +11,27 @@
     {
       "source": "/(.*)\\.wasm",
       "headers": [
-        { "key": "Content-Type", "value": "application/wasm" },
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        {
+          "key": "Content-Type",
+          "value": "application/wasm"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
       ]
     },
     {
       "source": "/(.*)\\.js",
       "headers": [
-        { "key": "Content-Type", "value": "text/javascript" },
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        {
+          "key": "Content-Type",
+          "value": "text/javascript"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
       ]
     }
   ]

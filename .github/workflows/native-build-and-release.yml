@@ -1,0 +1,153 @@
+name: Build and Release Native Version
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-macos-arm64:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache cargo dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: target
+
+      - name: Build release binary (macOS Apple Silicon native)
+        run: cargo build --release --target aarch64-apple-darwin
+
+      - name: Rename macOS binary for unique filename
+        run: cp target/aarch64-apple-darwin/release/mm3sim target/aarch64-apple-darwin/release/mm3sim-macos-arm64
+
+      - name: Upload macOS ARM64 artifact
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: mm3sim-macos-arm64
+          path: target/aarch64-apple-darwin/release/mm3sim-macos-arm64
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: target
+
+      - name: Build release binary (Windows)
+        run: |
+          cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Rename Windows binary for unique filename
+        shell: pwsh
+        run: Move-Item -Force "target/x86_64-pc-windows-msvc/release/mm3sim.exe" "target/x86_64-pc-windows-msvc/release/mm3sim-windows.exe"
+
+      - name: Upload Windows artifact
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: mm3sim-windows
+          path: target/x86_64-pc-windows-msvc/release/mm3sim-windows.exe
+          if-no-files-found: error
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config \
+            libx11-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libasound2-dev \
+            libudev-dev \
+            libwayland-dev \
+            wayland-protocols \
+            libssl-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache cargo dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: target
+
+      - name: Build release binary (Linux)
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+
+      - name: Rename Linux binary for unique filename
+        run: cp target/x86_64-unknown-linux-gnu/release/mm3sim target/x86_64-unknown-linux-gnu/release/mm3sim-linux
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v7
+        if: github.ref_type == 'tag'
+        with:
+          name: mm3sim-linux
+          path: target/x86_64-unknown-linux-gnu/release/mm3sim-linux
+          if-no-files-found: error
+
+  create-release:
+    needs: [build-macos-arm64, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: mm3sim-*
+          path: target/artifacts/
+
+      - name: List downloaded files
+        run: ls -R target/
+
+      - name: Create release
+        id: create_release
+        uses: softprops/action-gh-release@v3
+        with:
+          working_directory: target
+          files: |
+            target/artifacts/mm3sim-macos/mm3sim-macos-arm64
+            target/artifacts/mm3sim-windows/mm3sim-windows.exe
+            target/artifacts/mm3sim-linux/mm3sim-linux
+          generate_release_notes: true

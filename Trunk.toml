@@ -1,8 +1,5 @@
 [build]
-release = false
-
-# Disable Trunk's hot-reload client in production builds
-env.TRUNK_NO_HOT_RELOAD = "true"
+release = true
 
 [serve]
-port = 8080
+port = 3000
