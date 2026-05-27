@@ -32,7 +32,7 @@ use systems::hud::hud_panel_ui;
 use systems::instrument::{detect_instrument_hits, record_instrument_hits, InstrumentHits};
 use systems::marble::{
     advance_flight_timers_system, auto_spawn_system, capture_prev_velocity_system,
-    despawn_fallen_marbles_system, record_marble_paths_system, track_slide_end_system,
+    despawn_fallen_marbles_system, record_marble_paths_system,
     update_marble_collisions, AutoSpawn,
 };
 use systems::marble_graph::{
@@ -102,7 +102,6 @@ fn main() {
             FixedUpdate,
             (
                 advance_flight_timers_system,
-                track_slide_end_system,
                 detect_instrument_hits,
                 record_instrument_hits,
                 play_instrument_sounds,

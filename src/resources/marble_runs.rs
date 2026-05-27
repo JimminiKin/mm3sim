@@ -14,10 +14,6 @@ pub struct HitRecord {
     pub ke_mj: f32,
     pub hit_pos: Vec3,
     pub hit_local: Vec3, // hit_pos in snare-local frame: y = axial, xz = radial
-    pub slide_s: Option<f32>,
-    pub slide_end_vy: Option<f32>,
-    pub slide_end_vz: Option<f32>,
-    pub slide_end_pos: Option<Vec3>,
     pub arm_deg: f32,
     pub arm_angvel: f32, // deg/s around X axis at moment of hit
 }

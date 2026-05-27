@@ -6,11 +6,12 @@ use crate::components::snare::{PivotArm, SnareDrum};
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
 use crate::resources::marble_runs::{HitRecord, Run, RunHistory};
-use crate::systems::marble::{ChuteMarble, Marble};
+use crate::resources::programming_wheel_params::WHEEL_CH_CHUTE;
+use crate::systems::marble::{Marble, SpawnChannel};
 
 pub fn hud_panel_ui(
     mut contexts: EguiContexts,
-    marbles: Query<(&LinearVelocity, &AngularVelocity, Option<&ChuteMarble>), With<Marble>>,
+    marbles: Query<(&LinearVelocity, &AngularVelocity, &SpawnChannel), With<Marble>>,
     snare: Query<&GlobalTransform, With<SnareDrum>>,
     arm: Query<&Transform, With<PivotArm>>,
     chute_params: Res<ChuteParams>,
@@ -89,7 +90,7 @@ pub fn hud_panel_ui(
 
                     let mut live: Vec<(bool, Vec3, Vec3)> = marbles
                         .iter()
-                        .map(|(lin_vel, ang_vel, is_chute)| (is_chute.is_some(), lin_vel.0, ang_vel.0))
+                        .map(|(lin_vel, ang_vel, spawn_ch)| (spawn_ch.0 == WHEEL_CH_CHUTE, lin_vel.0, ang_vel.0))
                         .collect();
                     live.sort_by_key(|(is_chute, _, _)| *is_chute as u8);
 
@@ -346,15 +347,6 @@ fn render_summary(ui: &mut egui::Ui, runs: &[Run]) {
     let c_spd:  Vec<f32> = complete.iter().map(|r| r.chute.unwrap().speed).collect();
     let c_aoa:  Vec<f32> = complete.iter().map(|r| r.chute.unwrap().aoa).collect();
     let c_ke:   Vec<f32> = complete.iter().map(|r| r.chute.unwrap().ke_mj).collect();
-    let c_slide: Vec<f32> = complete.iter().filter_map(|r| r.chute.unwrap().slide_s).collect();
-    let c_lift: Vec<f32> = complete.iter().filter_map(|r| {
-        let c = r.chute.unwrap();
-        match (c.slide_end_vy, c.slide_end_vz) {
-            (Some(vy), Some(vz)) => Some((vy * vy + vz * vz).sqrt()),
-            _ => None,
-        }
-    }).collect();
-
     egui::Grid::new("summary_grid").num_columns(2).spacing([8.0, 2.0]).show(ui, |ui| {
         ui.label(egui::RichText::new("n").strong());
         ui.monospace(format!("{} complete runs", n));
@@ -395,16 +387,6 @@ fn render_summary(ui: &mut egui::Ui, runs: &[Run]) {
         ui.monospace(Agg::from(&c_ke).map_or("--".into(), |a| a.fmt_mean_std(2, " mJ")));
         ui.end_row();
 
-        if !c_slide.is_empty() {
-            ui.label(egui::RichText::new("Slide dur").strong());
-            ui.monospace(Agg::from(&c_slide).map_or("--".into(), |a| a.fmt_mean_std(3, " s")));
-            ui.end_row();
-        }
-        if !c_lift.is_empty() {
-            ui.label(egui::RichText::new("Liftoff spd").strong());
-            ui.monospace(Agg::from(&c_lift).map_or("--".into(), |a| a.fmt_mean_std(3, " m/s")));
-            ui.end_row();
-        }
     });
 }
 
@@ -474,8 +456,6 @@ fn render_help_panel(ui: &mut egui::Ui) {
                     ("KE", "Kinetic energy at impact in mJ: ½mv², marble mass = 14 g."),
                     ("vx/vy/vz", "Velocity components at impact. y is vertical (down = negative)."),
                     ("spin", "Surface speed ω × r (m/s) — spin rate at impact."),
-                    ("slide", "Time (s) chute marble stayed in contact before liftoff."),
-                    ("liftoff spd", "Liftoff velocity √(vy² + vz²) — determines free-flight path."),
                 ];
                 for (term, desc) in rows {
                     ui.label(egui::RichText::new(*term).monospace().strong());

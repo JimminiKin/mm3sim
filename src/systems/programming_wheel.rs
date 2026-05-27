@@ -14,7 +14,7 @@ use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::marble_runs::RunHistory;
 use crate::resources::vibraphone_params::VibraphoneParams;
 use crate::systems::marble::{
-    jittered_spawn, spawn_chute_marble, spawn_marble, spawn_vib_marble_for_bar,
+    chute_spawn_pos, jittered_spawn, spawn_marble, vib_spawn_pos,
 };
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -100,9 +100,10 @@ pub fn programming_wheel_spawn_system(
                 if let Some(run) = all_runs.get_run_mut(run_idx) {
                     run.chute_exit = Some(chute_params.exit_pos);
                 }
-                spawn_chute_marble(
+                let pos = chute_spawn_pos(&chute_params);
+                spawn_marble(
                     &mut commands, &mut meshes, &mut materials,
-                    &chute_params, marble_col.0, run_idx,
+                    pos, marble_col.0, run_idx, WHEEL_CH_CHUTE,
                 );
             }
             c if c == WHEEL_CH_DROP => {
@@ -110,7 +111,7 @@ pub fn programming_wheel_spawn_system(
                 let pos = jittered_spawn(snare_top_y);
                 spawn_marble(
                     &mut commands, &mut meshes, &mut materials,
-                    pos, marble_col.0, run_idx,
+                    pos, marble_col.0, run_idx, WHEEL_CH_DROP,
                 );
             }
             c if c >= WHEEL_CH_VIB_FIRST => {
@@ -119,9 +120,10 @@ pub fn programming_wheel_spawn_system(
                 if let Some(run) = all_runs.get_run_mut(run_idx) {
                     run.vib_bar_idx = Some(bar_idx);
                 }
-                spawn_vib_marble_for_bar(
+                let pos = vib_spawn_pos(&vib_params, bar_idx);
+                spawn_marble(
                     &mut commands, &mut meshes, &mut materials,
-                    &vib_params, bar_idx, marble_col.0, run_idx,
+                    pos, marble_col.0, run_idx, c,
                 );
             }
             _ => {}

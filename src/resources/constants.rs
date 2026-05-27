@@ -39,6 +39,7 @@ pub const MARBLE_METALLIC: f32 = 0.80;
 pub const MARBLE_ROUGHNESS: f32 = 0.20;
 
 pub const CHUTE_MARBLE_COLOR: (f32, f32, f32) = (0.20, 0.45, 0.90);
+pub const VIB_MARBLE_COLOR:   (f32, f32, f32) = (0.20, 0.80, 0.35);
 
 // =============================================================================
 // Physics & Geometry

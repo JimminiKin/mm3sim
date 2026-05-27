@@ -23,15 +23,16 @@ const ACCEL_SMOOTH: usize = 10;
 use crate::components::snare::PivotArm;
 use crate::resources::constants::*;
 use crate::resources::marble_runs::{MarbleSample, RunHistory};
-use crate::systems::marble::{ChuteMarble, FlightTimer, Marble, RunIndex};
+use crate::resources::programming_wheel_params::WHEEL_CH_CHUTE;
+use crate::systems::marble::{FlightTimer, Marble, RunIndex, SpawnChannel};
 
 pub fn record_marble_samples_system(
     mut all_runs: ResMut<RunHistory>,
-    marbles: Query<(&LinearVelocity, &AngularVelocity, &FlightTimer, &RunIndex, Option<&ChuteMarble>), With<Marble>>,
+    marbles: Query<(&LinearVelocity, &AngularVelocity, &FlightTimer, &RunIndex, &SpawnChannel), With<Marble>>,
 ) {
-    for (lin_vel, ang_vel, timer, run_idx, is_chute) in &marbles {
+    for (lin_vel, ang_vel, timer, run_idx, spawn_ch) in &marbles {
         let Some(run) = all_runs.get_run_mut(run_idx.0) else { continue };
-        let samples = if is_chute.is_some() {
+        let samples = if spawn_ch.0 == WHEEL_CH_CHUTE {
             &mut run.chute_samples
         } else {
             &mut run.drop_samples

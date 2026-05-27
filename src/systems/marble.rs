@@ -9,6 +9,7 @@ use crate::resources::constants::*;
 use crate::resources::layers::GameLayer;
 use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::marble_runs::RunHistory;
+use crate::resources::programming_wheel_params::{WHEEL_CH_CHUTE, WHEEL_CH_VIB_FIRST};
 use crate::resources::vibraphone_params::VibraphoneParams;
 
 pub fn jittered_spawn(snare_top_y: f32) -> Vec3 {
@@ -24,6 +25,26 @@ pub fn jittered_spawn(snare_top_y: f32) -> Vec3 {
     Vec3::new(MARBLE_SPAWN_X + x_off, snare_top_y + SPAWN_HEIGHT, z_off)
 }
 
+/// Compute the world-space spawn position for a chute marble (surface of the slope entry).
+pub fn chute_spawn_pos(params: &ChuteParams) -> Vec3 {
+    let geo = params.geometry();
+    let [slope_z, slope_y] = geo.slope_start;
+    let [slope_tz, slope_ty] = geo.slope_tangent;
+    let normal = Vec3::new(0.0, -slope_tz, slope_ty).normalize_or_zero();
+    let chute_centre = Vec3::new(CHUTE_END_X, slope_y + CHUTE_ORIGIN_Y, slope_z + CHUTE_ORIGIN_Z);
+    chute_centre + normal * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.001)
+}
+
+/// Compute the world-space spawn position for a vibraphone marble above a bar.
+pub fn vib_spawn_pos(params: &VibraphoneParams, bar_idx: u32) -> Vec3 {
+    let bar_count = VIB_BAR_COUNT;
+    let logical_idx = bar_idx.min(bar_count - 1);
+    let bar_x = params.row_x_center
+        + ((bar_count - 1 - logical_idx) as f32 - (bar_count - 1) as f32 * 0.5)
+        * params.bar_spacing;
+    Vec3::new(bar_x, params.row_y + VIB_SPAWN_HEIGHT, params.row_z)
+}
+
 fn marble_layers(collide: bool) -> CollisionLayers {
     if collide {
         CollisionLayers::new(GameLayer::Marble, [GameLayer::Default, GameLayer::Marble])
@@ -32,14 +53,16 @@ fn marble_layers(collide: bool) -> CollisionLayers {
     }
 }
 
+// ── Components ────────────────────────────────────────────────────────────────
+
 #[derive(Component)]
 pub struct Marble;
 
-#[derive(Component)]
-pub struct ChuteMarble;
-
-#[derive(Component)]
-pub struct VibMarble;
+/// Records which programming-wheel channel (WHEEL_CH_*) spawned this marble.
+/// Used everywhere the old `ChuteMarble` / `VibMarble` type tags were used for
+/// routing stats, paths, and display labels.
+#[derive(Component, Clone, Copy)]
+pub struct SpawnChannel(pub usize);
 
 #[derive(Component)]
 pub struct RunIndex(pub usize);
@@ -58,13 +81,6 @@ pub struct DespawnFloor(pub f32);
 pub struct PrevVelocity {
     pub linvel: Vec3,
     pub angvel: Vec3,
-}
-
-#[derive(Component, Default)]
-pub struct SlideRecord {
-    pub end_time: Option<f32>,
-    pub end_vel: Option<Vec3>,
-    pub end_pos: Option<Vec3>,
 }
 
 const GHOST_SAMPLE_INTERVAL: f32 = 0.008;
@@ -105,8 +121,11 @@ fn marble_physics(collide: bool) -> impl Bundle {
     )
 }
 
-// ── Spawn systems ─────────────────────────────────────────────────────────────
+// ── Spawn ─────────────────────────────────────────────────────────────────────
 
+/// Spawn a marble.  All marble-type-specific properties (colour, despawn floor,
+/// `SlideRecord`) are derived from `spawn_channel` (one of the `WHEEL_CH_*`
+/// constants).  Call sites only need to provide the world position.
 pub fn spawn_marble(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -114,76 +133,25 @@ pub fn spawn_marble(
     position: Vec3,
     collide: bool,
     run_idx: usize,
+    spawn_channel: usize,
 ) {
+    let (color, despawn_floor) = if spawn_channel == WHEEL_CH_CHUTE {
+        (CHUTE_MARBLE_COLOR, CHUTE_MARBLE_DESPAWN_Y)
+    } else if spawn_channel >= WHEEL_CH_VIB_FIRST {
+        (VIB_MARBLE_COLOR, DESPAWN_Y)
+    } else {
+        (MARBLE_COLOR, DESPAWN_Y)
+    };
+
     commands.spawn((
         Marble,
+        SpawnChannel(spawn_channel),
         RunIndex(run_idx),
         FlightTimer(0.0),
         PathTimer(0.0),
         PrevVelocity::default(),
-        DespawnFloor(DESPAWN_Y),
-        marble_pbr(meshes, materials, position, MARBLE_COLOR),
-        marble_physics(collide),
-    ));
-}
-
-pub fn spawn_chute_marble(
-    commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-    chute_params: &ChuteParams,
-    collide: bool,
-    run_idx: usize,
-) {
-    let geo = chute_params.geometry();
-    let [slope_z, slope_y] = geo.slope_start;
-    let [slope_tz, slope_ty] = geo.slope_tangent;
-    let normal = Vec3::new(0.0, -slope_tz, slope_ty).normalize_or_zero();
-
-    let chute_centre = Vec3::new(CHUTE_END_X, slope_y + CHUTE_ORIGIN_Y, slope_z + CHUTE_ORIGIN_Z);
-    let position = chute_centre + normal * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.001);
-
-    commands.spawn((
-        (
-            Marble,
-            ChuteMarble,
-            RunIndex(run_idx),
-            FlightTimer(0.0),
-            PathTimer(0.0),
-            SlideRecord::default(),
-            PrevVelocity::default(),
-            DespawnFloor(CHUTE_MARBLE_DESPAWN_Y),
-        ),
-        marble_pbr(meshes, materials, position, CHUTE_MARBLE_COLOR),
-        marble_physics(collide),
-    ));
-}
-
-/// Spawn a vibraphone marble above a specific bar index (0-based from the high/positive-X end).
-pub fn spawn_vib_marble_for_bar(
-    commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-    params: &VibraphoneParams,
-    bar_idx: u32,
-    collide: bool,
-    run_idx: usize,
-) {
-    let bar_count = VIB_BAR_COUNT;
-    let logical_idx = bar_idx.min(bar_count - 1);
-    let bar_x = params.row_x_center
-        + ((bar_count - 1 - logical_idx) as f32 - (bar_count - 1) as f32 * 0.5)
-        * params.bar_spacing;
-    let spawn_pos = Vec3::new(bar_x, params.row_y + VIB_SPAWN_HEIGHT, params.row_z);
-    commands.spawn((
-        Marble,
-        VibMarble,
-        FlightTimer(0.0),
-        PathTimer(0.0),
-        PrevVelocity::default(),
-        RunIndex(run_idx),
-        DespawnFloor(DESPAWN_Y),
-        marble_pbr(meshes, materials, spawn_pos, (0.20, 0.80, 0.35)),
+        DespawnFloor(despawn_floor),
+        marble_pbr(meshes, materials, position, color),
         marble_physics(collide),
     ));
 }
@@ -194,24 +162,22 @@ pub fn record_marble_paths_system(
     mut all_runs: ResMut<RunHistory>,
     time: Res<Time<Fixed>>,
     mut marbles: Query<
-        (&Transform, Option<&ChuteMarble>, Option<&VibMarble>, &RunIndex, &mut PathTimer),
+        (&Transform, &SpawnChannel, &RunIndex, &mut PathTimer),
         With<Marble>,
     >,
 ) {
     let dt = time.delta_secs();
-    for (tf, is_chute, is_vib, run_idx, mut timer) in &mut marbles {
+    for (tf, spawn_ch, run_idx, mut timer) in &mut marbles {
         timer.0 += dt;
         if timer.0 < GHOST_SAMPLE_INTERVAL {
             continue;
         }
         timer.0 -= GHOST_SAMPLE_INTERVAL;
         if let Some(run) = all_runs.get_run_mut(run_idx.0) {
-            let path = if is_vib.is_some() {
-                &mut run.vib_path
-            } else if is_chute.is_some() {
-                &mut run.chute_path
-            } else {
-                &mut run.drop_path
+            let path = match spawn_ch.0 {
+                c if c >= WHEEL_CH_VIB_FIRST => &mut run.vib_path,
+                WHEEL_CH_CHUTE               => &mut run.chute_path,
+                _                            => &mut run.drop_path,
             };
             path.push(tf.translation);
         }
@@ -262,58 +228,6 @@ pub fn advance_flight_timers_system(
     }
 }
 
-pub fn track_slide_end_system(
-    chute_params: Res<ChuteParams>,
-    mut marbles: Query<
-        (&Transform, &LinearVelocity, &FlightTimer, &mut SlideRecord),
-        (With<Marble>, With<ChuteMarble>),
-    >,
-) {
-    let geo = chute_params.geometry();
-
-    for (tf, vel, timer, mut slide) in &mut marbles {
-        if slide.end_time.is_some() {
-            continue;
-        }
-
-        let marble_yz = (tf.translation.y, tf.translation.z);
-
-        let min_dist = (0u32..=48)
-            .map(|i| {
-                let t = i as f32 / 48.0;
-                let (bz, by) = if t < 1.0 / 3.0 {
-                    let s = t * 3.0;
-                    let [sz, sy] = geo.slope_start;
-                    let [az, ay] = geo.arc_start;
-                    (sz + s * (az - sz), sy + s * (ay - sy))
-                } else if t < 2.0 / 3.0 {
-                    let s = (t - 1.0 / 3.0) * 3.0;
-                    let theta = geo.theta_start + s * geo.arc_sweep;
-                    (
-                        geo.center[0] + chute_params.curve_radius * theta.cos(),
-                        geo.center[1] + chute_params.curve_radius * theta.sin(),
-                    )
-                } else {
-                    let s = (t - 2.0 / 3.0) * 3.0;
-                    let [es_z, es_y] = geo.exit_start;
-                    let [ee_z, ee_y] = chute_params.exit_pos;
-                    (es_z + s * (ee_z - es_z), es_y + s * (ee_y - es_y))
-                };
-                let dy = marble_yz.0 - (by + CHUTE_ORIGIN_Y);
-                let dz = marble_yz.1 - (bz + CHUTE_ORIGIN_Z);
-                (dy * dy + dz * dz).sqrt()
-            })
-            .fold(f32::MAX, f32::min);
-
-        if min_dist > CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS * 2.0 {
-            slide.end_time = Some(timer.0);
-            slide.end_vel = Some(vel.0);
-            slide.end_pos = Some(tf.translation);
-        }
-    }
-}
-
-
 #[derive(Resource)]
 pub struct AutoSpawn {
     pub batch_size: u32,
@@ -346,13 +260,14 @@ pub fn auto_spawn_system(
     marble_col: Res<MarbleCollisions>,
     snare: Query<&GlobalTransform, With<SnareDrum>>,
     mut all_runs: ResMut<RunHistory>,
-    chute_slides: Query<(&RunIndex, &SlideRecord), (With<Marble>, With<ChuteMarble>)>,
+    // Wait until no chute marble with the tracked run index remains in the world.
+    chute_marbles: Query<(&RunIndex, &SpawnChannel), With<Marble>>,
 ) {
     if let Some(waiting_idx) = auto.waiting_for {
-        let still_on_chute = chute_slides
+        let still_live = chute_marbles
             .iter()
-            .any(|(ri, slide)| ri.0 == waiting_idx && slide.end_time.is_none());
-        if still_on_chute {
+            .any(|(ri, ch)| ri.0 == waiting_idx && ch.0 == WHEEL_CH_CHUTE);
+        if still_live {
             return;
         }
         auto.waiting_for = None;
@@ -380,28 +295,19 @@ pub fn auto_spawn_system(
         .map(|gt| gt.translation().y + SNARE_HALF_HEIGHT)
         .unwrap_or(CHUTE_ORIGIN_Y);
 
-    let spawn_position = jittered_spawn(snare_top_y);
-
     let run_idx = all_runs.push_new_run();
     if let Some(run) = all_runs.get_run_mut(run_idx) {
         run.chute_exit = Some(params.exit_pos);
     }
-    spawn_marble(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        spawn_position,
-        marble_col.0,
-        run_idx,
-    );
-    spawn_chute_marble(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        &params,
-        marble_col.0,
-        run_idx,
-    );
+
+    let drop_pos = jittered_spawn(snare_top_y);
+    spawn_marble(&mut commands, &mut meshes, &mut materials,
+        drop_pos, marble_col.0, run_idx, crate::resources::programming_wheel_params::WHEEL_CH_DROP);
+
+    let chute_pos = chute_spawn_pos(&params);
+    spawn_marble(&mut commands, &mut meshes, &mut materials,
+        chute_pos, marble_col.0, run_idx, WHEEL_CH_CHUTE);
+
     auto.waiting_for = Some(run_idx);
     auto.pending -= 1;
     auto.spawned += 1;

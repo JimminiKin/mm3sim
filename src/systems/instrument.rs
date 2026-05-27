@@ -5,7 +5,8 @@ use crate::components::instrument::Instrument;
 use crate::components::snare::PivotArm;
 use crate::resources::constants::MARBLE_RADIUS;
 use crate::resources::marble_runs::{HitRecord, RunHistory};
-use crate::systems::marble::{ChuteMarble, FlightTimer, Marble, PrevVelocity, RunIndex, SlideRecord};
+use crate::resources::programming_wheel_params::WHEEL_CH_CHUTE;
+use crate::systems::marble::{FlightTimer, Marble, PrevVelocity, RunIndex, SpawnChannel};
 
 pub const CH_SNARE: usize = 1;
 pub const CH_VIB_FIRST: usize = 2;
@@ -61,8 +62,7 @@ pub fn record_instrument_hits(
             &PrevVelocity,
             &FlightTimer,
             &RunIndex,
-            Option<&ChuteMarble>,
-            Option<&SlideRecord>,
+            &SpawnChannel,
         ),
         With<Marble>,
     >,
@@ -71,7 +71,7 @@ pub fn record_instrument_hits(
     mut all_runs: ResMut<RunHistory>,
 ) {
     for hit in &hits.0 {
-        let Ok((tf, prev_vel, flight_timer, run_idx, is_chute, slide)) =
+        let Ok((tf, prev_vel, flight_timer, run_idx, spawn_ch)) =
             marbles.get(hit.marble_entity)
         else {
             continue;
@@ -102,15 +102,7 @@ pub fn record_instrument_hits(
         if instr.channel == CH_SNARE {
             let arm_angvel = arm_q.single().map(|v| v.0.x.to_degrees()).unwrap_or(0.0);
             record.arm_angvel = arm_angvel;
-            if is_chute.is_some() {
-                if let Some(s) = slide {
-                    record.slide_s = s.end_time;
-                    if let Some(lv) = s.end_vel {
-                        record.slide_end_vy = Some(lv.y);
-                        record.slide_end_vz = Some(lv.z);
-                    }
-                    record.slide_end_pos = s.end_pos;
-                }
+            if spawn_ch.0 == WHEEL_CH_CHUTE {
                 run.chute.get_or_insert(record);
             } else {
                 run.drop.get_or_insert(record);
