@@ -8,13 +8,13 @@ use bevy::prelude::*;
 
 use crate::resources::constants::*;
 
-/// Channel 0  = chute drop marble
-/// Channel 1  = vertical snare drop marble
-/// Channel 2..=38 = vibraphone bars 0..=36
-pub const WHEEL_CH_CHUTE: usize = 0;
-pub const WHEEL_CH_DROP: usize = 1;
+/// First chute channel index.  Channels `WHEEL_CH_CHUTE_FIRST + 0..N_CHUTES` map 1-to-1
+/// to chute instances; each is a `GhostSnare` path.
+pub const WHEEL_CH_CHUTE_FIRST: usize = 0;
+/// Channel index of the vertical snare drop (direct fall).
+pub const WHEEL_CH_DROP: usize = 6;
 /// First vibraphone channel index. Used by spawner setup, hit detection, and the vibraphone component.
-pub const WHEEL_CH_VIB_FIRST: usize = 8;
+pub const WHEEL_CH_VIB_FIRST: usize = 13;
 
 /// A single MIDI-style note on the programming wheel.
 /// `beat` is the start position in beats [0, BEATS_PER_REV).
@@ -97,26 +97,28 @@ impl ProgrammingWheelParams {
 /// Full 16-bar (64-beat) programming wheel loop transcribed from the Wintergatan
 /// Marble Machine MusicXML score. One revolution = 64 beats = 16 bars of 4/4 at
 /// 120 BPM. Channels: ch = WHEEL_CH_VIB_FIRST + semitones_from_F3
-/// (bar 0 = F3, 174.61 Hz, ch 8).
-///   B4=ch26  C5=ch27  D5=ch29  E5=ch31  F#5=ch33  G5=ch34
-///   A5=ch36  B5=ch38  C6=ch39  D6=ch41  E6=ch43
+/// (bar 0 = F3, 174.61 Hz, ch 13).
+///   B4=ch31  C5=ch32  D5=ch34  E5=ch36  F#5=ch38  G5=ch39
+///   A5=ch41  B5=ch43  C6=ch44  D6=ch46  E6=ch48
 pub fn marble_machine_default_notes() -> Vec<WheelNote> {
     let mut v: Vec<WheelNote> = Vec::new();
 
-    // Kick (ch 0) on beats 0,2; snare (ch 1) on beats 1,3 — all 16 bars
+    // Chute 1 (ch 0) on beats 0,2; snare drop (ch 6) on beats 1,3 — all 16 bars
     for bar in 0..16_usize {
         let b = bar as f32 * 4.0;
-        v.push(WheelNote::new(WHEEL_CH_CHUTE, b + 0.0, 0.2));
-        v.push(WheelNote::new(WHEEL_CH_DROP,  b + 1.0, 0.2));
-        v.push(WheelNote::new(WHEEL_CH_CHUTE, b + 2.0, 0.2));
-        v.push(WheelNote::new(WHEEL_CH_DROP,  b + 3.0, 0.2));
+        v.push(WheelNote::new(WHEEL_CH_CHUTE_FIRST, b + 0.0, 0.2));
+        v.push(WheelNote::new(WHEEL_CH_DROP,        b + 1.0, 0.2));
+        v.push(WheelNote::new(WHEEL_CH_CHUTE_FIRST, b + 2.0, 0.2));
+        v.push(WheelNote::new(WHEEL_CH_DROP,        b + 3.0, 0.2));
     }
 
-    // ch = WHEEL_CH_VIB_FIRST(8) + semitones_from_F3
-    const B4:  usize = 26; const C5:  usize = 27; const D5:  usize = 29;
-    const E5:  usize = 31; const FS5: usize = 33; const G5:  usize = 34;
-    const A5:  usize = 36; const B5:  usize = 38; const C6:  usize = 39;
-    const D6:  usize = 41; const E6:  usize = 43;
+    // ch = WHEEL_CH_VIB_FIRST(13) + semitones_from_F3
+    const B4:  usize = WHEEL_CH_VIB_FIRST + 18; const C5:  usize = WHEEL_CH_VIB_FIRST + 19;
+    const D5:  usize = WHEEL_CH_VIB_FIRST + 21; const E5:  usize = WHEEL_CH_VIB_FIRST + 23;
+    const FS5: usize = WHEEL_CH_VIB_FIRST + 25; const G5:  usize = WHEEL_CH_VIB_FIRST + 26;
+    const A5:  usize = WHEEL_CH_VIB_FIRST + 28; const B5:  usize = WHEEL_CH_VIB_FIRST + 30;
+    const C6:  usize = WHEEL_CH_VIB_FIRST + 31; const D6:  usize = WHEEL_CH_VIB_FIRST + 33;
+    const E6:  usize = WHEEL_CH_VIB_FIRST + 35;
 
     {
         let (q, e) = (1.0_f32, 0.5_f32);
@@ -251,61 +253,66 @@ const SNARE_JITTER: f32 = crate::resources::constants::MARBLE_SPAWN_JITTER;
 /// Complete instrument channel table, indexed by channel number.
 ///
 /// Each entry defines one instrument (or delivery path):
-/// - Channel 0:    Ghost snare — marble enters via chute, lands on the snare.
-/// - Channels 1–7: Direct snare drops at increasing X offsets (centre ± 2/4/6 cm).
-/// - Channels 8–44: Vibraphone bars 0–36 (F3 → F6).
+/// - Channels 0–5:  Chute channels — each marble enters via its own chute instance.
+/// - Channels 6–12: Direct snare drops at increasing X offsets (centre ± 2/4/6 cm).
+/// - Channels 13–49: Vibraphone bars 0–36 (F3 → F6).
 ///
 /// To add a new instrument: append a `ChannelDef` here, spawn an `Instrument`
 /// entity with the matching `channel`, and update `sync_instrument_spawners`.
 const CHANNEL_DEFS: &[ChannelDef] = &[
-    // ch 0 — ghost snare (chute → snare path)
-    ChannelDef { name: "Ghost snare", color: (51, 115, 230), target: ChannelTarget::GhostSnare,                jitter_xz: 0.0         }, // 0
-    // ch 1–7 — direct snare drops
-    ChannelDef { name: "Snare",       color: SNARE,          target: ChannelTarget::Snare { x_offset:  0.00 }, jitter_xz: SNARE_JITTER }, // 1  centre
-    ChannelDef { name: "Snare+2",     color: SNARE,          target: ChannelTarget::Snare { x_offset:  0.02 }, jitter_xz: SNARE_JITTER }, // 2
-    ChannelDef { name: "Snare-2",     color: SNARE,          target: ChannelTarget::Snare { x_offset: -0.02 }, jitter_xz: SNARE_JITTER }, // 3
-    ChannelDef { name: "Snare+4",     color: SNARE,          target: ChannelTarget::Snare { x_offset:  0.04 }, jitter_xz: SNARE_JITTER }, // 4
-    ChannelDef { name: "Snare-4",     color: SNARE,          target: ChannelTarget::Snare { x_offset: -0.04 }, jitter_xz: SNARE_JITTER }, // 5
-    ChannelDef { name: "Snare+6",     color: SNARE,          target: ChannelTarget::Snare { x_offset:  0.06 }, jitter_xz: SNARE_JITTER }, // 6
-    ChannelDef { name: "Snare-6",     color: SNARE,          target: ChannelTarget::Snare { x_offset: -0.06 }, jitter_xz: SNARE_JITTER }, // 7
-    // ch 8–44 — vibraphone bars 0–36 (F3 → F6)
-    ChannelDef { name: "F3",          color: VIB,            target: ChannelTarget::VibBar { bar_idx:  0 },    jitter_xz: 0.0         }, // 8
-    ChannelDef { name: "F#3",         color: VIB,            target: ChannelTarget::VibBar { bar_idx:  1 },    jitter_xz: 0.0         }, // 9
-    ChannelDef { name: "G3",          color: VIB,            target: ChannelTarget::VibBar { bar_idx:  2 },    jitter_xz: 0.0         }, // 10
-    ChannelDef { name: "G#3",         color: VIB,            target: ChannelTarget::VibBar { bar_idx:  3 },    jitter_xz: 0.0         }, // 11
-    ChannelDef { name: "A3",          color: VIB,            target: ChannelTarget::VibBar { bar_idx:  4 },    jitter_xz: 0.0         }, // 12
-    ChannelDef { name: "A#3",         color: VIB,            target: ChannelTarget::VibBar { bar_idx:  5 },    jitter_xz: 0.0         }, // 13
-    ChannelDef { name: "B3",          color: VIB,            target: ChannelTarget::VibBar { bar_idx:  6 },    jitter_xz: 0.0         }, // 14
-    ChannelDef { name: "C4",          color: VIB,            target: ChannelTarget::VibBar { bar_idx:  7 },    jitter_xz: 0.0         }, // 15
-    ChannelDef { name: "C#4",         color: VIB,            target: ChannelTarget::VibBar { bar_idx:  8 },    jitter_xz: 0.0         }, // 16
-    ChannelDef { name: "D4",          color: VIB,            target: ChannelTarget::VibBar { bar_idx:  9 },    jitter_xz: 0.0         }, // 17
-    ChannelDef { name: "D#4",         color: VIB,            target: ChannelTarget::VibBar { bar_idx: 10 },    jitter_xz: 0.0         }, // 18
-    ChannelDef { name: "E4",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 11 },    jitter_xz: 0.0         }, // 19
-    ChannelDef { name: "F4",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 12 },    jitter_xz: 0.0         }, // 20
-    ChannelDef { name: "F#4",         color: VIB,            target: ChannelTarget::VibBar { bar_idx: 13 },    jitter_xz: 0.0         }, // 21
-    ChannelDef { name: "G4",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 14 },    jitter_xz: 0.0         }, // 22
-    ChannelDef { name: "G#4",         color: VIB,            target: ChannelTarget::VibBar { bar_idx: 15 },    jitter_xz: 0.0         }, // 23
-    ChannelDef { name: "A4",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 16 },    jitter_xz: 0.0         }, // 24
-    ChannelDef { name: "A#4",         color: VIB,            target: ChannelTarget::VibBar { bar_idx: 17 },    jitter_xz: 0.0         }, // 25
-    ChannelDef { name: "B4",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 18 },    jitter_xz: 0.0         }, // 26
-    ChannelDef { name: "C5",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 19 },    jitter_xz: 0.0         }, // 27
-    ChannelDef { name: "C#5",         color: VIB,            target: ChannelTarget::VibBar { bar_idx: 20 },    jitter_xz: 0.0         }, // 28
-    ChannelDef { name: "D5",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 21 },    jitter_xz: 0.0         }, // 29
-    ChannelDef { name: "D#5",         color: VIB,            target: ChannelTarget::VibBar { bar_idx: 22 },    jitter_xz: 0.0         }, // 30
-    ChannelDef { name: "E5",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 23 },    jitter_xz: 0.0         }, // 31
-    ChannelDef { name: "F5",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 24 },    jitter_xz: 0.0         }, // 32
-    ChannelDef { name: "F#5",         color: VIB,            target: ChannelTarget::VibBar { bar_idx: 25 },    jitter_xz: 0.0         }, // 33
-    ChannelDef { name: "G5",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 26 },    jitter_xz: 0.0         }, // 34
-    ChannelDef { name: "G#5",         color: VIB,            target: ChannelTarget::VibBar { bar_idx: 27 },    jitter_xz: 0.0         }, // 35
-    ChannelDef { name: "A5",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 28 },    jitter_xz: 0.0         }, // 36
-    ChannelDef { name: "A#5",         color: VIB,            target: ChannelTarget::VibBar { bar_idx: 29 },    jitter_xz: 0.0         }, // 37
-    ChannelDef { name: "B5",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 30 },    jitter_xz: 0.0         }, // 38
-    ChannelDef { name: "C6",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 31 },    jitter_xz: 0.0         }, // 39
-    ChannelDef { name: "C#6",         color: VIB,            target: ChannelTarget::VibBar { bar_idx: 32 },    jitter_xz: 0.0         }, // 40
-    ChannelDef { name: "D6",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 33 },    jitter_xz: 0.0         }, // 41
-    ChannelDef { name: "D#6",         color: VIB,            target: ChannelTarget::VibBar { bar_idx: 34 },    jitter_xz: 0.0         }, // 42
-    ChannelDef { name: "E6",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 35 },    jitter_xz: 0.0         }, // 43
-    ChannelDef { name: "F6",          color: VIB,            target: ChannelTarget::VibBar { bar_idx: 36 },    jitter_xz: 0.0         }, // 44
+    // ch 0–5 — chute channels (one per chute instance, GhostSnare path)
+    ChannelDef { name: "Chute 1", color: (51, 115, 230), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 0
+    ChannelDef { name: "Chute 2", color: (70, 130, 210), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 1
+    ChannelDef { name: "Chute 3", color: (90, 150, 230), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 2
+    ChannelDef { name: "Chute 4", color: (40, 100, 215), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 3
+    ChannelDef { name: "Chute 5", color: (60,  85, 200), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 4
+    ChannelDef { name: "Chute 6", color: (80, 160, 225), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 5
+    // ch 6–12 — direct snare drops
+    ChannelDef { name: "Snare",   color: SNARE,          target: ChannelTarget::Snare { x_offset:  0.00 }, jitter_xz: SNARE_JITTER }, // 6  centre
+    ChannelDef { name: "Snare+2", color: SNARE,          target: ChannelTarget::Snare { x_offset:  0.02 }, jitter_xz: SNARE_JITTER }, // 7
+    ChannelDef { name: "Snare-2", color: SNARE,          target: ChannelTarget::Snare { x_offset: -0.02 }, jitter_xz: SNARE_JITTER }, // 8
+    ChannelDef { name: "Snare+4", color: SNARE,          target: ChannelTarget::Snare { x_offset:  0.04 }, jitter_xz: SNARE_JITTER }, // 9
+    ChannelDef { name: "Snare-4", color: SNARE,          target: ChannelTarget::Snare { x_offset: -0.04 }, jitter_xz: SNARE_JITTER }, // 10
+    ChannelDef { name: "Snare+6", color: SNARE,          target: ChannelTarget::Snare { x_offset:  0.06 }, jitter_xz: SNARE_JITTER }, // 11
+    ChannelDef { name: "Snare-6", color: SNARE,          target: ChannelTarget::Snare { x_offset: -0.06 }, jitter_xz: SNARE_JITTER }, // 12
+    // ch 13–49 — vibraphone bars 0–36 (F3 → F6)
+    ChannelDef { name: "F3",  color: VIB, target: ChannelTarget::VibBar { bar_idx:  0 }, jitter_xz: 0.0 }, // 13
+    ChannelDef { name: "F#3", color: VIB, target: ChannelTarget::VibBar { bar_idx:  1 }, jitter_xz: 0.0 }, // 14
+    ChannelDef { name: "G3",  color: VIB, target: ChannelTarget::VibBar { bar_idx:  2 }, jitter_xz: 0.0 }, // 15
+    ChannelDef { name: "G#3", color: VIB, target: ChannelTarget::VibBar { bar_idx:  3 }, jitter_xz: 0.0 }, // 16
+    ChannelDef { name: "A3",  color: VIB, target: ChannelTarget::VibBar { bar_idx:  4 }, jitter_xz: 0.0 }, // 17
+    ChannelDef { name: "A#3", color: VIB, target: ChannelTarget::VibBar { bar_idx:  5 }, jitter_xz: 0.0 }, // 18
+    ChannelDef { name: "B3",  color: VIB, target: ChannelTarget::VibBar { bar_idx:  6 }, jitter_xz: 0.0 }, // 19
+    ChannelDef { name: "C4",  color: VIB, target: ChannelTarget::VibBar { bar_idx:  7 }, jitter_xz: 0.0 }, // 20
+    ChannelDef { name: "C#4", color: VIB, target: ChannelTarget::VibBar { bar_idx:  8 }, jitter_xz: 0.0 }, // 21
+    ChannelDef { name: "D4",  color: VIB, target: ChannelTarget::VibBar { bar_idx:  9 }, jitter_xz: 0.0 }, // 22
+    ChannelDef { name: "D#4", color: VIB, target: ChannelTarget::VibBar { bar_idx: 10 }, jitter_xz: 0.0 }, // 23
+    ChannelDef { name: "E4",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 11 }, jitter_xz: 0.0 }, // 24
+    ChannelDef { name: "F4",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 12 }, jitter_xz: 0.0 }, // 25
+    ChannelDef { name: "F#4", color: VIB, target: ChannelTarget::VibBar { bar_idx: 13 }, jitter_xz: 0.0 }, // 26
+    ChannelDef { name: "G4",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 14 }, jitter_xz: 0.0 }, // 27
+    ChannelDef { name: "G#4", color: VIB, target: ChannelTarget::VibBar { bar_idx: 15 }, jitter_xz: 0.0 }, // 28
+    ChannelDef { name: "A4",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 16 }, jitter_xz: 0.0 }, // 29
+    ChannelDef { name: "A#4", color: VIB, target: ChannelTarget::VibBar { bar_idx: 17 }, jitter_xz: 0.0 }, // 30
+    ChannelDef { name: "B4",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 18 }, jitter_xz: 0.0 }, // 31
+    ChannelDef { name: "C5",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 19 }, jitter_xz: 0.0 }, // 32
+    ChannelDef { name: "C#5", color: VIB, target: ChannelTarget::VibBar { bar_idx: 20 }, jitter_xz: 0.0 }, // 33
+    ChannelDef { name: "D5",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 21 }, jitter_xz: 0.0 }, // 34
+    ChannelDef { name: "D#5", color: VIB, target: ChannelTarget::VibBar { bar_idx: 22 }, jitter_xz: 0.0 }, // 35
+    ChannelDef { name: "E5",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 23 }, jitter_xz: 0.0 }, // 36
+    ChannelDef { name: "F5",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 24 }, jitter_xz: 0.0 }, // 37
+    ChannelDef { name: "F#5", color: VIB, target: ChannelTarget::VibBar { bar_idx: 25 }, jitter_xz: 0.0 }, // 38
+    ChannelDef { name: "G5",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 26 }, jitter_xz: 0.0 }, // 39
+    ChannelDef { name: "G#5", color: VIB, target: ChannelTarget::VibBar { bar_idx: 27 }, jitter_xz: 0.0 }, // 40
+    ChannelDef { name: "A5",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 28 }, jitter_xz: 0.0 }, // 41
+    ChannelDef { name: "A#5", color: VIB, target: ChannelTarget::VibBar { bar_idx: 29 }, jitter_xz: 0.0 }, // 42
+    ChannelDef { name: "B5",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 30 }, jitter_xz: 0.0 }, // 43
+    ChannelDef { name: "C6",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 31 }, jitter_xz: 0.0 }, // 44
+    ChannelDef { name: "C#6", color: VIB, target: ChannelTarget::VibBar { bar_idx: 32 }, jitter_xz: 0.0 }, // 45
+    ChannelDef { name: "D6",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 33 }, jitter_xz: 0.0 }, // 46
+    ChannelDef { name: "D#6", color: VIB, target: ChannelTarget::VibBar { bar_idx: 34 }, jitter_xz: 0.0 }, // 47
+    ChannelDef { name: "E6",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 35 }, jitter_xz: 0.0 }, // 48
+    ChannelDef { name: "F6",  color: VIB, target: ChannelTarget::VibBar { bar_idx: 36 }, jitter_xz: 0.0 }, // 49
 ];
 
 /// Returns the display name for a channel.

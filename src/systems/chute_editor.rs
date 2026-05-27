@@ -5,7 +5,7 @@ use bevy_egui::{egui, EguiContexts};
 use crate::components::chute::{spawn_chute, ChuteSegment};
 use crate::components::snare::{spawn_snare, PivotArm, SnarePart};
 use crate::components::vibraphone::{spawn_vibraphone, VibraphoneEntity};
-use crate::resources::chute_params::ChuteParams;
+use crate::resources::chute_params::{ChuteParams, MultiChuteConfig, N_CHUTES};
 use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::snare_params::SnareParams;
 use crate::resources::stats_intake::StatsIntake;
@@ -39,6 +39,7 @@ pub fn apply_snare_fixed_system(
 pub fn chute_editor_ui(
     mut contexts: EguiContexts,
     mut params: ResMut<ChuteParams>,
+    mut multi: ResMut<MultiChuteConfig>,
     mut snare_params: ResMut<SnareParams>,
     mut vib: ResMut<VibraphoneParams>,
     mut marble_col: ResMut<MarbleCollisions>,
@@ -104,9 +105,9 @@ pub fn chute_editor_ui(
                         snare_params.dirty = true;
                     }
 
-                    // ── Chute ────────────────────────────────────────────────
+                    // ── Chute shape (shared across all instances) ────────────
                     ui.separator();
-                    ui.heading("Chute");
+                    ui.heading("Chute shape");
                     changed |= point_drag_row(ui, "Exit end", &mut params.exit_pos);
                     changed |= scalar_drag_row(ui, "Exit length (m)", &mut params.exit_length, 0.001, 0.005..=0.50);
                     changed |= angle_drag_row(ui, "Exit angle (°)", &mut params.exit_angle, 0.0..=45.0);
@@ -115,13 +116,42 @@ pub fn chute_editor_ui(
                     changed |= scalar_drag_row(ui, "Slope length (m)", &mut params.slope_length, 0.001, 0.01..=1.0);
 
                     ui.separator();
-                    if ui.button("Reset to defaults").clicked() {
+                    if ui.button("Reset shape to defaults").clicked() {
                         *params = ChuteParams::default();
                         changed = true;
                     }
 
                     if changed {
                         params.dirty = true;
+                    }
+
+                    // ── Chute angles (per-instance Y-axis rotation) ──────────
+                    ui.separator();
+                    ui.heading(format!("Chute angles ({N_CHUTES} chutes)"));
+                    let mut angle_changed = false;
+                    for i in 0..N_CHUTES {
+                        angle_changed |= scalar_drag_row(
+                            ui,
+                            &format!("Chute {} (°)", i + 1),
+                            &mut multi.angles_deg[i],
+                            0.1,
+                            -180.0..=180.0,
+                        );
+                    }
+                    ui.horizontal(|ui| {
+                        if ui.small_button("Space 3°").clicked() {
+                            for i in 0..N_CHUTES {
+                                multi.angles_deg[i] = 3.0 + i as f32 * 3.0;
+                            }
+                            angle_changed = true;
+                        }
+                        if ui.small_button("Reset angles").clicked() {
+                            multi.angles_deg = MultiChuteConfig::default().angles_deg;
+                            angle_changed = true;
+                        }
+                    });
+                    if angle_changed {
+                        multi.dirty = true;
                     }
 
                     // ── Vibraphone ───────────────────────────────────────────
@@ -176,7 +206,7 @@ pub fn chute_editor_ui(
                         ui.add(egui::DragValue::new(&mut auto_spawn.step_slope_angle_deg).speed(0.1));
                     });
 
-                    let is_running = auto_spawn.pending > 0 || auto_spawn.waiting_for.is_some();
+                    let is_running = auto_spawn.pending > 0 || auto_spawn.waiting;
                     ui.horizontal(|ui| {
                         if is_running {
                             let done = auto_spawn.spawned;
@@ -184,7 +214,7 @@ pub fn chute_editor_ui(
                             ui.label(format!("{done}/{total}"));
                             if ui.button("Stop").clicked() {
                                 auto_spawn.pending = 0;
-                                auto_spawn.waiting_for = None;
+                                auto_spawn.waiting = false;
                             }
                         } else if ui
                             .button(format!("Start {}", auto_spawn.batch_size))
@@ -291,16 +321,21 @@ pub fn rebuild_chute_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut params: ResMut<ChuteParams>,
+    mut multi: ResMut<MultiChuteConfig>,
     snare_params: Res<SnareParams>,
     segments: Query<Entity, With<ChuteSegment>>,
 ) {
-    // Rebuild when chute shape changes OR when the snare (and thus the chute origin) moves.
-    if !params.dirty && !snare_params.is_changed() {
+    // Rebuild when shape, angles, or snare position changes.
+    if !params.dirty && !multi.dirty && !snare_params.is_changed() {
         return;
     }
     params.dirty = false;
+    multi.dirty = false;
     for entity in &segments {
         commands.entity(entity).despawn();
     }
-    spawn_chute(&mut commands, &mut meshes, &mut materials, &params, snare_params.pos);
+    for i in 0..N_CHUTES {
+        let angle_rad = multi.angles_deg[i].to_radians();
+        spawn_chute(&mut commands, &mut meshes, &mut materials, &params, snare_params.pos, angle_rad);
+    }
 }

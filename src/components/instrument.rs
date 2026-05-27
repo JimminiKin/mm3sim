@@ -1,8 +1,16 @@
 use bevy::prelude::*;
 
+/// Index into the chute instances (0 .. `N_CHUTES`).
+///
+/// Added only to `MarbleSpawner` entities for chute channels
+/// (`WHEEL_CH_CHUTE_FIRST + i`) so that `sync_instrument_spawners` can look up
+/// the per-chute rotation angle in `MultiChuteConfig`.
+#[derive(Component, Clone, Copy)]
+pub struct ChuteSpawnerIndex(pub usize);
+
 /// Marker on every hittable instrument surface.
 /// `channel` matches the programming wheel channel number exactly
-/// (e.g., `WHEEL_CH_DROP` = 1 for the snare drum, `WHEEL_CH_VIB_FIRST + bar_idx`
+/// (e.g., `WHEEL_CH_DROP` = 6 for the snare drum, `WHEEL_CH_VIB_FIRST + bar_idx`
 /// for vibraphone bars).
 #[derive(Component, Clone, Copy)]
 pub struct Instrument {
@@ -18,10 +26,10 @@ pub struct Instrument {
 /// that is needed to relocate a channel's drop point.
 ///
 /// One `MarbleSpawner` exists per programming-wheel channel:
-/// - Ghost-snare (ch 0): sits at the chute entry, synced from `ChuteParams`.
-/// - Snare variants (ch 1–7): sit above the snare drum at their X offset,
+/// - Chute channels (ch 0–5): each sits at its chute entry, synced from `ChuteParams`.
+/// - Snare variants (ch 6–12): sit above the snare drum at their X offset,
 ///   synced from the snare `Instrument` world position.
-/// - Vibraphone bars (ch 8–44): sit above each bar, synced from the bar
+/// - Vibraphone bars (ch 13–49): sit above each bar, synced from the bar
 ///   `Instrument` world position.  Tagged `VibraphoneEntity` so they are
 ///   automatically recreated when the vibraphone is rebuilt.
 ///

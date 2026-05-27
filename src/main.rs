@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass};
 
 use resources::programming_wheel_params::ProgrammingWheelParams;
-use resources::chute_params::ChuteParams;
+use resources::chute_params::{ChuteParams, MultiChuteConfig};
 use resources::constants::BG_COLOR;
 use resources::constants::SIMULATION_TPS;
 use resources::marble_collisions::MarbleCollisions;
@@ -74,6 +74,7 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(BG_COLOR.0, BG_COLOR.1, BG_COLOR.2)))
         .init_resource::<ProgrammingWheelParams>()
         .init_resource::<ChuteParams>()
+        .init_resource::<MultiChuteConfig>()
         .init_resource::<SnareParams>()
         .init_resource::<MarbleCollisions>()
         .init_resource::<RunHistory>()

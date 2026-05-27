@@ -56,20 +56,28 @@ fn build_profile(params: &ChuteParams) -> Vec<ProfilePt> {
     pts
 }
 
-/// `snare_offset` is `SnareParams.pos` and is added to every world position so the
-/// chute translates with the snare.  Pass `Vec3::ZERO` for no offset.
+/// Spawns one chute instance.
+///
+/// Geometry is built in snare-local space (profile in the Y-Z plane at X = 0,
+/// Y origin = snare top face).  The entity `Transform` then:
+/// - rotates the chute by `angle_rad` around the Y-axis (through the snare centre),
+/// - translates by `snare_offset` to follow the snare assembly.
+///
+/// Because the body is `RigidBody::Static`, Avian3D applies the entity transform
+/// to the trimesh collider automatically.
 pub fn spawn_chute(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     params: &ChuteParams,
     snare_offset: Vec3,
+    angle_rad: f32,
 ) {
     let profile = build_profile(params);
-    let (coll_verts, coll_idx) = build_trimesh_collider(&profile, snare_offset);
+    let (coll_verts, coll_idx) = build_trimesh_collider(&profile);
 
     commands.spawn((
-        Mesh3d(meshes.add(build_smooth_mesh(&profile, snare_offset))),
+        Mesh3d(meshes.add(build_smooth_mesh(&profile))),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(0.55, 0.45, 0.30),
             metallic: 0.0,
@@ -78,6 +86,11 @@ pub fn spawn_chute(
             cull_mode: None,
             ..default()
         })),
+        Transform {
+            translation: snare_offset,
+            rotation: Quat::from_rotation_y(angle_rad),
+            scale: Vec3::ONE,
+        },
         RigidBody::Static,
         Collider::trimesh(coll_verts, coll_idx),
         Restitution::new(CHUTE_RESTITUTION),
@@ -93,16 +106,16 @@ fn surface_normal(tz: f32, ty: f32) -> Vec3 {
     Vec3::new(0.0, -tz, ty).normalize_or_zero()
 }
 
-fn build_trimesh_collider(profile: &[ProfilePt], snare_offset: Vec3) -> (Vec<Vec3>, Vec<[u32; 3]>) {
+/// Build trimesh collider vertices in snare-local space (no snare_offset, no rotation).
+fn build_trimesh_collider(profile: &[ProfilePt]) -> (Vec<Vec3>, Vec<[u32; 3]>) {
     let n = profile.len() - 1;
     let w = CHUTE_WIDTH * 0.5;
     let h = CHUTE_THICKNESS * 0.5;
-    let x = CHUTE_END_X + snare_offset.x;
 
     let mut verts: Vec<Vec3> = Vec::with_capacity((n + 1) * 4);
     for &(z, y, tz, ty) in profile {
         let sn = surface_normal(tz, ty);
-        let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y + snare_offset.y, z + CHUTE_ORIGIN_Z + snare_offset.z);
+        let centre = Vec3::new(CHUTE_END_X, y + CHUTE_ORIGIN_Y, z + CHUTE_ORIGIN_Z);
         let top = centre + sn * h;
         let bot = centre - sn * h;
         verts.push(Vec3::new(top.x - w, top.y, top.z));
@@ -124,11 +137,11 @@ fn build_trimesh_collider(profile: &[ProfilePt], snare_offset: Vec3) -> (Vec<Vec
     (verts, idx)
 }
 
-fn build_smooth_mesh(profile: &[ProfilePt], snare_offset: Vec3) -> Mesh {
+/// Build visual mesh in snare-local space (no snare_offset, no rotation).
+fn build_smooth_mesh(profile: &[ProfilePt]) -> Mesh {
     let n = profile.len() - 1;
     let w = CHUTE_WIDTH * 0.5;
     let h = CHUTE_THICKNESS * 0.5;
-    let x = CHUTE_END_X + snare_offset.x;
 
     const STRIDE: usize = 8;
     let cap = (n + 1) * STRIDE;
@@ -141,7 +154,7 @@ fn build_smooth_mesh(profile: &[ProfilePt], snare_offset: Vec3) -> Mesh {
         let t = seg_i as f32 / total_segs;
         let sn = surface_normal(tz, ty);
         let bn = -sn;
-        let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y + snare_offset.y, z + CHUTE_ORIGIN_Z + snare_offset.z);
+        let centre = Vec3::new(CHUTE_END_X, y + CHUTE_ORIGIN_Y, z + CHUTE_ORIGIN_Z);
         let top = centre + sn * h;
         let bot = centre + bn * h;
 

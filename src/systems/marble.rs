@@ -16,22 +16,23 @@ use crate::resources::constants::*;
 use crate::resources::layers::GameLayer;
 use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::marble_runs::RunHistory;
-use crate::resources::programming_wheel_params::{channel_jitter_xz, channel_target, ChannelTarget, WHEEL_CH_CHUTE, WHEEL_CH_DROP};
+use crate::resources::programming_wheel_params::{channel_jitter_xz, channel_target, ChannelTarget, WHEEL_CH_DROP};
 
 /// Compute the world-space spawn position for a chute marble (surface of the slope entry).
 ///
-/// `snare_offset` is `SnareParams.pos`; pass `Vec3::ZERO` when snare is at default position.
-pub fn chute_spawn_pos(params: &ChuteParams, snare_offset: Vec3) -> Vec3 {
+/// The position is computed in snare-local space (profile at X = 0, in the Y-Z plane)
+/// then rotated by `angle_rad` around the Y-axis and offset by `snare_offset`.
+pub fn chute_spawn_pos(params: &ChuteParams, snare_offset: Vec3, angle_rad: f32) -> Vec3 {
     let geo = params.geometry();
     let [slope_z, slope_y] = geo.slope_start;
     let [slope_tz, slope_ty] = geo.slope_tangent;
-    let normal = Vec3::new(0.0, -slope_tz, slope_ty).normalize_or_zero();
-    let chute_centre = Vec3::new(
-        CHUTE_END_X + snare_offset.x,
-        slope_y + CHUTE_ORIGIN_Y + snare_offset.y,
-        slope_z + CHUTE_ORIGIN_Z + snare_offset.z,
-    );
-    chute_centre + normal * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.001)
+    let normal_local = Vec3::new(0.0, -slope_tz, slope_ty).normalize_or_zero();
+    let local = Vec3::new(
+        CHUTE_END_X,
+        slope_y + CHUTE_ORIGIN_Y,
+        slope_z + CHUTE_ORIGIN_Z,
+    ) + normal_local * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.001);
+    Quat::from_rotation_y(angle_rad) * local + snare_offset
 }
 
 fn marble_layers(collide: bool) -> CollisionLayers {
@@ -217,7 +218,9 @@ pub struct AutoSpawn {
     pub step_slope_angle_deg: f32,
     pub pending: u32,
     pub spawned: u32,
-    pub waiting_for: Option<usize>,
+    /// True while waiting for all live chute marbles (GhostSnare channels) to despawn before
+    /// firing the next batch step.
+    pub waiting: bool,
 }
 
 impl Default for AutoSpawn {
@@ -228,7 +231,7 @@ impl Default for AutoSpawn {
             step_slope_angle_deg: 0.0,
             pending: 0,
             spawned: 0,
-            waiting_for: None,
+            waiting: false,
         }
     }
 }
@@ -242,17 +245,15 @@ pub fn auto_spawn_system(
     marble_col: Res<MarbleCollisions>,
     mut all_runs: ResMut<RunHistory>,
     spawners: Query<(&MarbleSpawner, &Transform)>,
-    // Wait until no chute marble with the tracked run index remains in the world.
-    chute_marbles: Query<(&RunIndex, &SpawnChannel), With<Marble>>,
+    // Wait until all chute marbles from the previous batch have despawned.
+    live_marbles: Query<&SpawnChannel, With<Marble>>,
 ) {
-    if let Some(waiting_idx) = auto.waiting_for {
-        let still_live = chute_marbles
-            .iter()
-            .any(|(ri, ch)| ri.0 == waiting_idx && ch.0 == WHEEL_CH_CHUTE);
+    if auto.waiting {
+        let still_live = live_marbles.iter().any(|ch| matches!(channel_target(ch.0), ChannelTarget::GhostSnare));
         if still_live {
             return;
         }
-        auto.waiting_for = None;
+        auto.waiting = false;
     }
 
     if auto.pending == 0 {
@@ -272,34 +273,32 @@ pub fn auto_spawn_system(
         }
     }
 
-    // Helper: look up a spawner's base position by channel.
-    let spawner_pos = |ch: usize| -> Vec3 {
-        spawners
-            .iter()
-            .find(|(s, _)| s.channel == ch)
-            .map(|(_, tf)| tf.translation)
-            .unwrap_or_default()
-    };
+    let mut rng = rand::rng();
 
     // Drop marble — apply per-channel jitter on top of spawner position.
     let drop_run_idx = all_runs.push_new_run(WHEEL_CH_DROP);
-    let mut drop_pos = spawner_pos(WHEEL_CH_DROP);
+    let mut drop_pos = spawners
+        .iter()
+        .find(|(s, _)| s.channel == WHEEL_CH_DROP)
+        .map(|(_, tf)| tf.translation)
+        .unwrap_or_default();
     let jitter = channel_jitter_xz(WHEEL_CH_DROP);
     if jitter > 0.0 {
-        let mut rng = rand::rng();
         drop_pos.x += rng.random_range(-jitter..jitter);
         drop_pos.z += rng.random_range(-jitter..jitter);
     }
     spawn_marble(&mut commands, &mut meshes, &mut materials,
         drop_pos, marble_col.0, drop_run_idx, WHEEL_CH_DROP);
 
-    // Chute (ghost-snare) marble — no jitter, spawn at chute entry.
-    let chute_run_idx = all_runs.push_new_run(WHEEL_CH_CHUTE);
-    let chute_pos = spawner_pos(WHEEL_CH_CHUTE);
-    spawn_marble(&mut commands, &mut meshes, &mut materials,
-        chute_pos, marble_col.0, chute_run_idx, WHEEL_CH_CHUTE);
+    // One chute marble per chute spawner (each has its own GhostSnare channel).
+    for (spawner, tf) in spawners.iter().filter(|(s, _)| matches!(channel_target(s.channel), ChannelTarget::GhostSnare)) {
+        let ch = spawner.channel;
+        let chute_run_idx = all_runs.push_new_run(ch);
+        spawn_marble(&mut commands, &mut meshes, &mut materials,
+            tf.translation, marble_col.0, chute_run_idx, ch);
+    }
 
-    auto.waiting_for = Some(chute_run_idx);
+    auto.waiting = true;
     auto.pending -= 1;
     auto.spawned += 1;
 }

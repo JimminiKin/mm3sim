@@ -5,7 +5,7 @@ use bevy_egui::PrimaryEguiContext;
 use crate::components::chute::spawn_chute;
 use crate::components::snare::spawn_snare;
 use crate::components::vibraphone::spawn_vibraphone;
-use crate::resources::chute_params::ChuteParams;
+use crate::resources::chute_params::{ChuteParams, MultiChuteConfig, N_CHUTES};
 use crate::resources::snare_params::SnareParams;
 use crate::resources::vibraphone_params::VibraphoneParams;
 use crate::resources::constants::*;
@@ -16,6 +16,7 @@ pub fn setup_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     chute_params: Res<ChuteParams>,
+    multi_config: Res<MultiChuteConfig>,
     snare_params: Res<SnareParams>,
     vib_params: Res<VibraphoneParams>,
 ) {
@@ -48,6 +49,9 @@ pub fn setup_system(
     });
 
     spawn_snare(&mut commands, &mut meshes, &mut materials, &snare_params);
-    spawn_chute(&mut commands, &mut meshes, &mut materials, &chute_params, snare_params.pos);
+    for i in 0..N_CHUTES {
+        let angle_rad = multi_config.angles_deg[i].to_radians();
+        spawn_chute(&mut commands, &mut meshes, &mut materials, &chute_params, snare_params.pos, angle_rad);
+    }
     spawn_vibraphone(&mut commands, &mut meshes, &mut materials, &vib_params);
 }

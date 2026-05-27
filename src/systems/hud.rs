@@ -411,10 +411,10 @@ fn render_help_panel(ui: &mut egui::Ui) {
             .id_salt("help_marbles")
             .default_open(true)
             .show(ui, |ui| {
-                use crate::resources::programming_wheel_params::{channel_color_rgb, channel_name, WHEEL_CH_CHUTE, WHEEL_CH_DROP};
+                use crate::resources::programming_wheel_params::{channel_color_rgb, channel_name, WHEEL_CH_CHUTE_FIRST, WHEEL_CH_DROP};
                 let channels = [
-                    (WHEEL_CH_DROP,  "Falls ~1 m with small random lateral jitter. Flight time nearly fixed by gravity."),
-                    (WHEEL_CH_CHUTE, "Slides down the chute, lifts off, then flies to snare. Chute shape controls slide duration and liftoff velocity."),
+                    (WHEEL_CH_DROP,        "Falls ~1 m with small random lateral jitter. Flight time nearly fixed by gravity."),
+                    (WHEEL_CH_CHUTE_FIRST, "Slides down the chute, lifts off, then flies to snare. Chute shape controls slide duration and liftoff velocity."),
                 ];
                 for (ch, desc) in channels {
                     let (r, g, b) = channel_color_rgb(ch);

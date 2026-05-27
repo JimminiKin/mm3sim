@@ -185,7 +185,7 @@ pub fn snare_tip_graph_ui(
     // Use chute channel color for the tip-height curve (blue)
     let curve_color = {
         let (r, g, b) = crate::resources::programming_wheel_params::channel_color_rgb(
-            crate::resources::programming_wheel_params::WHEEL_CH_CHUTE,
+            crate::resources::programming_wheel_params::WHEEL_CH_CHUTE_FIRST,
         );
         egui::Color32::from_rgb(r, g, b)
     };

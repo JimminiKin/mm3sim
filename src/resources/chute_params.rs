@@ -2,6 +2,9 @@ use bevy::prelude::*;
 
 use crate::resources::constants::*;
 
+/// Number of parallel chute instances arranged around the snare.
+pub const N_CHUTES: usize = 6;
+
 /// Derived geometry for the 3-part chute (computed from ChuteParams).
 pub struct ChuteGeometry {
     pub slope_start: [f32; 2],    // [z, y]
@@ -97,6 +100,28 @@ impl ChuteParams {
             exit_tangent: [exit_tz, exit_ty],
             theta_start,
             arc_sweep,
+        }
+    }
+}
+
+/// Per-chute rotation angles for the `N_CHUTES` parallel chutes.
+///
+/// Each chute shares the same `ChuteParams` profile but is rotated by its own
+/// angle around the Y-axis through the snare top-face centre.  Default spacing
+/// is 3 ° starting at −5 °, placing all six chutes slightly to the left of centre.
+#[derive(Resource)]
+pub struct MultiChuteConfig {
+    /// Y-axis rotation angle in degrees for each chute instance.
+    pub angles_deg: [f32; N_CHUTES],
+    pub dirty: bool,
+}
+
+impl Default for MultiChuteConfig {
+    fn default() -> Self {
+        // 3 ° spacing starting at −5 ° → [−5, −8, −11, −14, −17, −20]
+        Self {
+            angles_deg: std::array::from_fn(|i| -5.0 - i as f32 * 3.0),
+            dirty: false,
         }
     }
 }

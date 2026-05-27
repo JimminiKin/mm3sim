@@ -164,9 +164,9 @@ pub const PROGRAMMING_WHEEL_RADIUS: f32 = 0.5; // 1 m diameter cylinder
 /// 16 bars × 4 beats/bar = 64 beats per revolution.
 /// At 2.40625 RPM: 2.40625 × 64 = 154 musical BPM.
 pub const PROGRAMMING_WHEEL_BEATS_PER_REV: f32 = 64.0;
-/// ch 0 = ghost snare (chute path), ch 1–7 = snare variants, ch 8–44 = vib bars 0–36.
+/// ch 0–5 = chute channels (one per chute), ch 6–12 = snare variants, ch 13–49 = vib bars 0–36.
 /// Must equal the number of entries in `CHANNEL_DEFS` in `programming_wheel_params`.
-pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 45;
+pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 50;
 /// 154 BPM ÷ 64 beats/rev = 2.40625 RPM
 pub const PROGRAMMING_WHEEL_RPM_DEFAULT: f32 = 2.40625;
 pub const PROGRAMMING_WHEEL_Z_POS: f32 = 1.4; // world Z (positive from snare)
