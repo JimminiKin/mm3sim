@@ -12,17 +12,19 @@ use resources::constants::BG_COLOR;
 use resources::constants::SIMULATION_TPS;
 use resources::marble_collisions::MarbleCollisions;
 use resources::marble_runs::RunHistory;
+use resources::snare_params::SnareParams;
 use resources::stats_intake::StatsIntake;
 use resources::vibraphone_params::VibraphoneParams;
 use systems::axes::{resize_axes_viewport, setup_axes_hud, update_axes_hud};
 use systems::programming_wheel::{
     programming_wheel_editor_ui, programming_wheel_spawn_system, draw_programming_wheel_gizmos,
-    rotate_programming_wheel_system, setup_programming_wheel_system,
+    rotate_programming_wheel_system, setup_programming_wheel_system, setup_spawners_system,
+    sync_instrument_spawners,
 };
 use systems::camera::orbit_camera_system;
 use systems::chute_editor::{
-    apply_snare_fixed_system, chute_editor_ui, rebuild_chute_system, rebuild_vibraphone_system,
-    SnareFixed,
+    apply_snare_fixed_system, chute_editor_ui, rebuild_chute_system, rebuild_snare_system,
+    rebuild_vibraphone_system, SnareFixed,
 };
 use systems::chute_handles::{
     chute_handle_drag_system, draw_chute_gizmos, setup_chute_handles, sync_handle_transforms,
@@ -73,6 +75,7 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(BG_COLOR.0, BG_COLOR.1, BG_COLOR.2)))
         .init_resource::<ProgrammingWheelParams>()
         .init_resource::<ChuteParams>()
+        .init_resource::<SnareParams>()
         .init_resource::<MarbleCollisions>()
         .init_resource::<HandleDrag>()
         .init_resource::<RunHistory>()
@@ -91,7 +94,7 @@ fn main() {
                 setup_chute_handles,
             ),
         )
-        .add_systems(PostStartup, setup_programming_wheel_system)
+        .add_systems(PostStartup, (setup_programming_wheel_system, setup_spawners_system))
         // Snapshot velocity before physics so impact recording always sees approach speed.
         .add_systems(
             FixedUpdate,
@@ -124,14 +127,18 @@ fn main() {
                 despawn_fallen_marbles_system,
                 update_marble_collisions,
                 draw_marble_ghosts_system,
-                // Chute
+                // Instruments
+                rebuild_snare_system,
                 rebuild_chute_system,
                 rebuild_vibraphone_system,
                 sync_handle_transforms,
                 sync_handle_visibility,
                 draw_chute_gizmos,
-                // Programming wheel – rotation writes pending_spawns, spawner reads it
-                (rotate_programming_wheel_system, programming_wheel_spawn_system).chain(),
+                // Programming wheel – sync spawner positions, then rotate + spawn
+                (
+                    sync_instrument_spawners,
+                    (rotate_programming_wheel_system, programming_wheel_spawn_system).chain(),
+                ).chain(),
                 draw_programming_wheel_gizmos,
                 // Axes overlay
                 update_axes_hud,

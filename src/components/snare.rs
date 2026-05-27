@@ -3,23 +3,33 @@ use bevy::math::primitives::Cylinder;
 use bevy::prelude::*;
 
 use crate::components::instrument::Instrument;
+use crate::components::pivot_arm::{spawn_pivot_arm, PivotArmSpec};
 use crate::resources::constants::*;
+use crate::resources::programming_wheel_params::WHEEL_CH_DROP;
+use crate::resources::snare_params::SnareParams;
 
+/// Marks the snare drum surface (hittable by marbles).
 #[derive(Component)]
 pub struct SnareDrum;
 
+/// Marks the pivot arm entity for the snare (used by `apply_snare_fixed_system`).
 #[derive(Component)]
 pub struct PivotArm;
+
+/// Tags every top-level entity that belongs to the snare assembly so that
+/// `rebuild_snare_system` can despawn the whole thing.
+///
+/// The arm's children (tube, CW, drum) are removed automatically via Bevy's
+/// hierarchical despawn — they do not need this marker themselves.
+#[derive(Component, Clone)]
+pub struct SnarePart;
 
 pub fn spawn_snare(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    params: &SnareParams,
 ) {
-    let arm_rad = ARM_SPAWN_DEG.to_radians();
-    let arm_spawn_y = PIVOT_LOCAL_Z * arm_rad.sin();
-    let arm_spawn_z = PIVOT_FROM_SNARE - PIVOT_LOCAL_Z * arm_rad.cos();
-
     let chrome = materials.add(StandardMaterial {
         base_color: Color::srgb(CHROME_COLOR.0, CHROME_COLOR.1, CHROME_COLOR.2),
         metallic: CHROME_METALLIC,
@@ -33,83 +43,45 @@ pub fn spawn_snare(
         ..default()
     });
 
-    let anchor = commands
-        .spawn((
-            Transform::from_xyz(0.0, 0.0, PIVOT_FROM_SNARE),
-            RigidBody::Static,
-        ))
-        .id();
+    // Pivot anchor position: offset from world origin by params.pos so the
+    // entire assembly moves as a rigid unit when params.pos changes.
+    let spec = PivotArmSpec {
+        pivot_world_pos: Vec3::new(0.0, 0.0, PIVOT_FROM_SNARE) + params.pos,
+        arm_half_len: ARM_HALF_LEN,
+        pivot_local_z: PIVOT_LOCAL_Z,
+        rest_deg: SNARE_REST_DEG,
+        max_tilt_deg: MAX_TILT_DEG,
+        arm_mass: ARM_MASS,
+        arm_tube_radius: ARM_TUBE_RADIUS,
+        linear_damping: ARM_LINEAR_DAMPING,
+        angular_damping: ARM_ANGULAR_DAMPING,
+        cw_mass: CW_MASS,
+        cw_radius: CW_RADIUS,
+        cw_half_height: CW_HALF_HEIGHT,
+        stand_half_height: PIVOT_STAND_HALF_HEIGHT,
+    };
 
-    commands.spawn((
-        Mesh3d(meshes.add(Mesh::from(Cylinder {
-            radius: ARM_TUBE_RADIUS,
-            half_height: PIVOT_STAND_HALF_HEIGHT,
-        }))),
-        MeshMaterial3d(dark_steel.clone()),
-        Transform::from_xyz(0.0, -PIVOT_STAND_HALF_HEIGHT, PIVOT_FROM_SNARE),
-    ));
+    // spawn_pivot_arm creates: anchor (SnarePart), stand (SnarePart),
+    // arm (SnarePart) + tube child + CW child, joint (SnarePart).
+    let arm = spawn_pivot_arm(commands, meshes, &spec, dark_steel, SnarePart);
 
-    let arm = commands
-        .spawn((
-            Transform::from_xyz(0.0, arm_spawn_y, arm_spawn_z)
-                .with_rotation(Quat::from_rotation_x(arm_rad)),
-            Visibility::default(),
-            RigidBody::Dynamic,
-            PivotArm,
-            LinearDamping(ARM_LINEAR_DAMPING),
-            AngularDamping(ARM_ANGULAR_DAMPING),
-        ))
-        .with_children(|p| {
-            p.spawn((
-                Mesh3d(meshes.add(Mesh::from(Cylinder {
-                    radius: ARM_TUBE_RADIUS,
-                    half_height: ARM_HALF_LEN,
-                }))),
-                MeshMaterial3d(dark_steel.clone()),
-                Transform::from_rotation(Quat::from_rotation_x(
-                    -std::f32::consts::FRAC_PI_2,
-                )),
-                Collider::cylinder(ARM_TUBE_RADIUS, ARM_HALF_LEN * 2.0),
-                Mass(ARM_MASS),
-            ));
-
-            p.spawn((
-                Mesh3d(meshes.add(Mesh::from(Cylinder {
-                    radius: SNARE_RADIUS,
-                    half_height: SNARE_HALF_HEIGHT,
-                }))),
-                MeshMaterial3d(chrome),
-                Transform::from_xyz(0.0, 0.0, SNARE_LOCAL_Z),
-                Collider::cylinder(SNARE_RADIUS, SNARE_HALF_HEIGHT * 2.0),
-                Mass(SNARE_MASS),
-                Restitution::new(SNARE_RESTITUTION),
-                Friction::new(SNARE_FRICTION),
-                CollisionEventsEnabled,
-                SnareDrum,
-                Instrument { channel: 1 },
-            ));
-
-            p.spawn((
-                Mesh3d(meshes.add(Mesh::from(Cylinder {
-                    radius: CW_RADIUS,
-                    half_height: CW_HALF_HEIGHT,
-                }))),
-                MeshMaterial3d(dark_steel.clone()),
-                Transform::from_xyz(0.0, 0.0, CW_LOCAL_Z),
-                Collider::cylinder(CW_RADIUS, CW_HALF_HEIGHT * 2.0),
-                Mass(CW_MASS),
-            ));
-        })
-        .id();
-
-    commands.spawn(
-        RevoluteJoint::new(anchor, arm)
-            .with_hinge_axis(Vec3::X)
-            .with_local_anchor1(Vec3::ZERO)
-            .with_local_anchor2(Vec3::new(0.0, 0.0, PIVOT_LOCAL_Z))
-            .with_angle_limits(
-                -(SNARE_REST_DEG + MAX_TILT_DEG).to_radians(),
-                -SNARE_REST_DEG.to_radians(),
-            ),
-    );
+    // Tag the arm as PivotArm and attach the snare drum surface at the
+    // instrument end (local z = SNARE_LOCAL_Z = −ARM_HALF_LEN).
+    commands.entity(arm).insert(PivotArm).with_children(|p| {
+        p.spawn((
+            Mesh3d(meshes.add(Mesh::from(Cylinder {
+                radius: SNARE_RADIUS,
+                half_height: SNARE_HALF_HEIGHT,
+            }))),
+            MeshMaterial3d(chrome),
+            Transform::from_xyz(0.0, 0.0, SNARE_LOCAL_Z),
+            Collider::cylinder(SNARE_RADIUS, SNARE_HALF_HEIGHT * 2.0),
+            Mass(SNARE_MASS),
+            Restitution::new(SNARE_RESTITUTION),
+            Friction::new(SNARE_FRICTION),
+            CollisionEventsEnabled,
+            SnareDrum,
+            Instrument { channel: WHEEL_CH_DROP },
+        ));
+    });
 }

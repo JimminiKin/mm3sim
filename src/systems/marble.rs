@@ -3,27 +3,13 @@ use bevy::math::primitives::Sphere;
 use bevy::prelude::*;
 use rand::RngExt;
 
-use crate::components::snare::SnareDrum;
+use crate::components::instrument::MarbleSpawner;
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
 use crate::resources::layers::GameLayer;
 use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::marble_runs::RunHistory;
-use crate::resources::programming_wheel_params::{WHEEL_CH_CHUTE, WHEEL_CH_VIB_FIRST};
-use crate::resources::vibraphone_params::VibraphoneParams;
-
-pub fn jittered_spawn(snare_top_y: f32) -> Vec3 {
-    let (x_off, z_off) = if MARBLE_SPAWN_JITTER > 0.0 {
-        let mut rng = rand::rng();
-        (
-            rng.random_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
-            rng.random_range(-MARBLE_SPAWN_JITTER..MARBLE_SPAWN_JITTER),
-        )
-    } else {
-        (0.0, 0.0)
-    };
-    Vec3::new(MARBLE_SPAWN_X + x_off, snare_top_y + SPAWN_HEIGHT, z_off)
-}
+use crate::resources::programming_wheel_params::{channel_jitter_xz, channel_target, ChannelTarget, WHEEL_CH_CHUTE, WHEEL_CH_DROP};
 
 /// Compute the world-space spawn position for a chute marble (surface of the slope entry).
 pub fn chute_spawn_pos(params: &ChuteParams) -> Vec3 {
@@ -33,16 +19,6 @@ pub fn chute_spawn_pos(params: &ChuteParams) -> Vec3 {
     let normal = Vec3::new(0.0, -slope_tz, slope_ty).normalize_or_zero();
     let chute_centre = Vec3::new(CHUTE_END_X, slope_y + CHUTE_ORIGIN_Y, slope_z + CHUTE_ORIGIN_Z);
     chute_centre + normal * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.001)
-}
-
-/// Compute the world-space spawn position for a vibraphone marble above a bar.
-pub fn vib_spawn_pos(params: &VibraphoneParams, bar_idx: u32) -> Vec3 {
-    let bar_count = VIB_BAR_COUNT;
-    let logical_idx = bar_idx.min(bar_count - 1);
-    let bar_x = params.row_x_center
-        + ((bar_count - 1 - logical_idx) as f32 - (bar_count - 1) as f32 * 0.5)
-        * params.bar_spacing;
-    Vec3::new(bar_x, params.row_y + VIB_SPAWN_HEIGHT, params.row_z)
 }
 
 fn marble_layers(collide: bool) -> CollisionLayers {
@@ -135,12 +111,10 @@ pub fn spawn_marble(
     run_idx: usize,
     spawn_channel: usize,
 ) {
-    let (color, despawn_floor) = if spawn_channel == WHEEL_CH_CHUTE {
-        (CHUTE_MARBLE_COLOR, CHUTE_MARBLE_DESPAWN_Y)
-    } else if spawn_channel >= WHEEL_CH_VIB_FIRST {
-        (VIB_MARBLE_COLOR, DESPAWN_Y)
-    } else {
-        (MARBLE_COLOR, DESPAWN_Y)
+    let (color, despawn_floor) = match channel_target(spawn_channel) {
+        ChannelTarget::GhostSnare      => (CHUTE_MARBLE_COLOR, CHUTE_MARBLE_DESPAWN_Y),
+        ChannelTarget::VibBar { .. }   => (VIB_MARBLE_COLOR,   DESPAWN_Y),
+        ChannelTarget::Snare { .. }    => (MARBLE_COLOR,        DESPAWN_Y),
     };
 
     commands.spawn((
@@ -253,8 +227,8 @@ pub fn auto_spawn_system(
     mut auto: ResMut<AutoSpawn>,
     mut params: ResMut<ChuteParams>,
     marble_col: Res<MarbleCollisions>,
-    snare: Query<&GlobalTransform, With<SnareDrum>>,
     mut all_runs: ResMut<RunHistory>,
+    spawners: Query<(&MarbleSpawner, &Transform)>,
     // Wait until no chute marble with the tracked run index remains in the world.
     chute_marbles: Query<(&RunIndex, &SpawnChannel), With<Marble>>,
 ) {
@@ -285,18 +259,30 @@ pub fn auto_spawn_system(
         }
     }
 
-    let snare_top_y = snare
-        .single()
-        .map(|gt| gt.translation().y + SNARE_HALF_HEIGHT)
-        .unwrap_or(CHUTE_ORIGIN_Y);
+    // Helper: look up a spawner's base position by channel.
+    let spawner_pos = |ch: usize| -> Vec3 {
+        spawners
+            .iter()
+            .find(|(s, _)| s.channel == ch)
+            .map(|(_, tf)| tf.translation)
+            .unwrap_or_default()
+    };
 
-    let drop_run_idx = all_runs.push_new_run(crate::resources::programming_wheel_params::WHEEL_CH_DROP);
-    let drop_pos = jittered_spawn(snare_top_y);
+    // Drop marble — apply per-channel jitter on top of spawner position.
+    let drop_run_idx = all_runs.push_new_run(WHEEL_CH_DROP);
+    let mut drop_pos = spawner_pos(WHEEL_CH_DROP);
+    let jitter = channel_jitter_xz(WHEEL_CH_DROP);
+    if jitter > 0.0 {
+        let mut rng = rand::rng();
+        drop_pos.x += rng.random_range(-jitter..jitter);
+        drop_pos.z += rng.random_range(-jitter..jitter);
+    }
     spawn_marble(&mut commands, &mut meshes, &mut materials,
-        drop_pos, marble_col.0, drop_run_idx, crate::resources::programming_wheel_params::WHEEL_CH_DROP);
+        drop_pos, marble_col.0, drop_run_idx, WHEEL_CH_DROP);
 
+    // Chute (ghost-snare) marble — no jitter, spawn at chute entry.
     let chute_run_idx = all_runs.push_new_run(WHEEL_CH_CHUTE);
-    let chute_pos = chute_spawn_pos(&params);
+    let chute_pos = spawner_pos(WHEEL_CH_CHUTE);
     spawn_marble(&mut commands, &mut meshes, &mut materials,
         chute_pos, marble_col.0, chute_run_idx, WHEEL_CH_CHUTE);
 

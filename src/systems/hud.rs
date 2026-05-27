@@ -6,7 +6,7 @@ use crate::components::snare::{PivotArm, SnareDrum};
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
 use crate::resources::marble_runs::{HitRecord, Run, RunHistory};
-use crate::resources::programming_wheel_params::{channel_name, WHEEL_CH_VIB_FIRST};
+use crate::resources::programming_wheel_params::{channel_name, channel_target, ChannelTarget};
 use crate::systems::marble::{Marble, SpawnChannel};
 
 pub fn hud_panel_ui(
@@ -244,7 +244,7 @@ fn run_entry_label(run: &Run) -> String {
     let name = channel_name(run.spawn_channel);
     match run.hit {
         None => format!("{} {}   — in flight…", name, run.index + 1),
-        Some(r) if run.spawn_channel >= WHEEL_CH_VIB_FIRST => {
+        Some(r) if matches!(channel_target(run.spawn_channel), ChannelTarget::VibBar { .. }) => {
             format!("{} {}   fly {:.3} s   spd {:.3}   arm {:+.1}°",
                 name, run.index + 1, r.flight_s, r.speed, r.arm_deg)
         }
@@ -261,7 +261,7 @@ fn render_hit_compact(ui: &mut egui::Ui, r: HitRecord, spawn_channel: usize) {
         "  fly {:.3} s   spd {:.3}   AoA {:.1}°   KE {:.2} mJ",
         r.flight_s, r.speed, r.aoa, r.ke_mj
     ));
-    if spawn_channel >= WHEEL_CH_VIB_FIRST {
+    if matches!(channel_target(spawn_channel), ChannelTarget::VibBar { .. }) {
         ui.monospace(format!(
             "  vx/vy/vz  {:+.3}/{:+.3}/{:+.3}   spin {:.3}",
             r.vx, r.vy, r.vz, r.spin

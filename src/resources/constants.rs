@@ -96,9 +96,9 @@ pub const ARM_SPAWN_DEG: f32 = -SNARE_REST_DEG;
 // ── Marble ────────────────────────────────────────────────────────────────────
 pub const MARBLE_RADIUS: f32 = 0.0075;
 pub const MARBLE_MASS: f32 = 0.014; // kg — steel at 20 mm diameter
-pub const MARBLE_SPAWN_X: f32 = 0.0; // centre of snare
-pub const SPAWN_HEIGHT: f32 = 1.0; // above snare top centre
+pub const SPAWN_HEIGHT: f32 = 1.0; // above snare top face
 pub const DROP_REFERENCE_S: f32 = 0.450; // theoretical 1 m free-fall flight time
+/// XZ jitter applied at marble spawn (realistic release noise, in metres).
 pub const MARBLE_SPAWN_JITTER: f32 = 0.001;
 pub const DESPAWN_Y: f32 = -0.3;
 pub const CHUTE_MARBLE_DESPAWN_Y: f32 = -0.1; // chute marbles exit near snare height; cull sooner
@@ -165,8 +165,9 @@ pub const PROGRAMMING_WHEEL_RADIUS: f32 = 0.5; // 1 m diameter cylinder
 /// 16 bars × 4 beats/bar = 64 beats per revolution.
 /// At 2.40625 RPM: 2.40625 × 64 = 154 musical BPM.
 pub const PROGRAMMING_WHEEL_BEATS_PER_REV: f32 = 64.0;
-/// ch 0 = chute drop, ch 1 = vertical snare drop, ch 2..38 = vib bars 0..36
-pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 39;
+/// ch 0 = ghost snare (chute path), ch 1–7 = snare variants, ch 8–44 = vib bars 0–36.
+/// Must equal the number of entries in `CHANNEL_DEFS` in `programming_wheel_params`.
+pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 45;
 /// 154 BPM ÷ 64 beats/rev = 2.40625 RPM
 pub const PROGRAMMING_WHEEL_RPM_DEFAULT: f32 = 2.40625;
 pub const PROGRAMMING_WHEEL_Z_POS: f32 = 1.4; // world Z (positive from snare)

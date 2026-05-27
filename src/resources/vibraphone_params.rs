@@ -4,32 +4,34 @@ use crate::resources::constants::*;
 
 #[derive(Resource)]
 pub struct VibraphoneParams {
-    // Row position
-    pub row_z: f32,
-    pub row_y: f32,
-    pub row_x_center: f32,
+    /// World position of the vibraphone bar row:
+    ///   `pos.x` = X centre of the row (bars fan out symmetrically from here)
+    ///   `pos.y` = top face Y of bars  (bar centre Y = pos.y − bar_thickness / 2)
+    ///   `pos.z` = centre Z of all bars
+    pub pos: Vec3,
 
-    // Bar geometry
+    // ── Bar geometry ─────────────────────────────────────────────────────────
     pub bar_width: f32,
     pub bar_spacing: f32,
     pub bar_thickness: f32,
     pub bar_length_max: f32,
     pub bar_length_min: f32,
 
-    // Bar physics
+    // ── Bar physics ──────────────────────────────────────────────────────────
     pub restitution: f32,
     pub friction: f32,
-    pub bar_density: f32, // kg/m³ — mass computed as density × width × thickness × length per bar
+    /// Aluminium alloy density; bar mass = density × width × thickness × length.
+    pub bar_density: f32,
     pub angular_damping: f32,
 
-    // Pivot arm (dimensions scale with bar_length)
-    pub arm_scale: f32,    // arm_length = bar_length * arm_scale
-    pub pivot_frac: f32,   // pivot_from_bar = bar_length * pivot_frac (from bar center toward CW)
+    // ── Pivot arm (dimensions scale with bar_length) ─────────────────────────
+    pub arm_scale: f32,   // arm_length = bar_length × arm_scale
+    pub pivot_frac: f32,  // pivot distance from bar centre = bar_length × pivot_frac (toward CW)
     pub rest_deg: f32,
     pub max_tilt_deg: f32,
     pub cw_weight_ratio: f32,
 
-    // Marble drop
+    // ── Marble drop ──────────────────────────────────────────────────────────
     pub drop_bar_index: u32,
     pub spawn_marble: bool,
 
@@ -39,9 +41,7 @@ pub struct VibraphoneParams {
 impl Default for VibraphoneParams {
     fn default() -> Self {
         Self {
-            row_z: VIB_ROW_Z,
-            row_y: VIB_ROW_Y,
-            row_x_center: 0.0,
+            pos: Vec3::new(0.0, VIB_ROW_Y, VIB_ROW_Z),
             bar_width: VIB_BAR_WIDTH,
             bar_spacing: VIB_BAR_SPACING,
             bar_thickness: VIB_BAR_THICKNESS,

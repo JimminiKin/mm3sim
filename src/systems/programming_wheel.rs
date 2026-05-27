@@ -1,21 +1,21 @@
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
+use rand::RngExt;
 
+use crate::components::instrument::{Instrument, MarbleSpawner};
 use crate::components::programming_wheel::{spawn_programming_wheel, ProgrammingWheelCylinder};
 use crate::components::snare::SnareDrum;
-use crate::resources::programming_wheel_params::{
-    channel_color_rgb, channel_name, snap_beat, snap_label,
-    DragState, ProgrammingWheelParams, WheelNote,
-    WHEEL_CH_CHUTE, WHEEL_CH_DROP, WHEEL_CH_VIB_FIRST,
-};
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
 use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::marble_runs::RunHistory;
-use crate::resources::vibraphone_params::VibraphoneParams;
-use crate::systems::marble::{
-    chute_spawn_pos, jittered_spawn, spawn_marble, vib_spawn_pos,
+use crate::resources::programming_wheel_params::{
+    channel_color_rgb, channel_jitter_xz, channel_name, channel_target,
+    snap_beat, snap_label,
+    ChannelTarget, DragState, ProgrammingWheelParams, WheelNote,
+    WHEEL_CH_CHUTE, WHEEL_CH_DROP, WHEEL_CH_VIB_FIRST,
 };
+use crate::systems::marble::{chute_spawn_pos, spawn_marble};
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +25,71 @@ pub fn setup_programming_wheel_system(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     spawn_programming_wheel(&mut commands, &mut meshes, &mut materials);
+}
+
+/// Spawn one `MarbleSpawner` entity per non-vibraphone channel (0 = ghost snare,
+/// 1–7 = snare variants).  Vibraphone bar spawners are created by
+/// `spawn_vibraphone` and tagged `VibraphoneEntity` so they rebuild with the
+/// instrument.  All spawner positions are set to their correct world locations
+/// by `sync_instrument_spawners` on the very first Update frame.
+pub fn setup_spawners_system(mut commands: Commands) {
+    for ch in 0..WHEEL_CH_VIB_FIRST {
+        commands.spawn((Transform::default(), MarbleSpawner { channel: ch }));
+    }
+}
+
+// ── Spawner synchronisation ───────────────────────────────────────────────────
+
+/// Runs every Update frame (before the spawn system) and repositions every
+/// `MarbleSpawner` entity to track its instrument's current world location.
+///
+/// - **Ghost snare (ch 0)**: positioned at the chute entry from `ChuteParams`.
+/// - **Snare variants (ch 1–7)**: above the snare drum with their X offset.
+/// - **Vibraphone bars (ch 8–44)**: 1 m above each bar's current world centre.
+///
+/// Because the position is derived from entity `GlobalTransform`s, moving any
+/// instrument entity (or rebuilding it with new params) automatically shifts
+/// the corresponding spawn point on the next frame.
+pub fn sync_instrument_spawners(
+    instruments: Query<(&Instrument, &GlobalTransform)>,
+    chute_params: Res<ChuteParams>,
+    snare_q: Query<&GlobalTransform, With<SnareDrum>>,
+    mut spawners: Query<(&MarbleSpawner, &mut Transform)>,
+) {
+    let snare_world = snare_q
+        .single()
+        .map(|gt| gt.translation())
+        .unwrap_or_default();
+
+    for (spawner, mut tf) in &mut spawners {
+        tf.translation = match channel_target(spawner.channel) {
+            ChannelTarget::GhostSnare => chute_spawn_pos(&chute_params),
+
+            ChannelTarget::Snare { x_offset } => Vec3::new(
+                snare_world.x + x_offset,
+                snare_world.y + SNARE_HALF_HEIGHT + SPAWN_HEIGHT,
+                snare_world.z,
+            ),
+
+            ChannelTarget::VibBar { bar_idx } => {
+                let vib_ch = WHEEL_CH_VIB_FIRST + bar_idx as usize;
+                instruments
+                    .iter()
+                    .find(|(instr, _)| instr.channel == vib_ch)
+                    .map(|(_, gt)| {
+                        // gt.translation() is the bar's world-space centre.
+                        // Add half-thickness (bar top face) + spawn height.
+                        let p = gt.translation();
+                        Vec3::new(
+                            p.x,
+                            p.y + VIB_BAR_THICKNESS * 0.5 + VIB_SPAWN_HEIGHT,
+                            p.z,
+                        )
+                    })
+                    .unwrap_or_default()
+            }
+        };
+    }
 }
 
 // ── Rotation + beat-crossing detection ───────────────────────────────────────
@@ -54,7 +119,9 @@ pub fn rotate_programming_wheel_system(
     let curr_beat = params.angle / std::f32::consts::TAU * bpr;
     params.current_beat = curr_beat;
 
-    let fired: Vec<usize> = params.notes.iter()
+    let fired: Vec<usize> = params
+        .notes
+        .iter()
         .filter_map(|note| {
             let nb = note.beat.rem_euclid(bpr);
             let crossed = if curr_beat >= prev_beat {
@@ -71,57 +138,53 @@ pub fn rotate_programming_wheel_system(
 
 // ── Marble spawning ───────────────────────────────────────────────────────────
 
+/// Spawns marbles for every channel queued in `ProgrammingWheelParams::pending_spawns`.
+///
+/// Spawn positions come exclusively from `MarbleSpawner` entities, which are
+/// kept in sync with instrument world positions by `sync_instrument_spawners`.
+/// Per-channel XZ jitter (if any) is read from `channel_jitter_xz` and applied
+/// on top of the spawner's base position.
 pub fn programming_wheel_spawn_system(
     mut params: ResMut<ProgrammingWheelParams>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    chute_params: Res<ChuteParams>,
-    vib_params: Res<VibraphoneParams>,
     marble_col: Res<MarbleCollisions>,
     mut all_runs: ResMut<RunHistory>,
-    snare: Query<&GlobalTransform, With<SnareDrum>>,
+    spawners: Query<(&MarbleSpawner, &Transform)>,
 ) {
     if params.pending_spawns.is_empty() {
         return;
     }
 
-    let snare_top_y = snare
-        .single()
-        .map(|gt| gt.translation().y + SNARE_HALF_HEIGHT)
-        .unwrap_or(CHUTE_ORIGIN_Y);
-
     let channels: Vec<usize> = params.pending_spawns.drain(..).collect();
 
     for ch in channels {
-        match ch {
-            c if c == WHEEL_CH_CHUTE => {
-                let run_idx = all_runs.push_new_run(WHEEL_CH_CHUTE);
-                let pos = chute_spawn_pos(&chute_params);
-                spawn_marble(
-                    &mut commands, &mut meshes, &mut materials,
-                    pos, marble_col.0, run_idx, WHEEL_CH_CHUTE,
-                );
-            }
-            c if c == WHEEL_CH_DROP => {
-                let run_idx = all_runs.push_new_run(WHEEL_CH_DROP);
-                let pos = jittered_spawn(snare_top_y);
-                spawn_marble(
-                    &mut commands, &mut meshes, &mut materials,
-                    pos, marble_col.0, run_idx, WHEEL_CH_DROP,
-                );
-            }
-            c if c >= WHEEL_CH_VIB_FIRST => {
-                let bar_idx = (c - WHEEL_CH_VIB_FIRST) as u32;
-                let run_idx = all_runs.push_new_run(c);
-                let pos = vib_spawn_pos(&vib_params, bar_idx);
-                spawn_marble(
-                    &mut commands, &mut meshes, &mut materials,
-                    pos, marble_col.0, run_idx, c,
-                );
-            }
-            _ => {}
-        }
+        let Some((_, spawner_tf)) = spawners.iter().find(|(s, _)| s.channel == ch) else {
+            continue; // spawner entity not yet created (shouldn't happen after setup)
+        };
+        let base = spawner_tf.translation;
+        let jitter = channel_jitter_xz(ch);
+        let pos = if jitter > 0.0 {
+            let mut rng = rand::rng();
+            Vec3::new(
+                base.x + rng.random_range(-jitter..jitter),
+                base.y,
+                base.z + rng.random_range(-jitter..jitter),
+            )
+        } else {
+            base
+        };
+        let run_idx = all_runs.push_new_run(ch);
+        spawn_marble(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            pos,
+            marble_col.0,
+            run_idx,
+            ch,
+        );
     }
 }
 
@@ -268,14 +331,18 @@ fn draw_transport(ui: &mut egui::Ui, params: &mut ProgrammingWheelParams) {
     });
 }
 
+/// Returns the top-Y of the row for `ch` inside the grid.
+/// A visual gap is inserted between the snare section (ch 0–7) and the
+/// vibraphone section (ch 8+) to make the two groups easy to distinguish.
 fn channel_row_y(ch: usize, grid_top: f32) -> f32 {
-    let gap = if ch >= 2 { CHANNEL_GROUP_GAP } else { 0.0 };
+    let gap = if ch >= WHEEL_CH_VIB_FIRST { CHANNEL_GROUP_GAP } else { 0.0 };
     grid_top + gap + ch as f32 * CELL_H
 }
 
 fn y_to_channel(y: f32, grid_top: f32) -> usize {
     let rel = y - grid_top;
-    let adj = if rel >= 2.0 * CELL_H + CHANNEL_GROUP_GAP {
+    let vib_boundary = WHEEL_CH_VIB_FIRST as f32 * CELL_H;
+    let adj = if rel >= vib_boundary + CHANNEL_GROUP_GAP {
         rel - CHANNEL_GROUP_GAP
     } else {
         rel
@@ -604,7 +671,7 @@ fn draw_piano_roll(ui: &mut egui::Ui, params: &mut ProgrammingWheelParams) {
             }
         }
         if ui.small_button("Clear vibs").clicked() {
-            params.notes.retain(|n| n.channel < WHEEL_CH_VIB_FIRST);
+            params.notes.retain(|n| !matches!(channel_target(n.channel), ChannelTarget::VibBar { .. }));
         }
     });
 }

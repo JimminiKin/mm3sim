@@ -3,10 +3,11 @@ use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
 use crate::components::chute::{spawn_chute, ChuteSegment};
-use crate::components::snare::PivotArm;
+use crate::components::snare::{spawn_snare, PivotArm, SnarePart};
 use crate::components::vibraphone::{spawn_vibraphone, VibraphoneEntity};
 use crate::resources::chute_params::{ChuteParams, DragAxis};
 use crate::resources::marble_collisions::MarbleCollisions;
+use crate::resources::snare_params::SnareParams;
 use crate::resources::stats_intake::StatsIntake;
 use crate::resources::vibraphone_params::VibraphoneParams;
 use crate::systems::marble::AutoSpawn;
@@ -38,6 +39,7 @@ pub fn apply_snare_fixed_system(
 pub fn chute_editor_ui(
     mut contexts: EguiContexts,
     mut params: ResMut<ChuteParams>,
+    mut snare_params: ResMut<SnareParams>,
     mut vib: ResMut<VibraphoneParams>,
     mut marble_col: ResMut<MarbleCollisions>,
     mut stats_intake: ResMut<StatsIntake>,
@@ -87,6 +89,22 @@ pub fn chute_editor_ui(
                         ui.monospace(format!("{:.0}%", snare_volume.0 * 100.0));
                     });
 
+                    // ── Snare position ───────────────────────────────────────
+                    ui.separator();
+                    ui.heading("Snare position");
+                    let mut snare_changed = false;
+                    snare_changed |= scalar_drag_row(ui, "X (m)", &mut snare_params.pos.x, 0.001, -1.0..=1.0);
+                    snare_changed |= scalar_drag_row(ui, "Y (m)", &mut snare_params.pos.y, 0.001, -1.0..=1.0);
+                    snare_changed |= scalar_drag_row(ui, "Z (m)", &mut snare_params.pos.z, 0.001, -1.0..=1.0);
+                    if snare_changed {
+                        snare_params.dirty = true;
+                    }
+                    if ui.button("Reset snare position").clicked() {
+                        *snare_params = SnareParams::default();
+                        snare_params.dirty = true;
+                    }
+
+                    // ── Chute position ───────────────────────────────────────
                     ui.separator();
                     ui.heading("Chute position");
                     ui.horizontal(|ui| {
@@ -115,12 +133,13 @@ pub fn chute_editor_ui(
                         params.dirty = true;
                     }
 
+                    // ── Vibraphone ───────────────────────────────────────────
                     ui.separator();
                     ui.heading("Vibraphone");
                     let mut vib_changed = false;
-                    vib_changed |= scalar_drag_row(ui, "Row Z (m)", &mut vib.row_z, 0.001, -2.0..=0.0);
-                    vib_changed |= scalar_drag_row(ui, "Row Y top (m)", &mut vib.row_y, 0.001, -0.5..=0.5);
-                    vib_changed |= scalar_drag_row(ui, "Row X center (m)", &mut vib.row_x_center, 0.001, -1.0..=1.0);
+                    vib_changed |= scalar_drag_row(ui, "Pos X center (m)", &mut vib.pos.x, 0.001, -2.0..=2.0);
+                    vib_changed |= scalar_drag_row(ui, "Pos Y top face (m)", &mut vib.pos.y, 0.001, -0.5..=0.5);
+                    vib_changed |= scalar_drag_row(ui, "Pos Z (m)", &mut vib.pos.z, 0.001, -2.0..=0.0);
                     vib_changed |= scalar_drag_row(ui, "Bar width (m)", &mut vib.bar_width, 0.0005, 0.010..=0.10);
                     vib_changed |= scalar_drag_row(ui, "Bar spacing (m)", &mut vib.bar_spacing, 0.0005, 0.010..=0.20);
                     vib_changed |= scalar_drag_row(ui, "Bar thickness (m)", &mut vib.bar_thickness, 0.0005, 0.003..=0.05);
@@ -150,6 +169,7 @@ pub fn chute_editor_ui(
                         vib.dirty = true;
                     }
 
+                    // ── Batch Runs ───────────────────────────────────────────
                     ui.separator();
                     ui.heading("Batch Runs");
                     ui.horizontal(|ui| {
@@ -238,6 +258,24 @@ fn angle_drag_row(
         });
     });
     changed
+}
+
+/// Despawns all `SnarePart` entities and respawns the snare when `SnareParams.dirty` is set.
+pub fn rebuild_snare_system(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut params: ResMut<SnareParams>,
+    entities: Query<Entity, With<SnarePart>>,
+) {
+    if !params.dirty {
+        return;
+    }
+    params.dirty = false;
+    for entity in &entities {
+        commands.entity(entity).despawn();
+    }
+    spawn_snare(&mut commands, &mut meshes, &mut materials, &params);
 }
 
 pub fn rebuild_vibraphone_system(

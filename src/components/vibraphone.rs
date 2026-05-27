@@ -1,9 +1,11 @@
 use avian3d::prelude::*;
-use bevy::math::primitives::{Cuboid, Cylinder};
+use bevy::math::primitives::Cuboid;
 use bevy::prelude::*;
 
-use crate::components::instrument::Instrument;
+use crate::components::instrument::{Instrument, MarbleSpawner};
+use crate::components::pivot_arm::{spawn_pivot_arm, PivotArmSpec};
 use crate::resources::constants::*;
+use crate::resources::programming_wheel_params::WHEEL_CH_VIB_FIRST;
 use crate::resources::vibraphone_params::VibraphoneParams;
 
 #[derive(Component)]
@@ -15,8 +17,12 @@ pub struct VibraphoneBar {
 #[derive(Component)]
 pub struct VibraphoneArm;
 
-/// Marker for every entity belonging to the vibraphone (used for rebuild despawn).
-#[derive(Component)]
+/// Tags every top-level entity belonging to the vibraphone so that
+/// `rebuild_vibraphone_system` can despawn the whole assembly.
+///
+/// Tagged on: anchor, arm, joint (per bar) and the standalone marble spawner.
+/// Arm children (tube, CW, bar) are removed via Bevy's hierarchical despawn.
+#[derive(Component, Clone)]
 pub struct VibraphoneEntity;
 
 pub fn spawn_vibraphone(
@@ -44,126 +50,97 @@ pub fn spawn_vibraphone(
 
     let bar_count = VIB_BAR_COUNT;
 
-    // Bar center Y (row_y is top face, same for all bars)
-    let bar_center_y = params.row_y - params.bar_thickness * 0.5;
-    let bar_center_z = params.row_z;
+    // Bar centre Y (pos.y is top face; bar centre is half-thickness below).
+    let bar_center_y = params.pos.y - params.bar_thickness * 0.5;
+    let bar_center_z = params.pos.z;
 
     for bar_idx in 0..bar_count {
-        // Bar length decreases per semitone: L ∝ 2^(-i/24) for equal-temperament scaling
+        // Bar length decreases per semitone: L ∝ 2^(−i/24) equal-temperament scaling.
         let bar_length = (params.bar_length_max * 2.0_f32.powf(-(bar_idx as f32) / 24.0))
             .max(params.bar_length_min);
 
-        // Realistic bar mass: aluminium density × actual bar volume
+        // Realistic bar mass: aluminium density × actual bar volume.
         let bar_mass = params.bar_density * params.bar_width * params.bar_thickness * bar_length;
 
-        // Arm and pivot dimensions scale with bar length so the mechanism stays proportional
+        // Arm and pivot dimensions scale with bar length.
         let arm_half = bar_length * params.arm_scale * 0.5;
         let pivot_from_bar = bar_length * params.pivot_frac;
-        let pivot_local_z = pivot_from_bar - arm_half;
-        let cw_distance = arm_half - pivot_local_z; // = bar_length*(arm_scale - pivot_frac)
+        let pivot_local_z = pivot_from_bar - arm_half; // offset from arm centre toward CW
+        let cw_distance = arm_half - pivot_local_z;    // = bar_length × (arm_scale − pivot_frac)
         let cw_mass = (bar_mass * pivot_from_bar + VIB_ARM_MASS * pivot_local_z)
             / cw_distance
             * params.cw_weight_ratio;
 
-        // X position: centered on row_x_center
-        let bar_x = params.row_x_center
+        // X position: bars fan symmetrically around pos.x.
+        let bar_x = params.pos.x
             + ((bar_count - 1) as f32 * 0.5 - bar_idx as f32) * params.bar_spacing;
 
-        // Arm spawn: R*(0,0,-arm_half) = (0, arm_half*sin_r, -arm_half*cos_r)
-        // arm_spawn = bar_center - R*(0,0,-arm_half)
-        // Bar center is always at (bar_x, bar_center_y, bar_center_z) regardless of arm_half.
-        let arm_spawn_y = bar_center_y - arm_half * sin_r;
-        let arm_spawn_z = bar_center_z + arm_half * cos_r;
+        // Pivot world position derived from desired bar centre at rest angle.
+        // D = arm_half + pivot_local_z = pivot_from_bar
+        // pivot = (bar_x, bar_center_y − D·sin_r, bar_center_z + D·cos_r)
+        let d = arm_half + pivot_local_z; // = pivot_from_bar
+        let pivot_world = Vec3::new(
+            bar_x,
+            bar_center_y - d * sin_r,
+            bar_center_z + d * cos_r,
+        );
 
-        // Pivot anchor world position
-        let pivot_world_y = arm_spawn_y - pivot_local_z * sin_r;
-        let pivot_world_z = arm_spawn_z + pivot_local_z * cos_r;
-
-        let anchor = commands
-            .spawn((
-                Transform::from_xyz(bar_x, pivot_world_y, pivot_world_z),
-                RigidBody::Static,
-                VibraphoneEntity,
-            ))
-            .id();
-
-        // Scale CW cylinder proportionally to arm size
+        // Scale CW cylinder proportionally to arm size.
         let cw_half_h = (arm_half * 0.12).max(VIB_CW_HALF_HEIGHT);
         let cw_r = (arm_half * 0.065).max(VIB_CW_RADIUS);
 
-        let arm = commands
-            .spawn((
-                Transform::from_xyz(bar_x, arm_spawn_y, arm_spawn_z)
-                    .with_rotation(Quat::from_rotation_x(arm_rad)),
-                Visibility::default(),
-                RigidBody::Dynamic,
-                VibraphoneArm,
-                VibraphoneEntity,
-                LinearDamping(VIB_LINEAR_DAMPING),
-                AngularDamping(params.angular_damping),
-            ))
-            .with_children(|p| {
-                // Thin arm tube (length scales with bar)
-                p.spawn((
-                    Mesh3d(meshes.add(Mesh::from(Cylinder {
-                        radius: VIB_ARM_TUBE_RADIUS,
-                        half_height: arm_half,
-                    }))),
-                    MeshMaterial3d(frame_mat.clone()),
-                    Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-                    Collider::cylinder(VIB_ARM_TUBE_RADIUS, arm_half * 2.0),
-                    Mass(VIB_ARM_MASS),
-                ));
+        let spec = PivotArmSpec {
+            pivot_world_pos: pivot_world,
+            arm_half_len: arm_half,
+            pivot_local_z,
+            rest_deg: params.rest_deg,
+            max_tilt_deg: params.max_tilt_deg,
+            arm_mass: VIB_ARM_MASS,
+            arm_tube_radius: VIB_ARM_TUBE_RADIUS,
+            linear_damping: VIB_LINEAR_DAMPING,
+            angular_damping: params.angular_damping,
+            cw_mass,
+            cw_radius: cw_r,
+            cw_half_height: cw_half_h,
+            stand_half_height: 0.0, // vibraphone has no stand
+        };
 
-                // Vibraphone bar (cuboid) centered at arm local z = -arm_half
-                // Bar is centered in Z so its center stays at bar_center_z in world space
-                p.spawn((
-                    Mesh3d(meshes.add(Mesh::from(Cuboid {
-                        half_size: Vec3::new(
-                            params.bar_width * 0.5,
-                            params.bar_thickness * 0.5,
-                            bar_length * 0.5,
-                        ),
-                    }))),
-                    MeshMaterial3d(bar_mat.clone()),
-                    Transform::from_xyz(0.0, 0.0, -arm_half),
-                    Collider::cuboid(
+        // spawn_pivot_arm creates: anchor (VibraphoneEntity), arm (VibraphoneEntity) +
+        // tube child + CW child, joint (VibraphoneEntity). No stand (0.0).
+        let arm = spawn_pivot_arm(commands, meshes, &spec, frame_mat.clone(), VibraphoneEntity);
+
+        // Tag the arm as VibraphoneArm and attach the bar at arm local z = −arm_half.
+        commands.entity(arm).insert(VibraphoneArm).with_children(|p| {
+            p.spawn((
+                Mesh3d(meshes.add(Mesh::from(Cuboid {
+                    half_size: Vec3::new(
                         params.bar_width * 0.5,
                         params.bar_thickness * 0.5,
                         bar_length * 0.5,
                     ),
-                    Mass(bar_mass),
-                    Restitution::new(params.restitution),
-                    Friction::new(params.friction),
-                    CollisionEventsEnabled,
-                    VibraphoneBar { index: bar_idx },
-                    Instrument { channel: 2 + bar_idx as usize },
-                    VibraphoneEntity,
-                ));
-
-                // Counterweight at far end (local z = +arm_half), scaled to arm size
-                p.spawn((
-                    Mesh3d(meshes.add(Mesh::from(Cylinder {
-                        radius: cw_r,
-                        half_height: cw_half_h,
-                    }))),
-                    MeshMaterial3d(frame_mat.clone()),
-                    Transform::from_xyz(0.0, 0.0, arm_half),
-                    Collider::cylinder(cw_r, cw_half_h * 2.0),
-                    Mass(cw_mass),
-                ));
-            })
-            .id();
-
-        commands.spawn((
-            RevoluteJoint::new(anchor, arm)
-                .with_hinge_axis(Vec3::X)
-                .with_local_anchor1(Vec3::ZERO)
-                .with_local_anchor2(Vec3::new(0.0, 0.0, pivot_local_z))
-                .with_angle_limits(
-                    -(params.rest_deg + params.max_tilt_deg).to_radians(),
-                    -params.rest_deg.to_radians(),
+                }))),
+                MeshMaterial3d(bar_mat.clone()),
+                Transform::from_xyz(0.0, 0.0, -arm_half),
+                Collider::cuboid(
+                    params.bar_width * 0.5,
+                    params.bar_thickness * 0.5,
+                    bar_length * 0.5,
                 ),
+                Mass(bar_mass),
+                Restitution::new(params.restitution),
+                Friction::new(params.friction),
+                CollisionEventsEnabled,
+                VibraphoneBar { index: bar_idx },
+                Instrument { channel: WHEEL_CH_VIB_FIRST + bar_idx as usize },
+            ));
+        });
+
+        // Standalone marble spawn-point marker for this bar.
+        // `sync_instrument_spawners` keeps it positioned above the bar each frame.
+        // Tagged VibraphoneEntity so it is despawned on vibraphone rebuild.
+        commands.spawn((
+            Transform::default(),
+            MarbleSpawner { channel: WHEEL_CH_VIB_FIRST + bar_idx as usize },
             VibraphoneEntity,
         ));
     }
