@@ -12,6 +12,7 @@ use resources::constants::BG_COLOR;
 use resources::constants::SIMULATION_TPS;
 use resources::marble_collisions::MarbleCollisions;
 use resources::marble_runs::RunHistory;
+use resources::stats_intake::StatsIntake;
 use resources::vibraphone_params::VibraphoneParams;
 use systems::axes::{resize_axes_viewport, setup_axes_hud, update_axes_hud};
 use systems::programming_wheel::{
@@ -80,6 +81,7 @@ fn main() {
         .init_resource::<VibraphoneParams>()
         .init_resource::<AutoSpawn>()
         .init_resource::<InstrumentHits>()
+        .init_resource::<StatsIntake>()
         .add_systems(
             Startup,
             (
@@ -104,8 +106,10 @@ fn main() {
                 detect_instrument_hits,
                 record_instrument_hits,
                 play_instrument_sounds,
-                record_marble_samples_system,
-                record_marble_paths_system,
+                record_marble_samples_system
+                    .run_if(|si: Res<StatsIntake>| si.0),
+                record_marble_paths_system
+                    .run_if(|si: Res<StatsIntake>| si.0),
             )
                 .chain()
                 .after(PhysicsSystems::Last),

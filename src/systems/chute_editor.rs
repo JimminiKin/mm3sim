@@ -7,6 +7,7 @@ use crate::components::snare::PivotArm;
 use crate::components::vibraphone::{spawn_vibraphone, VibraphoneEntity};
 use crate::resources::chute_params::{ChuteParams, DragAxis};
 use crate::resources::marble_collisions::MarbleCollisions;
+use crate::resources::stats_intake::StatsIntake;
 use crate::resources::vibraphone_params::VibraphoneParams;
 use crate::systems::marble::AutoSpawn;
 use crate::systems::sound::SnareVolume;
@@ -39,6 +40,7 @@ pub fn chute_editor_ui(
     mut params: ResMut<ChuteParams>,
     mut vib: ResMut<VibraphoneParams>,
     mut marble_col: ResMut<MarbleCollisions>,
+    mut stats_intake: ResMut<StatsIntake>,
     mut snare_fixed: ResMut<SnareFixed>,
     mut snare_volume: ResMut<SnareVolume>,
     mut auto_spawn: ResMut<AutoSpawn>,
@@ -63,6 +65,13 @@ pub fn chute_editor_ui(
                     ui.checkbox(&mut new_col, "Marble-marble collisions");
                     if new_col != old_col {
                         marble_col.0 = new_col;
+                    }
+
+                    let old_si = stats_intake.bypass_change_detection().0;
+                    let mut new_si = old_si;
+                    ui.checkbox(&mut new_si, "Stats intake (graphs & ghosts)");
+                    if new_si != old_si {
+                        stats_intake.0 = new_si;
                     }
 
                     let old_fixed = snare_fixed.bypass_change_detection().0;
