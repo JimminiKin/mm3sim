@@ -10,7 +10,6 @@ pub struct ChuteGeometry {
     pub slope_start: [f32; 2],    // [z, y]
     pub arc_start: [f32; 2],      // [z, y] where slope meets arc
     pub center: [f32; 2],         // [z, y] center of circular arc
-    pub exit_start: [f32; 2],     // [z, y] where arc meets exit section
     pub slope_tangent: [f32; 2],  // [tz, ty] forward direction along slope
     pub exit_tangent: [f32; 2],   // [tz, ty] forward direction along exit
     pub theta_start: f32,         // angle of arc_start from center (radians)
@@ -95,7 +94,6 @@ impl ChuteParams {
             slope_start: [slope_start_z, slope_start_y],
             arc_start: [arc_start_z, arc_start_y],
             center: [center_z, center_y],
-            exit_start: [exit_start_z, exit_start_y],
             slope_tangent: [slope_tz, slope_ty],
             exit_tangent: [exit_tz, exit_ty],
             theta_start,

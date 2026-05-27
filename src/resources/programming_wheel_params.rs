@@ -261,12 +261,12 @@ const SNARE_JITTER: f32 = crate::resources::constants::MARBLE_SPAWN_JITTER;
 /// entity with the matching `channel`, and update `sync_instrument_spawners`.
 const CHANNEL_DEFS: &[ChannelDef] = &[
     // ch 0–5 — chute channels (one per chute instance, GhostSnare path)
-    ChannelDef { name: "Chute 1", color: (51, 115, 230), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 0
-    ChannelDef { name: "Chute 2", color: (70, 130, 210), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 1
-    ChannelDef { name: "Chute 3", color: (90, 150, 230), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 2
-    ChannelDef { name: "Chute 4", color: (40, 100, 215), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 3
-    ChannelDef { name: "Chute 5", color: (60,  85, 200), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 4
-    ChannelDef { name: "Chute 6", color: (80, 160, 225), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 5
+    ChannelDef { name: "Ghost Snare 1", color: (51, 115, 230), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 0
+    ChannelDef { name: "Ghost Snare 2", color: (70, 130, 210), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 1
+    ChannelDef { name: "Ghost Snare 3", color: (90, 150, 230), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 2
+    ChannelDef { name: "Ghost Snare 4", color: (40, 100, 215), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 3
+    ChannelDef { name: "Ghost Snare 5", color: (60,  85, 200), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 4
+    ChannelDef { name: "Ghost Snare 6", color: (80, 160, 225), target: ChannelTarget::GhostSnare, jitter_xz: 0.0 }, // 5
     // ch 6–12 — direct snare drops
     ChannelDef { name: "Snare",   color: SNARE,          target: ChannelTarget::Snare { x_offset:  0.00 }, jitter_xz: SNARE_JITTER }, // 6  centre
     ChannelDef { name: "Snare+2", color: SNARE,          target: ChannelTarget::Snare { x_offset:  0.02 }, jitter_xz: SNARE_JITTER }, // 7
