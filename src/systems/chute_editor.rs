@@ -300,14 +300,16 @@ pub fn rebuild_chute_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut params: ResMut<ChuteParams>,
+    snare_params: Res<SnareParams>,
     segments: Query<Entity, With<ChuteSegment>>,
 ) {
-    if !params.dirty {
+    // Rebuild when chute shape changes OR when the snare (and thus the chute origin) moves.
+    if !params.dirty && !snare_params.is_changed() {
         return;
     }
     params.dirty = false;
     for entity in &segments {
         commands.entity(entity).despawn();
     }
-    spawn_chute(&mut commands, &mut meshes, &mut materials, &params);
+    spawn_chute(&mut commands, &mut meshes, &mut materials, &params, snare_params.pos);
 }

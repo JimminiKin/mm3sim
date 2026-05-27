@@ -48,6 +48,6 @@ pub fn setup_system(
     });
 
     spawn_snare(&mut commands, &mut meshes, &mut materials, &snare_params);
-    spawn_chute(&mut commands, &mut meshes, &mut materials, &chute_params);
+    spawn_chute(&mut commands, &mut meshes, &mut materials, &chute_params, snare_params.pos);
     spawn_vibraphone(&mut commands, &mut meshes, &mut materials, &vib_params);
 }

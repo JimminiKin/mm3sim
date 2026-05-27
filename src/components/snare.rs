@@ -58,7 +58,7 @@ pub fn spawn_snare(
         cw_mass: CW_MASS,
         cw_radius: CW_RADIUS,
         cw_half_height: CW_HALF_HEIGHT,
-        stand_half_height: PIVOT_STAND_HALF_HEIGHT,
+        stand_half_height: 0.0,
     };
 
     // spawn_pivot_arm creates: anchor (SnarePart), stand (SnarePart),

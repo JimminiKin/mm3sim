@@ -6,6 +6,7 @@ use crate::components::instrument::{Instrument, MarbleSpawner};
 use crate::components::programming_wheel::{spawn_programming_wheel, ProgrammingWheelCylinder};
 use crate::components::snare::SnareDrum;
 use crate::resources::chute_params::ChuteParams;
+use crate::resources::snare_params::SnareParams;
 use crate::resources::constants::*;
 use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::marble_runs::RunHistory;
@@ -53,6 +54,7 @@ pub fn setup_spawners_system(mut commands: Commands) {
 pub fn sync_instrument_spawners(
     instruments: Query<(&Instrument, &GlobalTransform)>,
     chute_params: Res<ChuteParams>,
+    snare_params: Res<SnareParams>,
     snare_q: Query<&GlobalTransform, With<SnareDrum>>,
     mut spawners: Query<(&MarbleSpawner, &mut Transform)>,
 ) {
@@ -63,7 +65,7 @@ pub fn sync_instrument_spawners(
 
     for (spawner, mut tf) in &mut spawners {
         tf.translation = match channel_target(spawner.channel) {
-            ChannelTarget::GhostSnare => chute_spawn_pos(&chute_params),
+            ChannelTarget::GhostSnare => chute_spawn_pos(&chute_params, snare_params.pos),
 
             ChannelTarget::Snare { x_offset } => Vec3::new(
                 snare_world.x + x_offset,

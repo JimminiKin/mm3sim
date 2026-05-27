@@ -5,6 +5,7 @@ use bevy_egui::EguiContexts;
 
 use crate::resources::chute_params::{ChuteParams, DragAxis};
 use crate::resources::constants::{CHUTE_END_X, CHUTE_ORIGIN_Y, CHUTE_ORIGIN_Z};
+use crate::resources::snare_params::SnareParams;
 use crate::systems::camera::OrbitCamera;
 
 const HANDLE_RADIUS: f32 = 0.012;
@@ -79,15 +80,21 @@ pub fn sync_handle_visibility(
 
 pub fn sync_handle_transforms(
     params: Res<ChuteParams>,
+    snare_params: Res<SnareParams>,
     mut handles: Query<(&ChuteHandle, &mut Transform)>,
 ) {
+    let sp = snare_params.pos;
     let geo = params.geometry();
     for (handle, mut tf) in &mut handles {
         let pt = match handle.0 {
             0 => params.exit_pos,
             _ => geo.slope_start,
         };
-        tf.translation = Vec3::new(CHUTE_END_X, pt[1] + CHUTE_ORIGIN_Y, pt[0] + CHUTE_ORIGIN_Z);
+        tf.translation = Vec3::new(
+            CHUTE_END_X + sp.x,
+            pt[1] + CHUTE_ORIGIN_Y + sp.y,
+            pt[0] + CHUTE_ORIGIN_Z + sp.z,
+        );
     }
 }
 
@@ -99,6 +106,7 @@ pub fn chute_handle_drag_system(
     mut params: ResMut<ChuteParams>,
     mut drag: ResMut<HandleDrag>,
     mut contexts: EguiContexts,
+    snare_params: Res<SnareParams>,
 ) {
     if contexts.ctx_mut().unwrap().wants_pointer_input() {
         return;
@@ -133,9 +141,10 @@ pub fn chute_handle_drag_system(
 
         // Fall back: body drag if click is near the chute surface
         if drag.active.is_none() {
-            if let Some(hit) = ray_x_plane(origin, dir, CHUTE_END_X) {
-                let hz = hit.z - CHUTE_ORIGIN_Z;
-                let hy = hit.y - CHUTE_ORIGIN_Y;
+            let sp = snare_params.pos;
+            if let Some(hit) = ray_x_plane(origin, dir, CHUTE_END_X + sp.x) {
+                let hz = hit.z - CHUTE_ORIGIN_Z - sp.z;
+                let hy = hit.y - CHUTE_ORIGIN_Y - sp.y;
                 if dist_to_chute(&params, hz, hy) < PICK_BODY_RADIUS {
                     drag.active = Some(DragState::Body {
                         anchor: [hit.z, hit.y],
@@ -155,10 +164,11 @@ pub fn chute_handle_drag_system(
     }
 
     // ── Drag update ──────────────────────────────────────────────────────────
+    let sp = snare_params.pos;
     if drag.active.is_some() {
-        if let Some(hit) = ray_x_plane(origin, dir, CHUTE_END_X) {
-            let raw_hz = hit.z - CHUTE_ORIGIN_Z;
-            let raw_hy = hit.y - CHUTE_ORIGIN_Y;
+        if let Some(hit) = ray_x_plane(origin, dir, CHUTE_END_X + sp.x) {
+            let raw_hz = hit.z - CHUTE_ORIGIN_Z - sp.z;
+            let raw_hy = hit.y - CHUTE_ORIGIN_Y - sp.y;
 
             match &drag.active {
                 Some(DragState::Handle(0)) => {
@@ -206,9 +216,14 @@ pub fn chute_handle_drag_system(
 }
 
 /// Draw the 3-part chute profile as a gizmo overlay.
-pub fn draw_chute_gizmos(params: Res<ChuteParams>, mut gizmos: Gizmos) {
-    let x = CHUTE_END_X;
-    let to_world = |z: f32, y: f32| Vec3::new(x, y + CHUTE_ORIGIN_Y, z + CHUTE_ORIGIN_Z);
+pub fn draw_chute_gizmos(
+    params: Res<ChuteParams>,
+    snare_params: Res<SnareParams>,
+    mut gizmos: Gizmos,
+) {
+    let sp = snare_params.pos;
+    let x = CHUTE_END_X + sp.x;
+    let to_world = |z: f32, y: f32| Vec3::new(x, y + CHUTE_ORIGIN_Y + sp.y, z + CHUTE_ORIGIN_Z + sp.z);
 
     let geo = params.geometry();
     let color = Color::srgb(0.35, 0.75, 1.0);

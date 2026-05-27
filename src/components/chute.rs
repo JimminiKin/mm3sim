@@ -56,17 +56,20 @@ fn build_profile(params: &ChuteParams) -> Vec<ProfilePt> {
     pts
 }
 
+/// `snare_offset` is `SnareParams.pos` and is added to every world position so the
+/// chute translates with the snare.  Pass `Vec3::ZERO` for no offset.
 pub fn spawn_chute(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     params: &ChuteParams,
+    snare_offset: Vec3,
 ) {
     let profile = build_profile(params);
-    let (coll_verts, coll_idx) = build_trimesh_collider(&profile);
+    let (coll_verts, coll_idx) = build_trimesh_collider(&profile, snare_offset);
 
     commands.spawn((
-        Mesh3d(meshes.add(build_smooth_mesh(&profile))),
+        Mesh3d(meshes.add(build_smooth_mesh(&profile, snare_offset))),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(0.55, 0.45, 0.30),
             metallic: 0.0,
@@ -90,16 +93,16 @@ fn surface_normal(tz: f32, ty: f32) -> Vec3 {
     Vec3::new(0.0, -tz, ty).normalize_or_zero()
 }
 
-fn build_trimesh_collider(profile: &[ProfilePt]) -> (Vec<Vec3>, Vec<[u32; 3]>) {
+fn build_trimesh_collider(profile: &[ProfilePt], snare_offset: Vec3) -> (Vec<Vec3>, Vec<[u32; 3]>) {
     let n = profile.len() - 1;
     let w = CHUTE_WIDTH * 0.5;
     let h = CHUTE_THICKNESS * 0.5;
-    let x = CHUTE_END_X;
+    let x = CHUTE_END_X + snare_offset.x;
 
     let mut verts: Vec<Vec3> = Vec::with_capacity((n + 1) * 4);
     for &(z, y, tz, ty) in profile {
         let sn = surface_normal(tz, ty);
-        let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y, z + CHUTE_ORIGIN_Z);
+        let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y + snare_offset.y, z + CHUTE_ORIGIN_Z + snare_offset.z);
         let top = centre + sn * h;
         let bot = centre - sn * h;
         verts.push(Vec3::new(top.x - w, top.y, top.z));
@@ -121,11 +124,11 @@ fn build_trimesh_collider(profile: &[ProfilePt]) -> (Vec<Vec3>, Vec<[u32; 3]>) {
     (verts, idx)
 }
 
-fn build_smooth_mesh(profile: &[ProfilePt]) -> Mesh {
+fn build_smooth_mesh(profile: &[ProfilePt], snare_offset: Vec3) -> Mesh {
     let n = profile.len() - 1;
     let w = CHUTE_WIDTH * 0.5;
     let h = CHUTE_THICKNESS * 0.5;
-    let x = CHUTE_END_X;
+    let x = CHUTE_END_X + snare_offset.x;
 
     const STRIDE: usize = 8;
     let cap = (n + 1) * STRIDE;
@@ -138,7 +141,7 @@ fn build_smooth_mesh(profile: &[ProfilePt]) -> Mesh {
         let t = seg_i as f32 / total_segs;
         let sn = surface_normal(tz, ty);
         let bn = -sn;
-        let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y, z + CHUTE_ORIGIN_Z);
+        let centre = Vec3::new(x, y + CHUTE_ORIGIN_Y + snare_offset.y, z + CHUTE_ORIGIN_Z + snare_offset.z);
         let top = centre + sn * h;
         let bot = centre + bn * h;
 

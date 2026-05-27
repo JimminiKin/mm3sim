@@ -68,7 +68,6 @@ pub const ARM_MASS: f32 = 1.0; // kg
 pub const PIVOT_TO_EDGE_GAP: f32 = 0.20; // 20 cm from snare edge to pivot
 pub const ARM_LINEAR_DAMPING: f32 = 0.0;
 pub const ARM_ANGULAR_DAMPING: f32 = 0.0;
-pub const PIVOT_STAND_HALF_HEIGHT: f32 = 0.5;
 
 // Derived arm geometry (all relative to world origin = snare centre)
 pub const PIVOT_FROM_SNARE: f32 = SNARE_RADIUS + PIVOT_TO_EDGE_GAP;

@@ -12,12 +12,18 @@ use crate::resources::marble_runs::RunHistory;
 use crate::resources::programming_wheel_params::{channel_jitter_xz, channel_target, ChannelTarget, WHEEL_CH_CHUTE, WHEEL_CH_DROP};
 
 /// Compute the world-space spawn position for a chute marble (surface of the slope entry).
-pub fn chute_spawn_pos(params: &ChuteParams) -> Vec3 {
+///
+/// `snare_offset` is `SnareParams.pos`; pass `Vec3::ZERO` when snare is at default position.
+pub fn chute_spawn_pos(params: &ChuteParams, snare_offset: Vec3) -> Vec3 {
     let geo = params.geometry();
     let [slope_z, slope_y] = geo.slope_start;
     let [slope_tz, slope_ty] = geo.slope_tangent;
     let normal = Vec3::new(0.0, -slope_tz, slope_ty).normalize_or_zero();
-    let chute_centre = Vec3::new(CHUTE_END_X, slope_y + CHUTE_ORIGIN_Y, slope_z + CHUTE_ORIGIN_Z);
+    let chute_centre = Vec3::new(
+        CHUTE_END_X + snare_offset.x,
+        slope_y + CHUTE_ORIGIN_Y + snare_offset.y,
+        slope_z + CHUTE_ORIGIN_Z + snare_offset.z,
+    );
     chute_centre + normal * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.001)
 }
 
