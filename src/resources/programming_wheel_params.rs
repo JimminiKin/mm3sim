@@ -217,32 +217,66 @@ pub fn marble_machine_default_notes_pub() -> Vec<WheelNote> {
     marble_machine_default_notes()
 }
 
-/// Convert vibraphone channel to musical note name.
-/// Channel 2 = bar 0 = F3, each subsequent channel is +1 semitone.
-pub fn channel_name(ch: usize) -> String {
-    match ch {
-        WHEEL_CH_CHUTE => "Chute".to_string(),
-        WHEEL_CH_DROP => "Drop".to_string(),
-        // Vibraphone bars (channels 2-38 = bars 0-36)
-        ch if ch >= WHEEL_CH_VIB_FIRST => {
-            const NOTE_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-            let bar_idx = ch - WHEEL_CH_VIB_FIRST;
-            // Bar 0 = F3 (semitone 5), each bar is +1 semitone
-            let semitone = 5 + bar_idx;
-            let note_name = NOTE_NAMES[(semitone % 12) as usize];
-            let octave = 3 + semitone / 12;
-            format!("{}{}", note_name, octave)
-        },
-        _ => "?".to_string(),
-    }
+struct ChannelDef {
+    name:  &'static str,
+    color: (u8, u8, u8),
 }
 
+const VIB: (u8, u8, u8) = (80, 200, 120);
+
+/// Complete channel table, indexed by channel number.
+/// Channels 0–1 are the non-pitched marble types.
+/// Channels 2–38 are vibraphone bars 0–36 (F3 → F6, one semitone per step).
+const CHANNEL_DEFS: &[ChannelDef] = &[
+    ChannelDef { name: "Chute", color: (51, 115, 230) }, // 0
+    ChannelDef { name: "Drop",  color: (242, 89,  38) }, // 1
+    ChannelDef { name: "F3",   color: VIB }, // 2
+    ChannelDef { name: "F#3",  color: VIB }, // 3
+    ChannelDef { name: "G3",   color: VIB }, // 4
+    ChannelDef { name: "G#3",  color: VIB }, // 5
+    ChannelDef { name: "A3",   color: VIB }, // 6
+    ChannelDef { name: "A#3",  color: VIB }, // 7
+    ChannelDef { name: "B3",   color: VIB }, // 8
+    ChannelDef { name: "C4",   color: VIB }, // 9
+    ChannelDef { name: "C#4",  color: VIB }, // 10
+    ChannelDef { name: "D4",   color: VIB }, // 11
+    ChannelDef { name: "D#4",  color: VIB }, // 12
+    ChannelDef { name: "E4",   color: VIB }, // 13
+    ChannelDef { name: "F4",   color: VIB }, // 14
+    ChannelDef { name: "F#4",  color: VIB }, // 15
+    ChannelDef { name: "G4",   color: VIB }, // 16
+    ChannelDef { name: "G#4",  color: VIB }, // 17
+    ChannelDef { name: "A4",   color: VIB }, // 18
+    ChannelDef { name: "A#4",  color: VIB }, // 19
+    ChannelDef { name: "B4",   color: VIB }, // 20
+    ChannelDef { name: "C5",   color: VIB }, // 21
+    ChannelDef { name: "C#5",  color: VIB }, // 22
+    ChannelDef { name: "D5",   color: VIB }, // 23
+    ChannelDef { name: "D#5",  color: VIB }, // 24
+    ChannelDef { name: "E5",   color: VIB }, // 25
+    ChannelDef { name: "F5",   color: VIB }, // 26
+    ChannelDef { name: "F#5",  color: VIB }, // 27
+    ChannelDef { name: "G5",   color: VIB }, // 28
+    ChannelDef { name: "G#5",  color: VIB }, // 29
+    ChannelDef { name: "A5",   color: VIB }, // 30
+    ChannelDef { name: "A#5",  color: VIB }, // 31
+    ChannelDef { name: "B5",   color: VIB }, // 32
+    ChannelDef { name: "C6",   color: VIB }, // 33
+    ChannelDef { name: "C#6",  color: VIB }, // 34
+    ChannelDef { name: "D6",   color: VIB }, // 35
+    ChannelDef { name: "D#6",  color: VIB }, // 36
+    ChannelDef { name: "E6",   color: VIB }, // 37
+    ChannelDef { name: "F6",   color: VIB }, // 38
+];
+
+/// Returns the display name for a channel.
+pub fn channel_name(ch: usize) -> String {
+    CHANNEL_DEFS.get(ch).map_or("?".to_string(), |d| d.name.to_string())
+}
+
+/// Returns the (r, g, b) display color for a channel.
 pub fn channel_color_rgb(ch: usize) -> (u8, u8, u8) {
-    match ch {
-        WHEEL_CH_CHUTE => (51, 115, 230),
-        WHEEL_CH_DROP  => (242, 89, 38),
-        _              => (80, 200, 120),
-    }
+    CHANNEL_DEFS.get(ch).map_or((128, 128, 128), |d| d.color)
 }
 
 pub fn snap_beat(beat: f32, snap: f32) -> f32 {

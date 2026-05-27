@@ -6,7 +6,7 @@ use crate::components::snare::{PivotArm, SnareDrum};
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
 use crate::resources::marble_runs::{HitRecord, Run, RunHistory};
-use crate::resources::programming_wheel_params::WHEEL_CH_CHUTE;
+use crate::resources::programming_wheel_params::{channel_name, WHEEL_CH_VIB_FIRST};
 use crate::systems::marble::{Marble, SpawnChannel};
 
 pub fn hud_panel_ui(
@@ -88,11 +88,11 @@ pub fn hud_panel_ui(
                         .map(|gt| gt.compute_transform().rotation * Vec3::Y)
                         .unwrap_or(Vec3::Y);
 
-                    let mut live: Vec<(bool, Vec3, Vec3)> = marbles
+                    let mut live: Vec<(usize, Vec3, Vec3)> = marbles
                         .iter()
-                        .map(|(lin_vel, ang_vel, spawn_ch)| (spawn_ch.0 == WHEEL_CH_CHUTE, lin_vel.0, ang_vel.0))
+                        .map(|(lin_vel, ang_vel, spawn_ch)| (spawn_ch.0, lin_vel.0, ang_vel.0))
                         .collect();
-                    live.sort_by_key(|(is_chute, _, _)| *is_chute as u8);
+                    live.sort_by_key(|(ch, _, _)| *ch);
 
                     let live_label = if live.is_empty() {
                         egui::RichText::new("Live").strong()
@@ -114,8 +114,8 @@ pub fn hud_panel_ui(
                                             ui.monospace(label);
                                         }
                                         ui.end_row();
-                                        for (is_chute, v, angvel) in &live {
-                                            let label = if *is_chute { "Chute" } else { "Drop " };
+                                        for (ch, v, angvel) in &live {
+                                            let label = channel_name(*ch);
                                             let speed = v.length();
                                             let aoa = if speed > 0.01 {
                                                 (*v / speed).dot(snare_normal).abs().clamp(0.0, 1.0).asin().to_degrees()
@@ -157,7 +157,7 @@ pub fn hud_panel_ui(
                     all_runs.force_all_open = None;
 
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Drops").strong());
+                        ui.label(egui::RichText::new("Runs").strong());
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.small_button("Reset").clicked() {
                                 all_runs.runs.clear();
@@ -185,7 +185,7 @@ pub fn hud_panel_ui(
                         .max_height(ui.available_height())
                         .show(ui, |ui| {
                             for i in (0..run_count).rev() {
-                                let header = drop_entry_label(&all_runs.runs[i]);
+                                let header = run_entry_label(&all_runs.runs[i]);
                                 let run_id = all_runs.runs[i].index;
 
                                 let state_id = ui.make_persistent_id(("run_header", run_id));
@@ -203,17 +203,10 @@ pub fn hud_panel_ui(
                                         ui.label(&header);
                                     })
                                     .body(|ui| {
-                                        if all_runs.runs[i].vib_bar_idx.is_some() {
-                                            let bar_idx = all_runs.runs[i].vib_bar_idx.unwrap_or(0);
-                                            match all_runs.runs[i].vib {
-                                                None => { ui.label("  — in flight"); }
-                                                Some(r) => render_vib_compact(ui, r, bar_idx),
-                                            }
-                                        } else {
-                                            match all_runs.runs[i].drop {
-                                                None => { ui.label("  — in flight"); }
-                                                Some(r) => render_drop_compact(ui, r),
-                                            }
+                                        let run = &all_runs.runs[i];
+                                        match run.hit {
+                                            None => { ui.label("  — in flight"); }
+                                            Some(r) => render_hit_compact(ui, r, run.spawn_channel),
                                         }
                                         ui.add_space(4.0);
                                         ui.horizontal(|ui| {
@@ -247,52 +240,43 @@ pub fn hud_panel_ui(
         .unwrap_or(false);
 }
 
-fn drop_entry_label(run: &Run) -> String {
-    if let Some(bar_idx) = run.vib_bar_idx {
-        return match run.vib {
-            None => format!("Vib {}   bar {}   — in flight…", run.index + 1, bar_idx + 1),
-            Some(r) => format!("Vib {}   bar {}   fly {:.3} s   spd {:.3}   arm {:+.1}°",
-                run.index + 1, bar_idx + 1, r.flight_s, r.speed, r.arm_deg),
-        };
-    }
-    match run.drop {
-        None => format!("Drop {}   — in flight…", run.index + 1),
+fn run_entry_label(run: &Run) -> String {
+    let name = channel_name(run.spawn_channel);
+    match run.hit {
+        None => format!("{} {}   — in flight…", name, run.index + 1),
+        Some(r) if run.spawn_channel >= WHEEL_CH_VIB_FIRST => {
+            format!("{} {}   fly {:.3} s   spd {:.3}   arm {:+.1}°",
+                name, run.index + 1, r.flight_s, r.speed, r.arm_deg)
+        }
         Some(r) => {
             let radial = (r.hit_local.x * r.hit_local.x + r.hit_local.z * r.hit_local.z).sqrt();
-            format!("Drop {}   fly {:.3} s   spd {:.3}   arm {:+.1}°   r {:.1} mm",
-                run.index + 1, r.flight_s, r.speed, r.arm_deg, radial * 1000.0)
+            format!("{} {}   fly {:.3} s   spd {:.3}   arm {:+.1}°   r {:.1} mm",
+                name, run.index + 1, r.flight_s, r.speed, r.arm_deg, radial * 1000.0)
         }
     }
 }
 
-fn render_drop_compact(ui: &mut egui::Ui, r: HitRecord) {
+fn render_hit_compact(ui: &mut egui::Ui, r: HitRecord, spawn_channel: usize) {
     ui.monospace(format!(
         "  fly {:.3} s   spd {:.3}   AoA {:.1}°   KE {:.2} mJ",
         r.flight_s, r.speed, r.aoa, r.ke_mj
     ));
-    ui.monospace(format!(
-        "  vx/vy/vz  {:+.3}/{:+.3}/{:+.3}   spin {:.3}   arm {:+.2}° ω{:+.1}°/s",
-        r.vx, r.vy, r.vz, r.spin, r.arm_deg, r.arm_angvel
-    ));
-    let radial = (r.hit_local.x * r.hit_local.x + r.hit_local.z * r.hit_local.z).sqrt();
-    ui.monospace(format!(
-        "  hit local  y{:+.1}mm  r{:.1}mm",
-        r.hit_local.y * 1000.0, radial * 1000.0
-    ));
-}
-
-fn render_vib_compact(ui: &mut egui::Ui, r: HitRecord, bar_idx: u32) {
-    const NOTE_NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-    let semitone = 5 + bar_idx;
-    let note = format!("{}{}", NOTE_NAMES[(semitone % 12) as usize], 3 + semitone / 12);
-    ui.monospace(format!(
-        "  {}   fly {:.3} s   spd {:.3}   AoA {:.1}°   KE {:.2} mJ",
-        note, r.flight_s, r.speed, r.aoa, r.ke_mj
-    ));
-    ui.monospace(format!(
-        "  vx/vy/vz  {:+.3}/{:+.3}/{:+.3}   spin {:.3}",
-        r.vx, r.vy, r.vz, r.spin
-    ));
+    if spawn_channel >= WHEEL_CH_VIB_FIRST {
+        ui.monospace(format!(
+            "  vx/vy/vz  {:+.3}/{:+.3}/{:+.3}   spin {:.3}",
+            r.vx, r.vy, r.vz, r.spin
+        ));
+    } else {
+        ui.monospace(format!(
+            "  vx/vy/vz  {:+.3}/{:+.3}/{:+.3}   spin {:.3}   arm {:+.2}° ω{:+.1}°/s",
+            r.vx, r.vy, r.vz, r.spin, r.arm_deg, r.arm_angvel
+        ));
+        let radial = (r.hit_local.x * r.hit_local.x + r.hit_local.z * r.hit_local.z).sqrt();
+        ui.monospace(format!(
+            "  hit local  y{:+.1}mm  r{:.1}mm",
+            r.hit_local.y * 1000.0, radial * 1000.0
+        ));
+    }
 }
 
 struct Agg { n: usize, mean: f32, std: f32, min: f32, max: f32 }
@@ -331,62 +315,54 @@ impl Agg {
 }
 
 fn render_summary(ui: &mut egui::Ui, runs: &[Run]) {
-    let complete: Vec<&Run> = runs.iter().filter(|r| r.drop.is_some() && r.chute.is_some()).collect();
-    let n = complete.len();
-    if n == 0 {
-        ui.label("No complete runs yet");
+    use std::collections::BTreeMap;
+    use crate::resources::programming_wheel_params::channel_name;
+
+    // Group completed runs by spawn channel, preserving channel order.
+    let mut by_channel: BTreeMap<usize, Vec<&Run>> = BTreeMap::new();
+    for run in runs.iter().filter(|r| r.hit.is_some()) {
+        by_channel.entry(run.spawn_channel).or_default().push(run);
+    }
+
+    if by_channel.is_empty() {
+        ui.label("No completed runs yet");
         return;
     }
 
-    let delta_ms: Vec<f32> = complete.iter().map(|r| (r.chute.unwrap().flight_s - DROP_REFERENCE_S) * 1000.0).collect();
-    let d_fly:  Vec<f32> = complete.iter().map(|r| r.drop.unwrap().flight_s).collect();
-    let d_spd:  Vec<f32> = complete.iter().map(|r| r.drop.unwrap().speed).collect();
-    let d_aoa:  Vec<f32> = complete.iter().map(|r| r.drop.unwrap().aoa).collect();
-    let d_ke:   Vec<f32> = complete.iter().map(|r| r.drop.unwrap().ke_mj).collect();
-    let c_fly:  Vec<f32> = complete.iter().map(|r| r.chute.unwrap().flight_s).collect();
-    let c_spd:  Vec<f32> = complete.iter().map(|r| r.chute.unwrap().speed).collect();
-    let c_aoa:  Vec<f32> = complete.iter().map(|r| r.chute.unwrap().aoa).collect();
-    let c_ke:   Vec<f32> = complete.iter().map(|r| r.chute.unwrap().ke_mj).collect();
     egui::Grid::new("summary_grid").num_columns(2).spacing([8.0, 2.0]).show(ui, |ui| {
-        ui.label(egui::RichText::new("n").strong());
-        ui.monospace(format!("{} complete runs", n));
-        ui.end_row();
-        ui.separator(); ui.separator(); ui.end_row();
+        for (ch, ch_runs) in &by_channel {
+            let name = channel_name(*ch);
+            let n = ch_runs.len();
 
-        if let Some(a) = Agg::from(&delta_ms) {
-            ui.label(egui::RichText::new("Δt").strong());
-            ui.monospace(a.fmt_delta_ms());
+            ui.label(egui::RichText::new(format!("── {} ──", name)).strong());
+            ui.monospace(format!("n = {}", n));
             ui.end_row();
+
+            let fly:      Vec<f32> = ch_runs.iter().map(|r| r.hit.unwrap().flight_s).collect();
+            let delta_ms: Vec<f32> = fly.iter().map(|&f| (f - DROP_REFERENCE_S) * 1000.0).collect();
+            let spd:      Vec<f32> = ch_runs.iter().map(|r| r.hit.unwrap().speed).collect();
+            let aoa:      Vec<f32> = ch_runs.iter().map(|r| r.hit.unwrap().aoa).collect();
+            let ke:       Vec<f32> = ch_runs.iter().map(|r| r.hit.unwrap().ke_mj).collect();
+
+            if let Some(a) = Agg::from(&delta_ms) {
+                ui.label(egui::RichText::new("Δt").strong());
+                ui.monospace(a.fmt_delta_ms());
+                ui.end_row();
+            }
+            ui.label(egui::RichText::new("fly").strong());
+            ui.monospace(Agg::from(&fly).map_or("--".into(), |a| a.fmt_mean_std(3, " s")));
+            ui.end_row();
+            ui.label(egui::RichText::new("spd").strong());
+            ui.monospace(Agg::from(&spd).map_or("--".into(), |a| a.fmt_mean_std(3, " m/s")));
+            ui.end_row();
+            ui.label(egui::RichText::new("AoA").strong());
+            ui.monospace(Agg::from(&aoa).map_or("--".into(), |a| a.fmt_mean_std(1, "°")));
+            ui.end_row();
+            ui.label(egui::RichText::new("KE").strong());
+            ui.monospace(Agg::from(&ke).map_or("--".into(), |a| a.fmt_mean_std(2, " mJ")));
+            ui.end_row();
+            ui.separator(); ui.separator(); ui.end_row();
         }
-        ui.separator(); ui.separator(); ui.end_row();
-
-        ui.label(egui::RichText::new("Drop fly").strong());
-        ui.monospace(Agg::from(&d_fly).map_or("--".into(), |a| a.fmt_mean_std(3, " s")));
-        ui.end_row();
-        ui.label(egui::RichText::new("Drop spd").strong());
-        ui.monospace(Agg::from(&d_spd).map_or("--".into(), |a| a.fmt_mean_std(3, " m/s")));
-        ui.end_row();
-        ui.label(egui::RichText::new("Drop AoA").strong());
-        ui.monospace(Agg::from(&d_aoa).map_or("--".into(), |a| a.fmt_mean_std(1, "°")));
-        ui.end_row();
-        ui.label(egui::RichText::new("Drop KE").strong());
-        ui.monospace(Agg::from(&d_ke).map_or("--".into(), |a| a.fmt_mean_std(2, " mJ")));
-        ui.end_row();
-        ui.separator(); ui.separator(); ui.end_row();
-
-        ui.label(egui::RichText::new("Chute fly").strong());
-        ui.monospace(Agg::from(&c_fly).map_or("--".into(), |a| a.fmt_mean_std(3, " s")));
-        ui.end_row();
-        ui.label(egui::RichText::new("Chute spd").strong());
-        ui.monospace(Agg::from(&c_spd).map_or("--".into(), |a| a.fmt_mean_std(3, " m/s")));
-        ui.end_row();
-        ui.label(egui::RichText::new("Chute AoA").strong());
-        ui.monospace(Agg::from(&c_aoa).map_or("--".into(), |a| a.fmt_mean_std(1, "°")));
-        ui.end_row();
-        ui.label(egui::RichText::new("Chute KE").strong());
-        ui.monospace(Agg::from(&c_ke).map_or("--".into(), |a| a.fmt_mean_std(2, " mJ")));
-        ui.end_row();
-
     });
 }
 
@@ -425,17 +401,15 @@ fn render_help_panel(ui: &mut egui::Ui) {
             .id_salt("help_marbles")
             .default_open(true)
             .show(ui, |ui| {
-                let rows: &[(&str, &str, Option<egui::Color32>)] = &[
-                    ("Drop marble", "Falls ~1 m with small random lateral jitter. Flight time nearly fixed by gravity.", Some(egui::Color32::from_rgb(242, 89, 38))),
-                    ("Chute marble", "Slides down the chute, lifts off, then flies to snare. Chute shape controls slide duration and liftoff velocity.", Some(egui::Color32::from_rgb(51, 115, 230))),
+                use crate::resources::programming_wheel_params::{channel_color_rgb, channel_name, WHEEL_CH_CHUTE, WHEEL_CH_DROP};
+                let channels = [
+                    (WHEEL_CH_DROP,  "Falls ~1 m with small random lateral jitter. Flight time nearly fixed by gravity."),
+                    (WHEEL_CH_CHUTE, "Slides down the chute, lifts off, then flies to snare. Chute shape controls slide duration and liftoff velocity."),
                 ];
-                for (label, desc, color) in rows {
-                    if let Some(c) = color {
-                        ui.label(egui::RichText::new(*label).weak().color(*c));
-                    } else {
-                        ui.label(*label);
-                        ui.label(*desc);
-                    }
+                for (ch, desc) in channels {
+                    let (r, g, b) = channel_color_rgb(ch);
+                    ui.label(egui::RichText::new(channel_name(ch)).weak().color(egui::Color32::from_rgb(r, g, b)));
+                    ui.label(desc);
                     ui.end_row();
                 }
                 ui.add_space(2.0);
@@ -518,8 +492,8 @@ fn render_help_panel(ui: &mut egui::Ui) {
             .default_open(false)
             .show(ui, |ui| {
                 let rows: &[(&str, &str)] = &[
-                    ("n", "Complete runs (both marbles hit snare)."),
-                    ("mean", "Average across all complete runs."),
+                    ("n", "Number of completed runs for that channel."),
+                    ("mean", "Average across all completed runs."),
                     ("σ std", "Sample standard deviation (÷ n−1), shown as ± after mean."),
                     ("[min … max]", "Range for Δt only."),
                 ];
@@ -539,17 +513,16 @@ fn render_help_panel(ui: &mut egui::Ui) {
             .default_open(false)
             .show(ui, |ui| {
                 ui.label(
-                    "Each run records both marbles every physics step. Open the graph for any \
-                     run via the \"Graph\" button inside that run's entry. Orange = drop marble, \
-                     blue = chute marble."
+                    "Each run records velocity samples every physics step. Open the graph for any \
+                     run via the \"Graph\" button inside that run's entry. Color matches the channel."
                 );
                 ui.add_space(2.0);
                 egui::Grid::new("help_graph_grid").num_columns(2).spacing([12.0, 3.0]).show(ui, |ui| {
                     let rows: &[(&str, &str)] = &[
                         ("speed",    "Total speed magnitude √(vx²+vy²+vz²).  Solid line."),
                         ("vy",       "Vertical velocity (m/s). Negative while falling.  Dashed."),
-                        ("vz",       "Forward velocity along the chute / arm axis (chute only).  Dotted."),
-                        ("spin",     "Surface speed from angular velocity: ω × r (chute only).  Short dashes."),
+                        ("vz",       "Forward velocity along chute / arm axis.  Dotted."),
+                        ("spin",     "Surface speed from angular velocity: ω × r.  Short dashes."),
                         ("|a|",      "Smoothed acceleration magnitude in the Y-Z plane (m/s²), \
                                       10 ms rolling window. Shows ~9.81 during free flight, \
                                       higher during chute contact, spike at snare impact."),

@@ -3,13 +3,6 @@ use bevy_egui::{egui, EguiContexts};
 use avian3d::prelude::*;
 use egui_plot::{Legend, Line, LineStyle, Plot, PlotPoints, VLine};
 
-const DROP_COLOR:  egui::Color32 = egui::Color32::from_rgb(242, 89,  38);
-const CHUTE_COLOR: egui::Color32 = egui::Color32::from_rgb(51,  115, 230);
-
-const DROP_GHOST_COLOR:  Color = Color::srgba(0.95, 0.35, 0.15, 0.75);
-const CHUTE_GHOST_COLOR: Color = Color::srgba(0.20, 0.45, 0.90, 0.75);
-const VIB_GHOST_COLOR:   Color = Color::srgba(0.20, 0.80, 0.35, 0.75);
-
 /// Record one sample per millisecond (1 kHz). At 10 kHz physics this skips 9
 /// out of every 10 steps, keeping each run's sample count under ~2000 even for
 /// long chute slides. The acceleration window below stays 10 ms wide.
@@ -23,27 +16,32 @@ const ACCEL_SMOOTH: usize = 10;
 use crate::components::snare::PivotArm;
 use crate::resources::constants::*;
 use crate::resources::marble_runs::{MarbleSample, RunHistory};
-use crate::resources::programming_wheel_params::WHEEL_CH_CHUTE;
+use crate::resources::programming_wheel_params::channel_color_rgb;
 use crate::systems::marble::{FlightTimer, Marble, RunIndex, SpawnChannel};
+
+fn channel_egui_color(ch: usize) -> egui::Color32 {
+    let (r, g, b) = channel_color_rgb(ch);
+    egui::Color32::from_rgb(r, g, b)
+}
+
+fn channel_bevy_color(ch: usize) -> Color {
+    let (r, g, b) = channel_color_rgb(ch);
+    Color::srgba(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 0.75)
+}
 
 pub fn record_marble_samples_system(
     mut all_runs: ResMut<RunHistory>,
     marbles: Query<(&LinearVelocity, &AngularVelocity, &FlightTimer, &RunIndex, &SpawnChannel), With<Marble>>,
 ) {
-    for (lin_vel, ang_vel, timer, run_idx, spawn_ch) in &marbles {
+    for (lin_vel, ang_vel, timer, run_idx, _spawn_ch) in &marbles {
         let Some(run) = all_runs.get_run_mut(run_idx.0) else { continue };
-        let samples = if spawn_ch.0 == WHEEL_CH_CHUTE {
-            &mut run.chute_samples
-        } else {
-            &mut run.drop_samples
-        };
 
         // Throttle: skip if not enough time has elapsed since the last stored sample.
-        if let Some(last) = samples.last() {
+        if let Some(last) = run.samples.last() {
             if timer.0 - last.t < SAMPLE_INTERVAL { continue; }
         }
 
-        samples.push(MarbleSample {
+        run.samples.push(MarbleSample {
             t: timer.0,
             vy: lin_vel.0.y,
             vz: lin_vel.0.z,
@@ -55,16 +53,9 @@ pub fn record_marble_samples_system(
 
 pub fn draw_marble_ghosts_system(mut gizmos: Gizmos, all_runs: Res<RunHistory>) {
     for run in &all_runs.runs {
-        if run.show_ghost {
-            if run.drop_path.len() >= 2 {
-                gizmos.linestrip(run.drop_path.iter().copied(), DROP_GHOST_COLOR);
-            }
-            if run.chute_path.len() >= 2 {
-                gizmos.linestrip(run.chute_path.iter().copied(), CHUTE_GHOST_COLOR);
-            }
-            if run.vib_path.len() >= 2 {
-                gizmos.linestrip(run.vib_path.iter().copied(), VIB_GHOST_COLOR);
-            }
+        if run.show_ghost && run.path.len() >= 2 {
+            let color = channel_bevy_color(run.spawn_channel);
+            gizmos.linestrip(run.path.iter().copied(), color);
         }
     }
 }
@@ -77,6 +68,7 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
 
         let title = format!("Run {} — Velocity & Acceleration", run.index + 1);
         let mut open = true;
+        let color = channel_egui_color(run.spawn_channel);
 
         egui::Window::new(&title)
             .id(egui::Id::new(("graph", run.index)))
@@ -84,20 +76,16 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
             .resizable(true)
             .open(&mut open)
             .show(ctx, |ui| {
-                let has_drop  = !run.drop_samples.is_empty();
-                let has_chute = !run.chute_samples.is_empty();
-
-                if !has_drop && !has_chute {
+                if run.samples.is_empty() {
                     ui.label("No data — marble still in flight or not yet spawned");
                     return;
                 }
 
-                // Diagnostic sample counts
+                // Diagnostic sample count
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(format!(
-                        "drop {} pts    chute {} pts",
-                        run.drop_samples.len(),
-                        run.chute_samples.len(),
+                        "{} pts",
+                        run.samples.len(),
                     )).small().weak());
                 });
                 ui.add_space(2.0);
@@ -119,26 +107,17 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
                     .x_axis_label("t (s)")
                     .y_axis_label("m/s")
                     .show(ui, |p| {
-                        if has_drop {
-                            p.line(Line::new("drop speed", vel_pts(&run.drop_samples, |s| s.speed as f64))
-                                .color(DROP_COLOR));
-                            p.line(Line::new("drop vy", vel_pts(&run.drop_samples, |s| s.vy as f64))
-                                .color(DROP_COLOR)
-                                .style(LineStyle::Dashed { length: 10.0 }));
-                        }
-                        if has_chute {
-                            p.line(Line::new("chute speed", vel_pts(&run.chute_samples, |s| s.speed as f64))
-                                .color(CHUTE_COLOR));
-                            p.line(Line::new("chute vy", vel_pts(&run.chute_samples, |s| s.vy as f64))
-                                .color(CHUTE_COLOR)
-                                .style(LineStyle::Dashed { length: 10.0 }));
-                            p.line(Line::new("chute vz", vel_pts(&run.chute_samples, |s| s.vz as f64))
-                                .color(CHUTE_COLOR)
-                                .style(LineStyle::Dotted { spacing: 6.0 }));
-                            p.line(Line::new("chute spin", vel_pts(&run.chute_samples, |s| s.spin as f64))
-                                .color(CHUTE_COLOR)
-                                .style(LineStyle::Dashed { length: 4.0 }));
-                        }
+                        p.line(Line::new("speed", vel_pts(&run.samples, |s| s.speed as f64))
+                            .color(color));
+                        p.line(Line::new("vy", vel_pts(&run.samples, |s| s.vy as f64))
+                            .color(color)
+                            .style(LineStyle::Dashed { length: 10.0 }));
+                        p.line(Line::new("vz", vel_pts(&run.samples, |s| s.vz as f64))
+                            .color(color)
+                            .style(LineStyle::Dotted { spacing: 6.0 }));
+                        p.line(Line::new("spin", vel_pts(&run.samples, |s| s.spin as f64))
+                            .color(color)
+                            .style(LineStyle::Dashed { length: 4.0 }));
                     });
 
                 ui.add_space(6.0);
@@ -166,14 +145,8 @@ pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHisto
                     .x_axis_label("t (s)")
                     .y_axis_label("m/s²")
                     .show(ui, |p| {
-                        if has_drop {
-                            p.line(Line::new("drop |a|", accel_pts(&run.drop_samples))
-                                .color(DROP_COLOR));
-                        }
-                        if has_chute {
-                            p.line(Line::new("chute |a|", accel_pts(&run.chute_samples))
-                                .color(CHUTE_COLOR));
-                        }
+                        p.line(Line::new("|a|", accel_pts(&run.samples))
+                            .color(color));
                     });
             });
 
@@ -209,6 +182,14 @@ pub fn snare_tip_graph_ui(
         [deg as f64, (snare_far_tip_height(deg) * 100.0) as f64]
     }));
 
+    // Use chute channel color for the tip-height curve (blue)
+    let curve_color = {
+        let (r, g, b) = crate::resources::programming_wheel_params::channel_color_rgb(
+            crate::resources::programming_wheel_params::WHEEL_CH_CHUTE,
+        );
+        egui::Color32::from_rgb(r, g, b)
+    };
+
     egui::Window::new("Snare Tip Height vs Angle")
         .id(egui::Id::new("snare_tip_graph"))
         .default_size([420.0, 280.0])
@@ -222,7 +203,7 @@ pub fn snare_tip_graph_ui(
                 .x_axis_label("arm angle (°)")
                 .y_axis_label("height (cm)")
                 .show(ui, |p| {
-                    p.line(Line::new("tip height", curve).color(CHUTE_COLOR));
+                    p.line(Line::new("tip height", curve).color(curve_color));
                     // Joint limits
                     p.vline(
                         VLine::new("rest", -(SNARE_REST_DEG as f64))

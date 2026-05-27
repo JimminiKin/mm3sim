@@ -162,24 +162,19 @@ pub fn record_marble_paths_system(
     mut all_runs: ResMut<RunHistory>,
     time: Res<Time<Fixed>>,
     mut marbles: Query<
-        (&Transform, &SpawnChannel, &RunIndex, &mut PathTimer),
+        (&Transform, &RunIndex, &mut PathTimer),
         With<Marble>,
     >,
 ) {
     let dt = time.delta_secs();
-    for (tf, spawn_ch, run_idx, mut timer) in &mut marbles {
+    for (tf, run_idx, mut timer) in &mut marbles {
         timer.0 += dt;
         if timer.0 < GHOST_SAMPLE_INTERVAL {
             continue;
         }
         timer.0 -= GHOST_SAMPLE_INTERVAL;
         if let Some(run) = all_runs.get_run_mut(run_idx.0) {
-            let path = match spawn_ch.0 {
-                c if c >= WHEEL_CH_VIB_FIRST => &mut run.vib_path,
-                WHEEL_CH_CHUTE               => &mut run.chute_path,
-                _                            => &mut run.drop_path,
-            };
-            path.push(tf.translation);
+            run.path.push(tf.translation);
         }
     }
 }
@@ -295,20 +290,17 @@ pub fn auto_spawn_system(
         .map(|gt| gt.translation().y + SNARE_HALF_HEIGHT)
         .unwrap_or(CHUTE_ORIGIN_Y);
 
-    let run_idx = all_runs.push_new_run();
-    if let Some(run) = all_runs.get_run_mut(run_idx) {
-        run.chute_exit = Some(params.exit_pos);
-    }
-
+    let drop_run_idx = all_runs.push_new_run(crate::resources::programming_wheel_params::WHEEL_CH_DROP);
     let drop_pos = jittered_spawn(snare_top_y);
     spawn_marble(&mut commands, &mut meshes, &mut materials,
-        drop_pos, marble_col.0, run_idx, crate::resources::programming_wheel_params::WHEEL_CH_DROP);
+        drop_pos, marble_col.0, drop_run_idx, crate::resources::programming_wheel_params::WHEEL_CH_DROP);
 
+    let chute_run_idx = all_runs.push_new_run(WHEEL_CH_CHUTE);
     let chute_pos = chute_spawn_pos(&params);
     spawn_marble(&mut commands, &mut meshes, &mut materials,
-        chute_pos, marble_col.0, run_idx, WHEEL_CH_CHUTE);
+        chute_pos, marble_col.0, chute_run_idx, WHEEL_CH_CHUTE);
 
-    auto.waiting_for = Some(run_idx);
+    auto.waiting_for = Some(chute_run_idx);
     auto.pending -= 1;
     auto.spawned += 1;
 }

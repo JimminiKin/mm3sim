@@ -43,17 +43,13 @@ pub struct MarbleSample {
 
 pub struct Run {
     pub index: usize,
-    pub drop: Option<HitRecord>,
-    pub chute: Option<HitRecord>,
-    pub vib: Option<HitRecord>,
-    pub vib_bar_idx: Option<u32>, // set at spawn time to tag this as a vib run
-    pub chute_exit: Option<[f32; 2]>, // p3 at spawn time: [z, y] relative to snare top
-    pub drop_samples: Vec<MarbleSample>,
-    pub chute_samples: Vec<MarbleSample>,
+    /// The `WHEEL_CH_*` channel that spawned this marble.
+    /// Set at spawn time so the run can be labelled before any hit is recorded.
+    pub spawn_channel: usize,
+    pub hit: Option<HitRecord>,
+    pub samples: Vec<MarbleSample>,
     pub graph_open: bool,
-    pub drop_path: Vec<Vec3>,
-    pub chute_path: Vec<Vec3>,
-    pub vib_path: Vec<Vec3>,
+    pub path: Vec<Vec3>,
     pub show_ghost: bool,
 }
 
@@ -68,22 +64,16 @@ pub struct RunHistory {
 }
 
 impl RunHistory {
-    pub fn push_new_run(&mut self) -> usize {
+    pub fn push_new_run(&mut self, spawn_channel: usize) -> usize {
         let idx = self.next_index;
         self.next_index += 1;
         self.runs.push(Run {
             index: idx,
-            drop: None,
-            chute: None,
-            vib: None,
-            vib_bar_idx: None,
-            chute_exit: None,
-            drop_samples: Vec::new(),
-            chute_samples: Vec::new(),
+            spawn_channel,
+            hit: None,
+            samples: Vec::new(),
             graph_open: false,
-            drop_path: Vec::new(),
-            chute_path: Vec::new(),
-            vib_path: Vec::new(),
+            path: Vec::new(),
             show_ghost: false,
         });
         idx

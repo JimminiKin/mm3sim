@@ -5,7 +5,6 @@ use crate::components::instrument::Instrument;
 use crate::components::snare::PivotArm;
 use crate::resources::constants::MARBLE_RADIUS;
 use crate::resources::marble_runs::{HitRecord, RunHistory};
-use crate::resources::programming_wheel_params::WHEEL_CH_CHUTE;
 use crate::systems::marble::{FlightTimer, Marble, PrevVelocity, RunIndex, SpawnChannel};
 
 pub const CH_SNARE: usize = 1;
@@ -71,7 +70,7 @@ pub fn record_instrument_hits(
     mut all_runs: ResMut<RunHistory>,
 ) {
     for hit in &hits.0 {
-        let Ok((tf, prev_vel, flight_timer, run_idx, spawn_ch)) =
+        let Ok((tf, prev_vel, flight_timer, run_idx, _spawn_ch)) =
             marbles.get(hit.marble_entity)
         else {
             continue;
@@ -97,20 +96,12 @@ pub fn record_instrument_hits(
         record.hit_local = hit_local;
         record.arm_deg = arm_deg;
 
-        let Some(run) = all_runs.get_run_mut(run_idx.0) else { continue };
-
         if instr.channel == CH_SNARE {
             let arm_angvel = arm_q.single().map(|v| v.0.x.to_degrees()).unwrap_or(0.0);
             record.arm_angvel = arm_angvel;
-            if spawn_ch.0 == WHEEL_CH_CHUTE {
-                run.chute.get_or_insert(record);
-            } else {
-                run.drop.get_or_insert(record);
-            }
-        } else if instr.channel >= CH_VIB_FIRST {
-            let bar_idx = (instr.channel - CH_VIB_FIRST) as u32;
-            run.vib.get_or_insert(record);
-            run.vib_bar_idx.get_or_insert(bar_idx);
         }
+
+        let Some(run) = all_runs.get_run_mut(run_idx.0) else { continue };
+        run.hit.get_or_insert(record);
     }
 }

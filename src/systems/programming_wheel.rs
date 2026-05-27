@@ -96,10 +96,7 @@ pub fn programming_wheel_spawn_system(
     for ch in channels {
         match ch {
             c if c == WHEEL_CH_CHUTE => {
-                let run_idx = all_runs.push_new_run();
-                if let Some(run) = all_runs.get_run_mut(run_idx) {
-                    run.chute_exit = Some(chute_params.exit_pos);
-                }
+                let run_idx = all_runs.push_new_run(WHEEL_CH_CHUTE);
                 let pos = chute_spawn_pos(&chute_params);
                 spawn_marble(
                     &mut commands, &mut meshes, &mut materials,
@@ -107,7 +104,7 @@ pub fn programming_wheel_spawn_system(
                 );
             }
             c if c == WHEEL_CH_DROP => {
-                let run_idx = all_runs.push_new_run();
+                let run_idx = all_runs.push_new_run(WHEEL_CH_DROP);
                 let pos = jittered_spawn(snare_top_y);
                 spawn_marble(
                     &mut commands, &mut meshes, &mut materials,
@@ -116,10 +113,7 @@ pub fn programming_wheel_spawn_system(
             }
             c if c >= WHEEL_CH_VIB_FIRST => {
                 let bar_idx = (c - WHEEL_CH_VIB_FIRST) as u32;
-                let run_idx = all_runs.push_new_run();
-                if let Some(run) = all_runs.get_run_mut(run_idx) {
-                    run.vib_bar_idx = Some(bar_idx);
-                }
+                let run_idx = all_runs.push_new_run(c);
                 let pos = vib_spawn_pos(&vib_params, bar_idx);
                 spawn_marble(
                     &mut commands, &mut meshes, &mut materials,
