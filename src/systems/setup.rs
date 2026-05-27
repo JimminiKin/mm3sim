@@ -19,8 +19,7 @@ pub fn setup_system(
 ) {
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(CAMERA_POS.0, CAMERA_POS.1, CAMERA_POS.2)
-            .looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::default(),
         OrbitCamera::default(),
         RenderLayers::layer(0),
         IsDefaultUiCamera,

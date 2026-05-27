@@ -10,10 +10,9 @@ pub const LIGHT_ROT_Y: f32 = 0.7;
 pub const LIGHT_ROT_Z: f32 = 0.0;
 pub const AMBIENT_BRIGHTNESS: f32 = 0.35;
 
-pub const CAMERA_POS: (f32, f32, f32) = (1.6, -0.1, -0.18);
-pub const CAMERA_INITIAL_RADIUS: f32 = 1.612;
-pub const CAMERA_INITIAL_PITCH: f32 = -0.52;
-pub const CAMERA_INITIAL_YAW: f32 = 1.7;
+pub const CAMERA_INITIAL_RADIUS: f32 = 4.5;
+pub const CAMERA_INITIAL_PITCH: f32 = -0.27;
+pub const CAMERA_INITIAL_YAW: f32 = 2.10;
 pub const CAMERA_ORBIT_SENSITIVITY: f32 = 0.005;
 pub const CAMERA_PAN_SENSITIVITY: f32 = 0.0015;
 pub const CAMERA_ZOOM_SPEED: f32 = 0.01;
@@ -162,12 +161,12 @@ pub const CHUTE_WIDTH: f32 = 0.02;
 
 pub const PROGRAMMING_WHEEL_RADIUS: f32 = 0.5; // 1 m diameter cylinder
 /// 16 bars × 4 beats/bar = 64 beats per revolution.
-/// At 1.875 RPM: 1.875 × 64 = 120 musical BPM.
+/// At 2.40625 RPM: 2.40625 × 64 = 154 musical BPM.
 pub const PROGRAMMING_WHEEL_BEATS_PER_REV: f32 = 64.0;
 /// ch 0 = chute drop, ch 1 = vertical snare drop, ch 2..38 = vib bars 0..36
 pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 39;
-/// 120 BPM ÷ 64 beats/rev = 1.875 RPM
-pub const PROGRAMMING_WHEEL_RPM_DEFAULT: f32 = 1.875;
+/// 154 BPM ÷ 64 beats/rev = 2.40625 RPM
+pub const PROGRAMMING_WHEEL_RPM_DEFAULT: f32 = 2.40625;
 pub const PROGRAMMING_WHEEL_Z_POS: f32 = 1.4; // world Z (positive from snare)
 pub const PROGRAMMING_WHEEL_Y_POS: f32 = 0.8; // world Y (cylinder centre)
 pub const PROGRAMMING_WHEEL_WIDTH: f32 = 2.2; // total X span of the wheel
