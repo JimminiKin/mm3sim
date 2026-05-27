@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
-use crate::systems::instrument::{InstrumentHits, CH_SNARE, CH_VIB_FIRST};
+use crate::resources::hihat_params::HiHatState;
+use crate::systems::instrument::{InstrumentHits, CH_HIHAT, CH_SNARE, CH_VIB_FIRST};
 
 const MAX_IMPACT_SPEED: f32 = 4.0;
 
@@ -37,6 +38,13 @@ pub(crate) struct SnareHitSound(Handle<AudioSource>);
 pub(crate) struct VibHitSounds(Vec<Handle<AudioSource>>);
 
 #[cfg(not(target_arch = "wasm32"))]
+#[derive(Resource)]
+pub(crate) struct HiHatHitSounds {
+    open: Handle<AudioSource>,
+    closed: Handle<AudioSource>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub fn setup_sounds(mut audio_sources: ResMut<Assets<AudioSource>>, mut commands: Commands) {
     let snare = audio_sources.add(AudioSource {
         bytes: Arc::from(generate_snare_wav()),
@@ -51,6 +59,14 @@ pub fn setup_sounds(mut audio_sources: ResMut<Assets<AudioSource>>, mut commands
         })
         .collect();
     commands.insert_resource(VibHitSounds(vib));
+
+    let hihat_open = audio_sources.add(AudioSource {
+        bytes: Arc::from(generate_hihat_wav(true)),
+    });
+    let hihat_closed = audio_sources.add(AudioSource {
+        bytes: Arc::from(generate_hihat_wav(false)),
+    });
+    commands.insert_resource(HiHatHitSounds { open: hihat_open, closed: hihat_closed });
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -58,6 +74,8 @@ pub fn play_instrument_sounds(
     hits: Res<InstrumentHits>,
     snare_sound: Option<Res<SnareHitSound>>,
     vib_sounds: Option<Res<VibHitSounds>>,
+    hihat_sounds: Option<Res<HiHatHitSounds>>,
+    hihat_state: Res<HiHatState>,
     volume: Res<SnareVolume>,
     mut commands: Commands,
 ) {
@@ -69,6 +87,18 @@ pub fn play_instrument_sounds(
             };
             commands.spawn((
                 AudioPlayer(s.0.clone()),
+                PlaybackSettings {
+                    volume: Volume::Linear(vol),
+                    ..PlaybackSettings::ONCE
+                },
+            ));
+        } else if hit.channel == CH_HIHAT {
+            let Some(sounds) = hihat_sounds.as_ref() else {
+                continue;
+            };
+            let handle = if hihat_state.open { &sounds.open } else { &sounds.closed };
+            commands.spawn((
+                AudioPlayer(handle.clone()),
                 PlaybackSettings {
                     volume: Volume::Linear(vol),
                     ..PlaybackSettings::ONCE
@@ -109,11 +139,17 @@ pub fn setup_sounds() {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn play_instrument_sounds(hits: Res<InstrumentHits>, volume: Res<SnareVolume>) {
+pub fn play_instrument_sounds(
+    hits: Res<InstrumentHits>,
+    volume: Res<SnareVolume>,
+    hihat_state: Res<HiHatState>,
+) {
     for hit in &hits.0 {
         let vol = impact_volume(hit.speed, volume.0);
         if hit.channel == CH_SNARE {
             play_snare_web_audio(vol);
+        } else if hit.channel == CH_HIHAT {
+            play_hihat_web_audio(vol, hihat_state.open);
         } else if hit.channel >= CH_VIB_FIRST {
             play_vib_web_audio((hit.channel - CH_VIB_FIRST) as u32, vol);
         }
@@ -135,6 +171,27 @@ fn play_snare_web_audio(volume: f32) {
         let Ok(source) = ctx.create_buffer_source() else {
             return;
         };
+        source.set_buffer(Some(&buf));
+        let Ok(gain) = ctx.create_gain() else { return };
+        gain.gain().set_value(volume);
+        let _ = source.connect_with_audio_node(&gain);
+        let _ = gain.connect_with_audio_node(&ctx.destination());
+        let _ = source.start();
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn play_hihat_web_audio(volume: f32, open: bool) {
+    AUDIO_CTX.with(|slot| {
+        let borrow = slot.borrow();
+        let Some(ctx) = borrow.as_ref() else { return };
+        let rate = ctx.sample_rate();
+        let dur = if open { 0.40 } else { 0.12 };
+        let n = (rate * dur) as u32;
+        let Ok(buf) = ctx.create_buffer(1, n, rate) else { return };
+        let samples = generate_hihat_samples_f32(n as usize, rate as u32, open);
+        let _ = buf.copy_to_channel(&samples, 0);
+        let Ok(source) = ctx.create_buffer_source() else { return };
         source.set_buffer(Some(&buf));
         let Ok(gain) = ctx.create_gain() else { return };
         gain.gain().set_value(volume);
@@ -202,6 +259,25 @@ fn generate_vib_samples_f32(bar_idx: u32, n: usize, sample_rate: u32) -> Vec<f32
         .collect()
 }
 
+fn generate_hihat_samples_f32(n: usize, sample_rate: u32, open: bool) -> Vec<f32> {
+    // Open: slow decay → long shimmer; closed: fast decay → tight tick.
+    let decay = if open { 15.0_f32 } else { 90.0_f32 };
+    let mut state: u32 = 0xF1E2_D3C4;
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / sample_rate as f32;
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let noise = (state >> 16) as f32 / 32768.0 - 1.0;
+            // Sparse metallic partials give the cymbal shimmer.
+            let ping = (std::f32::consts::TAU * 800.0  * t).sin() * 0.06
+                     + (std::f32::consts::TAU * 1500.0 * t).sin() * 0.04
+                     + (std::f32::consts::TAU * 2400.0 * t).sin() * 0.02;
+            let env = (-decay * t).exp();
+            ((noise * 0.88 + ping * 0.12) * env).clamp(-1.0, 1.0)
+        })
+        .collect()
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn generate_snare_wav() -> Vec<u8> {
     let sample_rate: u32 = 44100;
@@ -214,6 +290,14 @@ fn generate_vib_wav(bar_idx: u32) -> Vec<u8> {
     let sample_rate: u32 = 44100;
     let samples =
         generate_vib_samples_f32(bar_idx, (sample_rate as f32 * 2.0) as usize, sample_rate);
+    pcm_to_wav(samples, sample_rate)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn generate_hihat_wav(open: bool) -> Vec<u8> {
+    let sample_rate: u32 = 44100;
+    let dur = if open { 0.40 } else { 0.12 };
+    let samples = generate_hihat_samples_f32((sample_rate as f32 * dur) as usize, sample_rate, open);
     pcm_to_wav(samples, sample_rate)
 }
 

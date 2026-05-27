@@ -4,3 +4,4 @@ pub mod instrument;
 pub mod pivot_arm;
 pub mod snare;
 pub mod vibraphone;
+pub mod hihat;

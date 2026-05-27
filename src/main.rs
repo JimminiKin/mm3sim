@@ -13,6 +13,7 @@ use resources::constants::SIMULATION_TPS;
 use resources::marble_collisions::MarbleCollisions;
 use resources::marble_runs::RunHistory;
 use resources::snare_params::SnareParams;
+use resources::hihat_params::HiHatState;
 use resources::stats_intake::StatsIntake;
 use resources::vibraphone_params::VibraphoneParams;
 use systems::axes::{resize_axes_viewport, setup_axes_hud, update_axes_hud};
@@ -30,6 +31,7 @@ use systems::chute_handles::{
     draw_chute_gizmos, setup_chute_handles, sync_handle_transforms, sync_handle_visibility,
 };
 use systems::hud::hud_panel_ui;
+use systems::hihat::{sync_hihat_pedal_state, update_hihat_visual};
 use systems::instrument::{detect_instrument_hits, record_instrument_hits, InstrumentHits};
 use systems::marble::{
     advance_flight_timers_system, auto_spawn_system, capture_prev_velocity_system,
@@ -41,6 +43,8 @@ use systems::marble_graph::{
 };
 use systems::setup::setup_system;
 use systems::sound::{play_instrument_sounds, setup_sounds, SnareVolume};
+
+use components::hihat::spawn_hihat;
 
 fn main() {
     let mut app = App::new();
@@ -83,6 +87,7 @@ fn main() {
         .init_resource::<VibraphoneParams>()
         .init_resource::<AutoSpawn>()
         .init_resource::<InstrumentHits>()
+        .init_resource::<HiHatState>()
         .init_resource::<StatsIntake>()
         .add_systems(
             Startup,
@@ -91,6 +96,11 @@ fn main() {
                 setup_sounds,
                 setup_axes_hud,
                 setup_chute_handles,
+                |mut commands: Commands,
+                 mut meshes: ResMut<Assets<Mesh>>,
+                 mut materials: ResMut<Assets<StandardMaterial>>| {
+                    spawn_hihat(&mut commands, &mut meshes, &mut materials);
+                },
             ),
         )
         .add_systems(PostStartup, (setup_programming_wheel_system, setup_spawners_system))
@@ -132,10 +142,15 @@ fn main() {
                 sync_handle_transforms,
                 sync_handle_visibility,
                 draw_chute_gizmos,
-                // Programming wheel – sync spawner positions, then rotate + spawn
+                // Programming wheel – sync spawner positions, then rotate + spawn + hi-hat gate
                 (
                     sync_instrument_spawners,
-                    (rotate_programming_wheel_system, programming_wheel_spawn_system).chain(),
+                    (
+                        rotate_programming_wheel_system,
+                        programming_wheel_spawn_system,
+                        sync_hihat_pedal_state,
+                        update_hihat_visual,
+                    ).chain(),
                 ).chain(),
                 draw_programming_wheel_gizmos,
                 // Axes overlay

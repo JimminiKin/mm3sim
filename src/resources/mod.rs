@@ -7,3 +7,4 @@ pub mod marble_runs;
 pub mod snare_params;
 pub mod stats_intake;
 pub mod vibraphone_params;
+pub mod hihat_params;

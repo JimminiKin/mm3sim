@@ -25,6 +25,7 @@ use crate::resources::programming_wheel_params::{
     snap_beat, snap_label,
     ChannelTarget, DragState, ProgrammingWheelParams, WheelNote,
     WHEEL_CH_CHUTE_FIRST, WHEEL_CH_DROP, WHEEL_CH_VIB_FIRST,
+    WHEEL_CH_HIHAT_FIRST, WHEEL_CH_HIHAT_PEDAL,
 };
 use crate::systems::marble::{chute_spawn_pos, spawn_marble};
 
@@ -55,6 +56,10 @@ pub fn setup_spawners_system(mut commands: Commands) {
     }
     // One spawner for each remaining non-vib channel (direct snare drops).
     for ch in (WHEEL_CH_CHUTE_FIRST + N_CHUTES)..WHEEL_CH_VIB_FIRST {
+        commands.spawn((Transform::default(), MarbleSpawner { channel: ch }));
+    }
+    // Hi-hat strike channels + pedal channel.
+    for ch in WHEEL_CH_HIHAT_FIRST..=WHEEL_CH_HIHAT_PEDAL {
         commands.spawn((Transform::default(), MarbleSpawner { channel: ch }));
     }
 }
@@ -110,6 +115,28 @@ pub fn sync_instrument_spawners(
                             p.y + VIB_BAR_THICKNESS * 0.5 + VIB_SPAWN_HEIGHT,
                             p.z,
                         )
+                    })
+                    .unwrap_or_default()
+            }
+
+            ChannelTarget::HiHat { x_offset } => {
+                instruments
+                    .iter()
+                    .find(|(instr, _)| instr.channel == WHEEL_CH_HIHAT_FIRST)
+                    .map(|(_, gt)| {
+                        let p = gt.translation();
+                        Vec3::new(p.x + x_offset, p.y + HIHAT_HALF_HEIGHT + SPAWN_HEIGHT, p.z)
+                    })
+                    .unwrap_or_default()
+            }
+
+            ChannelTarget::HiHatPedal => {
+                instruments
+                    .iter()
+                    .find(|(instr, _)| instr.channel == WHEEL_CH_HIHAT_PEDAL)
+                    .map(|(_, gt)| {
+                        let p = gt.translation();
+                        Vec3::new(p.x, p.y + HIHAT_PEDAL_HALF_HEIGHT + SPAWN_HEIGHT, p.z)
                     })
                     .unwrap_or_default()
             }
@@ -186,6 +213,9 @@ pub fn programming_wheel_spawn_system(
     let mut rng = rand::rng();
 
     for ch in channels {
+        if ch == WHEEL_CH_HIHAT_PEDAL {
+            continue;
+        }
         let jitter = channel_jitter_xz(ch);
 
         // Collect positions for all spawners on this channel (always 1 spawner per channel now).

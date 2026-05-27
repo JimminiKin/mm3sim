@@ -164,9 +164,9 @@ pub const PROGRAMMING_WHEEL_RADIUS: f32 = 0.5; // 1 m diameter cylinder
 /// 16 bars × 4 beats/bar = 64 beats per revolution.
 /// At 2.40625 RPM: 2.40625 × 64 = 154 musical BPM.
 pub const PROGRAMMING_WHEEL_BEATS_PER_REV: f32 = 64.0;
-/// ch 0–5 = chute channels (one per chute), ch 6–12 = snare variants, ch 13–49 = vib bars 0–36.
+/// ch 0–5 = chute channels, ch 6–12 = snare variants, ch 13–49 = vib bars, ch 50–56 = hi-hat.
 /// Must equal the number of entries in `CHANNEL_DEFS` in `programming_wheel_params`.
-pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 50;
+pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 57;
 /// 154 BPM ÷ 64 beats/rev = 2.40625 RPM
 pub const PROGRAMMING_WHEEL_RPM_DEFAULT: f32 = 2.40625;
 pub const PROGRAMMING_WHEEL_Z_POS: f32 = 1.4; // world Z (positive from snare)
@@ -174,3 +174,27 @@ pub const PROGRAMMING_WHEEL_Y_POS: f32 = 0.8; // world Y (cylinder centre)
 pub const PROGRAMMING_WHEEL_WIDTH: f32 = 2.2; // total X span of the wheel
 pub const PROGRAMMING_WHEEL_READER_GAP: f32 = 0.014; // gap between cylinder surface and reader bar
 pub const PROGRAMMING_WHEEL_READER_HALF_H: f32 = 0.012; // reader bar cross-section half-size
+
+// =============================================================================
+// Hi-hat
+// =============================================================================
+
+pub const HIHAT_RADIUS: f32           = 0.15;    // ~12" cymbal
+pub const HIHAT_HALF_HEIGHT: f32      = 0.003;   // 3 mm thick
+pub const HIHAT_X: f32                = 0.35;    // world X — right of snare
+pub const HIHAT_Y: f32                = 0.12;    // world Y — above snare top face
+pub const HIHAT_Z: f32                = 0.0;
+pub const HIHAT_GAP_OPEN: f32         = 0.025;   // top cymbal lift when open
+pub const HIHAT_GAP_CLOSED: f32       = 0.004;   // top cymbal lift when closed
+pub const HIHAT_RESTITUTION: f32      = 0.55;
+pub const HIHAT_FRICTION: f32         = 0.15;
+pub const HIHAT_COLOR: (f32, f32, f32) = (0.72, 0.60, 0.18); // brass/gold
+pub const HIHAT_METALLIC: f32         = 0.85;
+pub const HIHAT_ROUGHNESS: f32        = 0.25;
+pub const HIHAT_MARBLE_COLOR: (f32, f32, f32) = (0.95, 0.80, 0.15);
+
+pub const HIHAT_PEDAL_X: f32          = HIHAT_X - HIHAT_RADIUS - 0.06;
+pub const HIHAT_PEDAL_Y: f32          = HIHAT_Y;
+pub const HIHAT_PEDAL_Z: f32          = HIHAT_Z;
+pub const HIHAT_PEDAL_RADIUS: f32     = 0.025;
+pub const HIHAT_PEDAL_HALF_HEIGHT: f32 = 0.003;

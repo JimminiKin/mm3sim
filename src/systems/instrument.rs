@@ -14,13 +14,17 @@ use crate::components::instrument::Instrument;
 use crate::components::snare::PivotArm;
 use crate::resources::constants::MARBLE_RADIUS;
 use crate::resources::marble_runs::{HitRecord, RunHistory};
-use crate::resources::programming_wheel_params::{WHEEL_CH_DROP, WHEEL_CH_VIB_FIRST};
+use crate::resources::programming_wheel_params::{
+    WHEEL_CH_DROP, WHEEL_CH_VIB_FIRST, WHEEL_CH_HIHAT_FIRST,
+};
 use crate::systems::marble::{FlightTimer, Marble, PrevVelocity, RunIndex, SpawnChannel};
 
 /// Channel number of the snare drum instrument (matches `WHEEL_CH_DROP`).
 pub const CH_SNARE: usize = WHEEL_CH_DROP;
 /// First vibraphone bar channel (matches `WHEEL_CH_VIB_FIRST`).
 pub const CH_VIB_FIRST: usize = WHEEL_CH_VIB_FIRST;
+/// Hi-hat cymbal channel (the physical bottom cymbal entity).
+pub const CH_HIHAT: usize = WHEEL_CH_HIHAT_FIRST;
 
 #[derive(Clone)]
 pub struct HitData {
@@ -117,3 +121,4 @@ pub fn record_instrument_hits(
         run.hit.get_or_insert(record);
     }
 }
+
