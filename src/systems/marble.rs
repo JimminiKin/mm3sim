@@ -50,6 +50,10 @@ pub struct PathTimer(pub f32);
 #[derive(Component)]
 pub struct FlightTimer(pub f32);
 
+/// When present, overrides the global `DESPAWN_Y` floor for this marble.
+#[derive(Component)]
+pub struct DespawnFloor(pub f32);
+
 #[derive(Component, Default)]
 pub struct PrevVelocity {
     pub linvel: Vec3,
@@ -117,6 +121,7 @@ pub fn spawn_marble(
         FlightTimer(0.0),
         PathTimer(0.0),
         PrevVelocity::default(),
+        DespawnFloor(DESPAWN_Y),
         marble_pbr(meshes, materials, position, MARBLE_COLOR),
         marble_physics(collide),
     ));
@@ -147,6 +152,7 @@ pub fn spawn_chute_marble(
             PathTimer(0.0),
             SlideRecord::default(),
             PrevVelocity::default(),
+            DespawnFloor(CHUTE_MARBLE_DESPAWN_Y),
         ),
         marble_pbr(meshes, materials, position, CHUTE_MARBLE_COLOR),
         marble_physics(collide),
@@ -176,6 +182,7 @@ pub fn spawn_vib_marble_for_bar(
         PathTimer(0.0),
         PrevVelocity::default(),
         RunIndex(run_idx),
+        DespawnFloor(DESPAWN_Y),
         marble_pbr(meshes, materials, spawn_pos, (0.20, 0.80, 0.35)),
         marble_physics(collide),
     ));
@@ -213,15 +220,10 @@ pub fn record_marble_paths_system(
 
 pub fn despawn_fallen_marbles_system(
     mut commands: Commands,
-    query: Query<(Entity, &Transform, Option<&ChuteMarble>), With<Marble>>,
-    snare: Query<&GlobalTransform, With<SnareDrum>>,
+    query: Query<(Entity, &Transform, &DespawnFloor), With<Marble>>,
 ) {
-    let snare_z = snare.single().map(|gt| gt.translation().z).unwrap_or(0.0);
-    let chute_despawn_z = snare_z - 0.2;
-
-    for (entity, transform, is_chute) in &query {
-        let pos = transform.translation;
-        if pos.y < DESPAWN_Y || (is_chute.is_some() && pos.z < chute_despawn_z) {
+    for (entity, transform, floor) in &query {
+        if transform.translation.y < floor.0 {
             commands.entity(entity).despawn();
         }
     }
