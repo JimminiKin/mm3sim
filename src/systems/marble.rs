@@ -1,3 +1,10 @@
+//! Marble lifecycle: spawning, physics, flight tracking, and despawn.
+//!
+//! `spawn_marble()` is the single entry point for creating a marble.
+//! All per-marble properties (colour, despawn floor) are derived from the spawn channel.
+//!
+//! `AutoSpawn` drives the sweep-and-record mode in `chute_editor.rs`.
+
 use avian3d::prelude::*;
 use bevy::math::primitives::Sphere;
 use bevy::prelude::*;

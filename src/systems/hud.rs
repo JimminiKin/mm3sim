@@ -1,3 +1,8 @@
+//! Stats panel, run history list, and help panel (egui).
+//!
+//! `hud_panel_ui` renders the main left-side stats window and the collapsible help panel.
+//! `render_summary` aggregates completed runs per channel using the `Agg` helper.
+
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use avian3d::prelude::{AngularVelocity, LinearVelocity};
@@ -9,6 +14,11 @@ use crate::resources::marble_runs::{HitRecord, Run, RunHistory};
 use crate::resources::programming_wheel_params::{channel_name, channel_target, ChannelTarget};
 use crate::systems::marble::{Marble, SpawnChannel};
 
+const STATS_WINDOW_OFFSET: [f32; 2]       = [90.0, -8.0];
+const STATS_WINDOW_DEFAULT_SIZE: [f32; 2] = [340.0, 460.0];
+const HELP_WINDOW_OFFSET: [f32; 2]        = [8.0, -8.0];
+const HELP_WINDOW_DEFAULT_SIZE: [f32; 2]  = [400.0, 520.0];
+
 pub fn hud_panel_ui(
     mut contexts: EguiContexts,
     marbles: Query<(&LinearVelocity, &AngularVelocity, &SpawnChannel), With<Marble>>,
@@ -17,12 +27,12 @@ pub fn hud_panel_ui(
     chute_params: Res<ChuteParams>,
     mut all_runs: ResMut<RunHistory>,
 ) {
-    let ctx = contexts.ctx_mut().unwrap();
+    let ctx = contexts.ctx_mut().expect("primary egui context");
 
     // ── Stats panel ───────────────────────────────────────────────────────────
     egui::Window::new("Stats")
-        .anchor(egui::Align2::LEFT_BOTTOM, egui::vec2(90.0, -8.0))
-        .default_size([340.0, 460.0])
+        .anchor(egui::Align2::LEFT_BOTTOM, egui::vec2(STATS_WINDOW_OFFSET[0], STATS_WINDOW_OFFSET[1]))
+        .default_size(STATS_WINDOW_DEFAULT_SIZE)
         .resizable(true)
         .title_bar(false)
         .show(ctx, |ui| {
@@ -225,9 +235,9 @@ pub fn hud_panel_ui(
     let mut help_win = egui::Window::new("Help")
         .title_bar(false)
         .resizable(true)
-        .default_size([400.0, 520.0]);
+        .default_size(HELP_WINDOW_DEFAULT_SIZE);
     if !all_runs.help_open {
-        help_win = help_win.anchor(egui::Align2::LEFT_BOTTOM, egui::vec2(8.0, -8.0));
+        help_win = help_win.anchor(egui::Align2::LEFT_BOTTOM, egui::vec2(HELP_WINDOW_OFFSET[0], HELP_WINDOW_OFFSET[1]));
     }
     let help_resp = help_win.show(&*ctx, |ui| {
         egui::CollapsingHeader::new(egui::RichText::new("Help").strong())
@@ -338,11 +348,11 @@ fn render_summary(ui: &mut egui::Ui, runs: &[Run]) {
             ui.monospace(format!("n = {}", n));
             ui.end_row();
 
-            let fly:      Vec<f32> = ch_runs.iter().map(|r| r.hit.unwrap().flight_s).collect();
+            let fly:      Vec<f32> = ch_runs.iter().map(|r| r.hit.expect("filtered to completed runs").flight_s).collect();
             let delta_ms: Vec<f32> = fly.iter().map(|&f| (f - DROP_REFERENCE_S) * 1000.0).collect();
-            let spd:      Vec<f32> = ch_runs.iter().map(|r| r.hit.unwrap().speed).collect();
-            let aoa:      Vec<f32> = ch_runs.iter().map(|r| r.hit.unwrap().aoa).collect();
-            let ke:       Vec<f32> = ch_runs.iter().map(|r| r.hit.unwrap().ke_mj).collect();
+            let spd:      Vec<f32> = ch_runs.iter().map(|r| r.hit.expect("filtered to completed runs").speed).collect();
+            let aoa:      Vec<f32> = ch_runs.iter().map(|r| r.hit.expect("filtered to completed runs").aoa).collect();
+            let ke:       Vec<f32> = ch_runs.iter().map(|r| r.hit.expect("filtered to completed runs").ke_mj).collect();
 
             if let Some(a) = Agg::from(&delta_ms) {
                 ui.label(egui::RichText::new("Δt").strong());

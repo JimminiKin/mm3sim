@@ -108,7 +108,7 @@ pub fn chute_handle_drag_system(
     mut contexts: EguiContexts,
     snare_params: Res<SnareParams>,
 ) {
-    if contexts.ctx_mut().unwrap().wants_pointer_input() {
+    if contexts.ctx_mut().expect("primary egui context").wants_pointer_input() {
         return;
     }
 

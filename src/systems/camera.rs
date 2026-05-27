@@ -30,7 +30,7 @@ pub fn orbit_camera_system(
     mut query: Query<(&mut OrbitCamera, &mut Transform)>,
     mut contexts: EguiContexts,
 ) {
-    let ui_wants_scroll = contexts.ctx_mut().unwrap().is_pointer_over_area();
+    let ui_wants_scroll = contexts.ctx_mut().expect("primary egui context").is_pointer_over_area();
 
     let orbiting = mouse_buttons.pressed(MouseButton::Right);
     let panning  = mouse_buttons.pressed(MouseButton::Middle);

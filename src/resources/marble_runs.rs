@@ -1,3 +1,8 @@
+//! Run history and hit data.
+//!
+//! `RunHistory` is the single source of truth for all marble impact records.
+//! Each marble spawns a `Run`; `record_instrument_hits` fills in `Run::hit` on contact.
+
 use bevy::prelude::*;
 
 use crate::resources::constants::MARBLE_MASS;

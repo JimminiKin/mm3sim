@@ -1,3 +1,9 @@
+//! Programming wheel data: channel table, note sequence, and UI state.
+//!
+//! The `CHANNEL_DEFS` table is the single source of truth for every instrument channel.
+//! Add new instruments there; everything else (`channel_name`, `channel_target`, etc.)
+//! derives from it automatically.
+
 use bevy::prelude::*;
 
 use crate::resources::constants::*;
@@ -7,8 +13,7 @@ use crate::resources::constants::*;
 /// Channel 2..=38 = vibraphone bars 0..=36
 pub const WHEEL_CH_CHUTE: usize = 0;
 pub const WHEEL_CH_DROP: usize = 1;
-/// First vibraphone channel (for documentation / tooling; logic uses `ChannelTarget` directly).
-#[allow(dead_code)]
+/// First vibraphone channel index. Used by spawner setup, hit detection, and the vibraphone component.
 pub const WHEEL_CH_VIB_FIRST: usize = 8;
 
 /// A single MIDI-style note on the programming wheel.
@@ -95,7 +100,7 @@ impl ProgrammingWheelParams {
 /// (bar 0 = F3, 174.61 Hz, ch 8).
 ///   B4=ch26  C5=ch27  D5=ch29  E5=ch31  F#5=ch33  G5=ch34
 ///   A5=ch36  B5=ch38  C6=ch39  D6=ch41  E6=ch43
-fn marble_machine_default_notes() -> Vec<WheelNote> {
+pub fn marble_machine_default_notes() -> Vec<WheelNote> {
     let mut v: Vec<WheelNote> = Vec::new();
 
     // Kick (ch 0) on beats 0,2; snare (ch 1) on beats 1,3 — all 16 bars
@@ -216,10 +221,6 @@ fn marble_machine_default_notes() -> Vec<WheelNote> {
     v
 }
 
-/// Public alias so the UI fill button can reset to the default melody.
-pub fn marble_machine_default_notes_pub() -> Vec<WheelNote> {
-    marble_machine_default_notes()
-}
 
 /// Which physical instrument a channel targets, and everything needed to spawn its marble.
 /// This makes each channel self-describing — no arithmetic against `WHEEL_CH_VIB_FIRST`.

@@ -9,10 +9,7 @@ use crate::resources::programming_wheel_params::WHEEL_CH_VIB_FIRST;
 use crate::resources::vibraphone_params::VibraphoneParams;
 
 #[derive(Component)]
-pub struct VibraphoneBar {
-    #[allow(dead_code)]
-    pub index: u32,
-}
+pub struct VibraphoneBar;
 
 #[derive(Component)]
 pub struct VibraphoneArm;
@@ -130,7 +127,7 @@ pub fn spawn_vibraphone(
                 Restitution::new(params.restitution),
                 Friction::new(params.friction),
                 CollisionEventsEnabled,
-                VibraphoneBar { index: bar_idx },
+                VibraphoneBar,
                 Instrument { channel: WHEEL_CH_VIB_FIRST + bar_idx as usize },
             ));
         });

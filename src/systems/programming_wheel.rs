@@ -1,3 +1,12 @@
+//! Programming wheel simulation and piano-roll editor UI.
+//!
+//! System order each `Update` frame:
+//! 1. `sync_instrument_spawners` — repositions `MarbleSpawner` entities to track instruments.
+//! 2. `rotate_programming_wheel_system` — advances `angle`, detects beat crossings → `pending_spawns`.
+//! 3. `programming_wheel_spawn_system` — drains `pending_spawns`, calls `spawn_marble`.
+//!
+//! The `programming_wheel_editor_ui` system renders the transport bar + piano-roll in `EguiPrimaryContextPass`.
+
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 use rand::RngExt;
@@ -12,6 +21,7 @@ use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::marble_runs::RunHistory;
 use crate::resources::programming_wheel_params::{
     channel_color_rgb, channel_jitter_xz, channel_name, channel_target,
+    marble_machine_default_notes,
     snap_beat, snap_label,
     ChannelTarget, DragState, ProgrammingWheelParams, WheelNote,
     WHEEL_CH_CHUTE, WHEEL_CH_DROP, WHEEL_CH_VIB_FIRST,
@@ -257,7 +267,7 @@ pub fn programming_wheel_editor_ui(
     mut contexts: EguiContexts,
     mut params: ResMut<ProgrammingWheelParams>,
 ) {
-    let ctx = contexts.ctx_mut().unwrap();
+    let ctx = contexts.ctx_mut().expect("primary egui context");
 
     let default_w = LABEL_W + PROGRAMMING_WHEEL_BEATS_PER_REV * params.px_per_beat + 24.0;
     let default_h = BEAT_HEADER_H
@@ -654,8 +664,7 @@ fn draw_piano_roll(ui: &mut egui::Ui, params: &mut ProgrammingWheelParams) {
     ui.horizontal(|ui| {
         ui.label("Fill:");
         if ui.small_button("Default melody").clicked() {
-            use crate::resources::programming_wheel_params::*;
-            params.notes = marble_machine_default_notes_pub();
+            params.notes = marble_machine_default_notes();
         }
         if ui.small_button("Kick quarter").clicked() {
             params.notes.retain(|n| n.channel != WHEEL_CH_CHUTE);

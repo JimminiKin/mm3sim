@@ -47,7 +47,7 @@ pub fn chute_editor_ui(
     mut snare_volume: ResMut<SnareVolume>,
     mut auto_spawn: ResMut<AutoSpawn>,
 ) {
-    let ctx = contexts.ctx_mut().unwrap();
+    let ctx = contexts.ctx_mut().expect("primary egui context");
     egui::Window::new("Parameters")
         .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-8.0, 8.0))
         .resizable(false)

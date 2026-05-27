@@ -61,7 +61,7 @@ pub fn draw_marble_ghosts_system(mut gizmos: Gizmos, all_runs: Res<RunHistory>) 
 }
 
 pub fn marble_graph_ui(mut contexts: EguiContexts, mut all_runs: ResMut<RunHistory>) {
-    let ctx = contexts.ctx_mut().unwrap();
+    let ctx = contexts.ctx_mut().expect("primary egui context");
 
     for run in &mut all_runs.runs {
         if !run.graph_open { continue; }
@@ -169,7 +169,7 @@ pub fn snare_tip_graph_ui(
 ) {
     if !all_runs.snare_tip_graph_open { return; }
 
-    let ctx = contexts.ctx_mut().unwrap();
+    let ctx = contexts.ctx_mut().expect("primary egui context");
     let mut open = true;
 
     let current_deg = arm

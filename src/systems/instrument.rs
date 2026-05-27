@@ -1,3 +1,12 @@
+//! Marble–instrument hit detection and recording.
+//!
+//! Two-stage pipeline (both in `FixedUpdate`, after `PhysicsSystems::Last`):
+//! 1. `detect_instrument_hits` — reads `CollisionStart` events, populates `InstrumentHits`.
+//! 2. `record_instrument_hits` — drains `InstrumentHits`, writes `HitRecord` into `RunHistory`.
+//!
+//! Using a shared `InstrumentHits` bus lets `play_instrument_sounds` consume the same
+//! hit list without re-querying collisions.
+
 use avian3d::prelude::*;
 use bevy::prelude::*;
 

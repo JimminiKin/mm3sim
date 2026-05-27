@@ -27,7 +27,7 @@ pub fn setup_axes_hud(
     mut materials: ResMut<Assets<StandardMaterial>>,
     windows: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let window = windows.single().unwrap();
+    let window = windows.single().expect("primary window");
     let pw = window.physical_width();
     let ph = window.physical_height();
 
