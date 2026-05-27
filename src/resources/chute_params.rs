@@ -2,14 +2,6 @@ use bevy::prelude::*;
 
 use crate::resources::constants::*;
 
-#[derive(Default, PartialEq, Clone, Copy)]
-pub enum DragAxis {
-    #[default]
-    Free,
-    Vertical,   // Y only
-    Horizontal, // Z only
-}
-
 /// Derived geometry for the 3-part chute (computed from ChuteParams).
 pub struct ChuteGeometry {
     pub slope_start: [f32; 2],    // [z, y]
@@ -30,7 +22,6 @@ pub struct ChuteParams {
     pub curve_radius: f32,     // radius of circular transition arc
     pub slope_angle: f32,      // degrees below horizontal (must exceed exit_angle)
     pub slope_length: f32,     // length of entry slope
-    pub drag_axis: DragAxis,
     pub handles_visible: bool,
     pub dirty: bool,
 }
@@ -44,7 +35,6 @@ impl Default for ChuteParams {
             curve_radius: CHUTE_CURVE_RADIUS,
             slope_angle: CHUTE_SLOPE_ANGLE,
             slope_length: CHUTE_SLOPE_LENGTH,
-            drag_axis: DragAxis::Free,
             handles_visible: false,
             dirty: false,
         }

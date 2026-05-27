@@ -5,7 +5,7 @@ use bevy_egui::{egui, EguiContexts};
 use crate::components::chute::{spawn_chute, ChuteSegment};
 use crate::components::snare::{spawn_snare, PivotArm, SnarePart};
 use crate::components::vibraphone::{spawn_vibraphone, VibraphoneEntity};
-use crate::resources::chute_params::{ChuteParams, DragAxis};
+use crate::resources::chute_params::ChuteParams;
 use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::snare_params::SnareParams;
 use crate::resources::stats_intake::StatsIntake;
@@ -104,19 +104,10 @@ pub fn chute_editor_ui(
                         snare_params.dirty = true;
                     }
 
-                    // ── Chute position ───────────────────────────────────────
+                    // ── Chute ────────────────────────────────────────────────
                     ui.separator();
-                    ui.heading("Chute position");
-                    ui.horizontal(|ui| {
-                        ui.label("Drag axis:");
-                        ui.radio_value(&mut params.drag_axis, DragAxis::Free, "Free");
-                        ui.radio_value(&mut params.drag_axis, DragAxis::Vertical, "Y only");
-                        ui.radio_value(&mut params.drag_axis, DragAxis::Horizontal, "Z only");
-                    });
+                    ui.heading("Chute");
                     changed |= point_drag_row(ui, "Exit end", &mut params.exit_pos);
-
-                    ui.separator();
-                    ui.heading("Chute shape");
                     changed |= scalar_drag_row(ui, "Exit length (m)", &mut params.exit_length, 0.001, 0.005..=0.50);
                     changed |= angle_drag_row(ui, "Exit angle (°)", &mut params.exit_angle, 0.0..=45.0);
                     changed |= scalar_drag_row(ui, "Curve radius (m)", &mut params.curve_radius, 0.001, 0.005..=1.0);

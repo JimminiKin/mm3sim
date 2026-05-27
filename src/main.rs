@@ -27,8 +27,7 @@ use systems::chute_editor::{
     rebuild_vibraphone_system, SnareFixed,
 };
 use systems::chute_handles::{
-    chute_handle_drag_system, draw_chute_gizmos, setup_chute_handles, sync_handle_transforms,
-    sync_handle_visibility, HandleDrag,
+    draw_chute_gizmos, setup_chute_handles, sync_handle_transforms, sync_handle_visibility,
 };
 use systems::hud::hud_panel_ui;
 use systems::instrument::{detect_instrument_hits, record_instrument_hits, InstrumentHits};
@@ -77,7 +76,6 @@ fn main() {
         .init_resource::<ChuteParams>()
         .init_resource::<SnareParams>()
         .init_resource::<MarbleCollisions>()
-        .init_resource::<HandleDrag>()
         .init_resource::<RunHistory>()
         .init_resource::<SnareFixed>()
         .init_resource::<SnareVolume>()
@@ -120,7 +118,6 @@ fn main() {
             Update,
             (
                 // Input
-                chute_handle_drag_system,
                 orbit_camera_system,
                 // Simulation maintenance
                 apply_snare_fixed_system,
