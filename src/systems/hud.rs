@@ -6,7 +6,6 @@ use crate::components::snare::{PivotArm, SnareDrum};
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
 use crate::resources::marble_runs::{HitRecord, Run, RunHistory};
-use crate::systems::camera::OrbitCamera;
 use crate::systems::marble::{ChuteMarble, Marble};
 
 pub fn hud_panel_ui(
@@ -16,7 +15,6 @@ pub fn hud_panel_ui(
     arm: Query<&Transform, With<PivotArm>>,
     chute_params: Res<ChuteParams>,
     mut all_runs: ResMut<RunHistory>,
-    camera: Query<&OrbitCamera>,
 ) {
     let ctx = contexts.ctx_mut().unwrap();
 
@@ -73,50 +71,6 @@ pub fn hud_panel_ui(
                             ui.monospace(format!("{:.3} m  {:.1}°", length, angle));
                             ui.end_row();
                         });
-
-                    // ── Camera params ─────────────────────────────────────────────────────
-                    if let Ok(cam) = camera.single() {
-                        egui::CollapsingHeader::new(egui::RichText::new("📷 Camera").strong())
-                            .id_salt("camera_header")
-                            .default_open(false)
-                            .show(ui, |ui| {
-                                egui::Grid::new("camera_grid")
-                                    .num_columns(2)
-                                    .spacing([8.0, 2.0])
-                                    .show(ui, |ui| {
-                                        ui.label("radius");
-                                        ui.monospace(format!("{:.5}", cam.radius));
-                                        ui.end_row();
-                                        ui.label("pitch");
-                                        ui.monospace(format!("{:.5}", cam.pitch));
-                                        ui.end_row();
-                                        ui.label("yaw");
-                                        ui.monospace(format!("{:.5}", cam.yaw));
-                                        ui.end_row();
-                                        ui.label("focus");
-                                        ui.monospace(format!(
-                                            "({:.4}, {:.4}, {:.4})",
-                                            cam.focus.x, cam.focus.y, cam.focus.z
-                                        ));
-                                        ui.end_row();
-                                    });
-
-                                ui.add_space(4.0);
-                                ui.label(egui::RichText::new("← copy to constants.rs →").weak().small());
-
-                                let consts_text = format!(
-                                    "pub const CAMERA_INITIAL_RADIUS: f32 = {:.5};\npub const CAMERA_INITIAL_PITCH:  f32 = {:.5};\npub const CAMERA_INITIAL_YAW:    f32 = {:.5};",
-                                    cam.radius, cam.pitch, cam.yaw
-                                );
-                                ui.add(
-                                    egui::TextEdit::multiline(&mut consts_text.clone())
-                                        .font(egui::TextStyle::Monospace)
-                                        .desired_width(f32::INFINITY)
-                                        .desired_rows(3),
-                                );
-                            });
-                        ui.separator();
-                    }
 
                     ui.horizontal(|ui| {
                         let lbl = if all_runs.snare_tip_graph_open { "Hide Tip Graph" } else { "Tip Graph" };
