@@ -51,7 +51,7 @@ pub const SIMULATION_TPS: f32 = 1000.0;
 // ── Surface physics ───────────────────────────────────────────────────────────
 pub const STEEL_RESTITUTION: f32 = 0.60; // marble
 pub const STEEL_FRICTION: f32 = 0.18; // marble
-pub const CHUTE_RESTITUTION: f32 = 0.25;
+pub const CHUTE_RESTITUTION: f32 = 0.05;
 pub const CHUTE_FRICTION: f32 = 0.20; // ABS has moderate grip on steel
 pub const SNARE_RESTITUTION: f32 = 0.60;
 pub const SNARE_FRICTION: f32 = 0.18;
