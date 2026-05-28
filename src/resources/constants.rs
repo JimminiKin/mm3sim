@@ -145,7 +145,6 @@ pub const HIHAT_METALLIC: f32 = 0.85;
 pub const HIHAT_ROUGHNESS: f32 = 0.25;
 pub const HIHAT_MARBLE_COLOR: (f32, f32, f32) = (0.95, 0.80, 0.15);
 
-pub const HIHAT_PEDAL_RADIUS: f32 = 0.025;
 pub const HIHAT_PEDAL_HALF_HEIGHT: f32 = 0.003;
 
 // =============================================================================

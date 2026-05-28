@@ -106,7 +106,9 @@ pub fn spawn_pivot_arm<M: Component + Clone>(
             marker.clone(),
         ))
         .with_children(|p| {
-            // Arm tube (oriented along local Z via 90° rotation about X)
+            // Arm tube (oriented along local Z via 90° rotation about X).
+            // CollisionLayers::NONE keeps the collider for inertia computation but
+            // prevents marbles or other instruments from hitting the structural parts.
             p.spawn((
                 Mesh3d(meshes.add(Mesh::from(Cylinder {
                     radius: spec.arm_tube_radius,
@@ -115,6 +117,7 @@ pub fn spawn_pivot_arm<M: Component + Clone>(
                 MeshMaterial3d(frame_material.clone()),
                 Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
                 Collider::cylinder(spec.arm_tube_radius, spec.arm_half_len * 2.0),
+                CollisionLayers::new(LayerMask::NONE, LayerMask::NONE),
                 Mass(spec.arm_mass),
             ));
 
@@ -127,6 +130,7 @@ pub fn spawn_pivot_arm<M: Component + Clone>(
                 MeshMaterial3d(frame_material.clone()),
                 Transform::from_xyz(0.0, 0.0, spec.arm_half_len),
                 Collider::cylinder(spec.cw_radius, spec.cw_half_height * 2.0),
+                CollisionLayers::new(LayerMask::NONE, LayerMask::NONE),
                 Mass(spec.cw_mass),
             ));
         })

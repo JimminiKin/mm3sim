@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use crate::components::instrument::Instrument;
 use crate::resources::constants::*;
 use crate::resources::hihat_params::HiHatParams;
-use crate::resources::programming_wheel_params::{WHEEL_CH_HIHAT_FIRST, WHEEL_CH_HIHAT_PEDAL};
+use crate::resources::programming_wheel_params::WHEEL_CH_HIHAT_FIRST;
 
 /// Tags every entity that belongs to the hi-hat assembly.
 #[derive(Component)]
@@ -39,13 +39,6 @@ pub fn spawn_hihat(
         perceptual_roughness: HIHAT_ROUGHNESS + 0.05,
         ..default()
     });
-    let pedal_mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(DARK_STEEL_COLOR.0, DARK_STEEL_COLOR.1, DARK_STEEL_COLOR.2),
-        metallic: DARK_STEEL_METALLIC,
-        perceptual_roughness: DARK_STEEL_ROUGHNESS,
-        ..default()
-    });
-
     // Bottom cymbal — static hit surface.
     commands.spawn((
         Mesh3d(meshes.add(Mesh::from(Cylinder {
@@ -81,29 +74,4 @@ pub fn spawn_hihat(
         HiHatPart,
     ));
 
-    // Pedal trigger — small disc beside the cymbal.
-    let pedal_pos = Vec3::new(
-        params.pos.x - HIHAT_RADIUS - 0.06,
-        params.pos.y,
-        params.pos.z,
-    );
-    commands.spawn((
-        Mesh3d(meshes.add(Mesh::from(Cylinder {
-            radius: HIHAT_PEDAL_RADIUS,
-            half_height: HIHAT_PEDAL_HALF_HEIGHT,
-        }))),
-        MeshMaterial3d(pedal_mat),
-        Transform {
-            translation: pedal_pos,
-            rotation: tilt,
-            scale: Vec3::ONE,
-        },
-        RigidBody::Static,
-        Collider::cylinder(HIHAT_PEDAL_RADIUS, HIHAT_PEDAL_HALF_HEIGHT * 2.0),
-        Restitution::new(STEEL_RESTITUTION),
-        Friction::new(STEEL_FRICTION),
-        CollisionEventsEnabled,
-        Instrument { channel: WHEEL_CH_HIHAT_PEDAL },
-        HiHatPart,
-    ));
 }
