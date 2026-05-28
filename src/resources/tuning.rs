@@ -54,6 +54,10 @@ pub const KICK_Y: f32 = -0.151;
 pub const KICK_Z: f32 = 0.076;
 pub const KICK_RESTITUTION: f32 = 0.35;
 pub const KICK_FRICTION: f32 = 0.25;
+pub const KICK_REST_DEG: f32 = 15.0;
+pub const KICK_MAX_TILT_DEG: f32 = 2.0;
+pub const KICK_ANGULAR_DAMPING: f32 = 0.0;
+pub const KICK_CW_WEIGHT_RATIO: f32 = 1.07;
 
 // ── Ride ──────────────────────────────────────────────────────────────────────
 pub const RIDE_X: f32 = 0.896;

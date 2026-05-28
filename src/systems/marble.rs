@@ -121,13 +121,13 @@ pub fn spawn_marble(
     spawn_channel: usize,
 ) {
     let (color, despawn_floor) = match channel_target(spawn_channel) {
-        ChannelTarget::GhostSnare        => (CHUTE_MARBLE_COLOR,  CHUTE_MARBLE_DESPAWN_Y),
+        ChannelTarget::GhostSnare        => (CHUTE_MARBLE_COLOR,  BACKSIDE_INSTRUMENTS_MARBLE_DESPAWN_Y),
         ChannelTarget::VibBar { .. }     => (VIB_MARBLE_COLOR,    DESPAWN_Y),
-        ChannelTarget::Snare { .. }      => (MARBLE_COLOR,         DESPAWN_Y),
+        ChannelTarget::Snare { .. }      => (MARBLE_COLOR,         BACKSIDE_INSTRUMENTS_MARBLE_DESPAWN_Y),
         ChannelTarget::HiHat { .. }
-        | ChannelTarget::HiHatPedal     => (HIHAT_MARBLE_COLOR,   DESPAWN_Y),
-        ChannelTarget::Kick { .. }       => (KICK_MARBLE_COLOR,   DESPAWN_Y),
-        ChannelTarget::Ride { .. }       => (RIDE_MARBLE_COLOR,   DESPAWN_Y),
+        | ChannelTarget::HiHatPedal     => (HIHAT_MARBLE_COLOR,   BACKSIDE_INSTRUMENTS_MARBLE_DESPAWN_Y),
+        ChannelTarget::Kick { .. }       => (KICK_MARBLE_COLOR,    BACKSIDE_INSTRUMENTS_MARBLE_DESPAWN_Y),
+        ChannelTarget::Ride { .. }       => (RIDE_MARBLE_COLOR,    BACKSIDE_INSTRUMENTS_MARBLE_DESPAWN_Y),
     };
 
     commands.spawn((

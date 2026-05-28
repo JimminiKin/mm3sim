@@ -274,6 +274,12 @@ pub fn chute_editor_ui(
                                 changed = true;
                             }
 
+                            sub_heading(ui, "Pivot");
+                            changed |= scalar_drag_row(ui, "Rest deg", &mut kick_params.rest_deg, 0.1, 0.0..=45.0);
+                            changed |= scalar_drag_row(ui, "Max tilt deg", &mut kick_params.max_tilt_deg, 0.1, 0.0..=10.0);
+                            changed |= scalar_drag_row(ui, "Angular damping", &mut kick_params.angular_damping, 0.01, 0.0..=5.0);
+                            changed |= scalar_drag_row(ui, "CW weight ratio", &mut kick_params.cw_weight_ratio, 0.01, 0.5..=3.0);
+
                             sub_heading(ui, "Surface");
                             changed |= scalar_drag_row(ui, "Restitution", &mut kick_params.restitution, 0.01, 0.0..=1.0);
                             changed |= scalar_drag_row(ui, "Friction", &mut kick_params.friction, 0.01, 0.0..=1.0);
@@ -450,6 +456,10 @@ fn format_params_as_consts(
     writeln!(s, "pub const KICK_Z: f32 = {};", f(kick.pos.z)).unwrap();
     writeln!(s, "pub const KICK_RESTITUTION: f32 = {};", f(kick.restitution)).unwrap();
     writeln!(s, "pub const KICK_FRICTION: f32 = {};", f(kick.friction)).unwrap();
+    writeln!(s, "pub const KICK_REST_DEG: f32 = {};", f(kick.rest_deg)).unwrap();
+    writeln!(s, "pub const KICK_MAX_TILT_DEG: f32 = {};", f(kick.max_tilt_deg)).unwrap();
+    writeln!(s, "pub const KICK_ANGULAR_DAMPING: f32 = {};", f(kick.angular_damping)).unwrap();
+    writeln!(s, "pub const KICK_CW_WEIGHT_RATIO: f32 = {};", f(kick.cw_weight_ratio)).unwrap();
     writeln!(s).unwrap();
 
     writeln!(s, "// ── Ride ──────────────────────────────────────────────────────────────────────").unwrap();

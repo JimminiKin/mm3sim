@@ -98,7 +98,7 @@ pub const SPAWN_HEIGHT: f32 = 1.0; // above snare top face
 pub const DROP_REFERENCE_S: f32 = 0.450; // theoretical 1 m free-fall flight time
 pub const MARBLE_SPAWN_JITTER: f32 = 0.001;
 pub const DESPAWN_Y: f32 = -0.3;
-pub const CHUTE_MARBLE_DESPAWN_Y: f32 = -0.1;
+pub const BACKSIDE_INSTRUMENTS_MARBLE_DESPAWN_Y: f32 = -0.1;
 
 // ── Vibraphone ────────────────────────────────────────────────────────────────
 pub const VIB_BAR_COUNT: u32 = 37;
@@ -158,6 +158,18 @@ pub const KICK_COLOR: (f32, f32, f32) = (0.45, 0.28, 0.12);
 pub const KICK_METALLIC: f32 = 0.05;
 pub const KICK_ROUGHNESS: f32 = 0.75;
 pub const KICK_MARBLE_COLOR: (f32, f32, f32) = (0.70, 0.45, 0.20);
+
+// ── Kick drum (pivot arm geometry) ───────────────────────────────────────────
+pub const KICK_MASS: f32 = 4.0;
+pub const KICK_ARM_LENGTH: f32 = 1.0;
+pub const KICK_ARM_HALF_LEN: f32 = KICK_ARM_LENGTH / 2.0;
+pub const KICK_ARM_MASS: f32 = 1.0;
+pub const KICK_ARM_TUBE_RADIUS: f32 = 0.025;
+pub const KICK_PIVOT_FROM_DRUM: f32 = 0.45; // KICK_RADIUS + 0.20 gap
+pub const KICK_PIVOT_LOCAL_Z: f32 = KICK_PIVOT_FROM_DRUM - KICK_ARM_HALF_LEN; // = -0.05
+pub const KICK_CW_DISTANCE: f32 = KICK_ARM_HALF_LEN - KICK_PIVOT_LOCAL_Z;    // = 0.55
+pub const KICK_CW_RADIUS: f32 = 0.03;
+pub const KICK_CW_HALF_HEIGHT: f32 = 0.12;
 
 // =============================================================================
 // Ride cymbal (structural geometry)

@@ -118,6 +118,16 @@ pub fn marble_machine_default_notes() -> Vec<WheelNote> {
         v.push(WheelNote::new(WHEEL_CH_DROP,        b + 1.0, 0.2));
         v.push(WheelNote::new(WHEEL_CH_CHUTE_FIRST, b + 2.0, 0.2));
         v.push(WheelNote::new(WHEEL_CH_DROP,        b + 3.0, 0.2));
+        // Kick doubles the ghost snare on the strong beats (0 and 2)
+        v.push(WheelNote::new(WHEEL_CH_KICK_FIRST,  b + 0.0, 0.2));
+        v.push(WheelNote::new(WHEEL_CH_KICK_FIRST,  b + 2.0, 0.2));
+        // Hi-hat drives every beat
+        v.push(WheelNote::new(WHEEL_CH_HIHAT_FIRST, b + 0.0, 0.2));
+        v.push(WheelNote::new(WHEEL_CH_HIHAT_FIRST, b + 1.0, 0.2));
+        v.push(WheelNote::new(WHEEL_CH_HIHAT_FIRST, b + 2.0, 0.2));
+        v.push(WheelNote::new(WHEEL_CH_HIHAT_FIRST, b + 3.0, 0.2));
+        // Ride on the "and of 1" — 8th-note pulse underneath
+        v.push(WheelNote::new(WHEEL_CH_RIDE_FIRST,  b + 0.5, 0.2));
     }
 
     // ch = WHEEL_CH_VIB_FIRST(13) + semitones_from_F3
