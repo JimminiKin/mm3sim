@@ -17,8 +17,12 @@ pub const WHEEL_CH_DROP: usize = 6;
 pub const WHEEL_CH_VIB_FIRST: usize = 13;
 /// First hi-hat strike channel. Channels `WHEEL_CH_HIHAT_FIRST + 0..6` are the six hit zones.
 pub const WHEEL_CH_HIHAT_FIRST: usize = 50;
-/// Hi-hat pedal channel — a marble hit here toggles the open/closed state.
+/// Hi-hat pedal channel — controls the open/closed gate by beat position.
 pub const WHEEL_CH_HIHAT_PEDAL: usize = 56;
+/// First kick drum channel. Channels `WHEEL_CH_KICK_FIRST + 0..6` are the six hit zones.
+pub const WHEEL_CH_KICK_FIRST: usize = 57;
+/// First ride cymbal channel. Channels `WHEEL_CH_RIDE_FIRST + 0..6` are the six hit zones.
+pub const WHEEL_CH_RIDE_FIRST: usize = 63;
 
 /// A single MIDI-style note on the programming wheel.
 /// `beat` is the start position in beats [0, BEATS_PER_REV).
@@ -243,6 +247,10 @@ pub enum ChannelTarget {
     HiHat { x_offset: f32 },
     /// Marble hits the hi-hat pedal, toggling the open/closed state.
     HiHatPedal,
+    /// Marble drops onto the kick drum. `x_offset` is metres from drum centre.
+    Kick { x_offset: f32 },
+    /// Marble drops onto the ride cymbal. `x_offset` is metres from cymbal centre.
+    Ride { x_offset: f32 },
 }
 
 struct ChannelDef {
@@ -256,17 +264,21 @@ struct ChannelDef {
 const VIB:   (u8, u8, u8) = (80, 200, 120);
 const SNARE: (u8, u8, u8) = (242, 89, 38);
 const HIHAT: (u8, u8, u8) = (200, 165, 40);
+const KICK:  (u8, u8, u8) = (180, 110, 55);
+const RIDE:  (u8, u8, u8) = (210, 175, 60);
 /// Lateral XZ jitter for snare drops (realistic marble-release noise).
 const SNARE_JITTER: f32 = crate::resources::constants::MARBLE_SPAWN_JITTER;
 
 /// Complete instrument channel table, indexed by channel number.
 ///
 /// Each entry defines one instrument (or delivery path):
-/// - Channels 0–5:  Ghost snare chute channels.
-/// - Channels 6–12: Direct snare drops at increasing X offsets (centre ± 2/4/6 cm).
+/// - Channels 0–5:   Ghost snare chute channels.
+/// - Channels 6–12:  Direct snare drops at increasing X offsets (centre ± 2/4/6 cm).
 /// - Channels 13–49: Vibraphone bars 0–36 (F3 → F6).
 /// - Channels 50–55: Hi-hat strike zones (centre ± 2/4/6 cm).
-/// - Channel 56:    Hi-hat pedal (toggles open/closed).
+/// - Channel 56:     Hi-hat pedal (gate, no marble).
+/// - Channels 57–62: Kick drum (centre ± 2/4/6 cm).
+/// - Channels 63–68: Ride cymbal (centre ± 2/4/6 cm).
 ///
 /// To add a new instrument: append a `ChannelDef` here, spawn an `Instrument`
 /// entity with the matching `channel`, and update `sync_instrument_spawners`.
@@ -331,8 +343,22 @@ const CHANNEL_DEFS: &[ChannelDef] = &[
     ChannelDef { name: "Hi-Hat+4", color: HIHAT, target: ChannelTarget::HiHat { x_offset:  0.04 }, jitter_xz: 0.001 }, // 53
     ChannelDef { name: "Hi-Hat-4", color: HIHAT, target: ChannelTarget::HiHat { x_offset: -0.04 }, jitter_xz: 0.001 }, // 54
     ChannelDef { name: "Hi-Hat+6", color: HIHAT, target: ChannelTarget::HiHat { x_offset:  0.06 }, jitter_xz: 0.001 }, // 55
-    // ch 56 — hi-hat pedal (toggles open/closed)
+    // ch 56 — hi-hat pedal (gate, no marble)
     ChannelDef { name: "HH Pedal", color: (150, 120, 30), target: ChannelTarget::HiHatPedal, jitter_xz: 0.0 }, // 56
+    // ch 57–62 — kick drum (6 zones spread over ±6 cm)
+    ChannelDef { name: "Kick",   color: KICK, target: ChannelTarget::Kick { x_offset:  0.00 }, jitter_xz: 0.001 }, // 57
+    ChannelDef { name: "Kick+2", color: KICK, target: ChannelTarget::Kick { x_offset:  0.02 }, jitter_xz: 0.001 }, // 58
+    ChannelDef { name: "Kick-2", color: KICK, target: ChannelTarget::Kick { x_offset: -0.02 }, jitter_xz: 0.001 }, // 59
+    ChannelDef { name: "Kick+4", color: KICK, target: ChannelTarget::Kick { x_offset:  0.04 }, jitter_xz: 0.001 }, // 60
+    ChannelDef { name: "Kick-4", color: KICK, target: ChannelTarget::Kick { x_offset: -0.04 }, jitter_xz: 0.001 }, // 61
+    ChannelDef { name: "Kick+6", color: KICK, target: ChannelTarget::Kick { x_offset:  0.06 }, jitter_xz: 0.001 }, // 62
+    // ch 63–68 — ride cymbal (6 zones spread over ±6 cm)
+    ChannelDef { name: "Ride",   color: RIDE, target: ChannelTarget::Ride { x_offset:  0.00 }, jitter_xz: 0.001 }, // 63
+    ChannelDef { name: "Ride+2", color: RIDE, target: ChannelTarget::Ride { x_offset:  0.02 }, jitter_xz: 0.001 }, // 64
+    ChannelDef { name: "Ride-2", color: RIDE, target: ChannelTarget::Ride { x_offset: -0.02 }, jitter_xz: 0.001 }, // 65
+    ChannelDef { name: "Ride+4", color: RIDE, target: ChannelTarget::Ride { x_offset:  0.04 }, jitter_xz: 0.001 }, // 66
+    ChannelDef { name: "Ride-4", color: RIDE, target: ChannelTarget::Ride { x_offset: -0.04 }, jitter_xz: 0.001 }, // 67
+    ChannelDef { name: "Ride+6", color: RIDE, target: ChannelTarget::Ride { x_offset:  0.06 }, jitter_xz: 0.001 }, // 68
 ];
 
 /// Returns the display name for a channel.

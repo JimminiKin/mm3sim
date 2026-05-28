@@ -39,7 +39,7 @@ pub const MARBLE_METALLIC: f32 = 0.80;
 pub const MARBLE_ROUGHNESS: f32 = 0.20;
 
 pub const CHUTE_MARBLE_COLOR: (f32, f32, f32) = (0.20, 0.45, 0.90);
-pub const VIB_MARBLE_COLOR:   (f32, f32, f32) = (0.20, 0.80, 0.35);
+pub const VIB_MARBLE_COLOR: (f32, f32, f32) = (0.20, 0.80, 0.35);
 
 // =============================================================================
 // Physics & Geometry
@@ -130,7 +130,6 @@ pub const VIB_CW_WEIGHT_RATIO: f32 = 1.07;
 pub const VIB_CW_RADIUS: f32 = 0.012;
 pub const VIB_CW_HALF_HEIGHT: f32 = 0.018;
 
-pub const VIB_DROP_BAR_INDEX: u32 = 6;
 pub const VIB_SPAWN_HEIGHT: f32 = 1.0; // height above bar top to spawn marble
 
 pub const VIB_BAR_COLOR: (f32, f32, f32) = (0.82, 0.73, 0.33);
@@ -164,9 +163,9 @@ pub const PROGRAMMING_WHEEL_RADIUS: f32 = 0.5; // 1 m diameter cylinder
 /// 16 bars × 4 beats/bar = 64 beats per revolution.
 /// At 2.40625 RPM: 2.40625 × 64 = 154 musical BPM.
 pub const PROGRAMMING_WHEEL_BEATS_PER_REV: f32 = 64.0;
-/// ch 0–5 = chute channels, ch 6–12 = snare variants, ch 13–49 = vib bars, ch 50–56 = hi-hat.
+/// ch 0–5 = chute, 6–12 = snare, 13–49 = vib, 50–56 = hi-hat, 57–62 = kick, 63–68 = ride.
 /// Must equal the number of entries in `CHANNEL_DEFS` in `programming_wheel_params`.
-pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 57;
+pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 69;
 /// 154 BPM ÷ 64 beats/rev = 2.40625 RPM
 pub const PROGRAMMING_WHEEL_RPM_DEFAULT: f32 = 2.40625;
 pub const PROGRAMMING_WHEEL_Z_POS: f32 = 1.4; // world Z (positive from snare)
@@ -179,22 +178,54 @@ pub const PROGRAMMING_WHEEL_READER_HALF_H: f32 = 0.012; // reader bar cross-sect
 // Hi-hat
 // =============================================================================
 
-pub const HIHAT_RADIUS: f32           = 0.15;    // ~12" cymbal
-pub const HIHAT_HALF_HEIGHT: f32      = 0.003;   // 3 mm thick
-pub const HIHAT_X: f32                = 0.35;    // world X — right of snare
-pub const HIHAT_Y: f32                = 0.12;    // world Y — above snare top face
-pub const HIHAT_Z: f32                = 0.0;
-pub const HIHAT_GAP_OPEN: f32         = 0.025;   // top cymbal lift when open
-pub const HIHAT_GAP_CLOSED: f32       = 0.004;   // top cymbal lift when closed
-pub const HIHAT_RESTITUTION: f32      = 0.55;
-pub const HIHAT_FRICTION: f32         = 0.15;
+pub const HIHAT_RADIUS: f32 = 0.15; // ~12" cymbal
+pub const HIHAT_HALF_HEIGHT: f32 = 0.003; // 3 mm thick
+pub const HIHAT_X: f32 = 0.35; // world X — right of snare
+pub const HIHAT_Y: f32 = 0.12; // world Y — above snare top face
+pub const HIHAT_Z: f32 = 0.0;
+pub const HIHAT_GAP_OPEN: f32 = 0.025; // top cymbal lift when open
+pub const HIHAT_GAP_CLOSED: f32 = 0.004; // top cymbal lift when closed
+pub const HIHAT_RESTITUTION: f32 = 0.55;
+pub const HIHAT_FRICTION: f32 = 0.15;
 pub const HIHAT_COLOR: (f32, f32, f32) = (0.72, 0.60, 0.18); // brass/gold
-pub const HIHAT_METALLIC: f32         = 0.85;
-pub const HIHAT_ROUGHNESS: f32        = 0.25;
+pub const HIHAT_METALLIC: f32 = 0.85;
+pub const HIHAT_ROUGHNESS: f32 = 0.25;
 pub const HIHAT_MARBLE_COLOR: (f32, f32, f32) = (0.95, 0.80, 0.15);
 
-pub const HIHAT_PEDAL_X: f32          = HIHAT_X - HIHAT_RADIUS - 0.06;
-pub const HIHAT_PEDAL_Y: f32          = HIHAT_Y;
-pub const HIHAT_PEDAL_Z: f32          = HIHAT_Z;
-pub const HIHAT_PEDAL_RADIUS: f32     = 0.025;
+pub const HIHAT_PEDAL_X: f32 = HIHAT_X - HIHAT_RADIUS - 0.06;
+pub const HIHAT_PEDAL_Y: f32 = HIHAT_Y;
+pub const HIHAT_PEDAL_Z: f32 = HIHAT_Z;
+pub const HIHAT_PEDAL_RADIUS: f32 = 0.025;
 pub const HIHAT_PEDAL_HALF_HEIGHT: f32 = 0.003;
+
+// =============================================================================
+// Kick drum
+// =============================================================================
+
+pub const KICK_RADIUS: f32 = 0.25; // ~20" diameter
+pub const KICK_HALF_HEIGHT: f32 = 0.15; // ~12" depth
+pub const KICK_X: f32 = 0.70; // right of snare, past hi-hat
+pub const KICK_Y: f32 = -0.10; // slightly lower than snare centre
+pub const KICK_Z: f32 = 0.2;
+pub const KICK_RESTITUTION: f32 = 0.35; // padded batter head
+pub const KICK_FRICTION: f32 = 0.25;
+pub const KICK_COLOR: (f32, f32, f32) = (0.45, 0.28, 0.12); // dark maple shell
+pub const KICK_METALLIC: f32 = 0.05;
+pub const KICK_ROUGHNESS: f32 = 0.75;
+pub const KICK_MARBLE_COLOR: (f32, f32, f32) = (0.70, 0.45, 0.20);
+
+// =============================================================================
+// Ride cymbal
+// =============================================================================
+
+pub const RIDE_RADIUS: f32 = 0.20; // ~16" diameter
+pub const RIDE_HALF_HEIGHT: f32 = 0.003; // 3 mm thick
+pub const RIDE_X: f32 = -0.65; // further left than kick
+pub const RIDE_Y: f32 = HIHAT_Y; // same height as hi-hat
+pub const RIDE_Z: f32 = 0.0;
+pub const RIDE_RESTITUTION: f32 = 0.55;
+pub const RIDE_FRICTION: f32 = 0.15;
+pub const RIDE_COLOR: (f32, f32, f32) = (0.78, 0.65, 0.25); // slightly different gold from hi-hat
+pub const RIDE_METALLIC: f32 = 0.88;
+pub const RIDE_ROUGHNESS: f32 = 0.22;
+pub const RIDE_MARBLE_COLOR: (f32, f32, f32) = (0.85, 0.70, 0.25);

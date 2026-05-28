@@ -24,7 +24,8 @@ pub struct ChuteParams {
     pub curve_radius: f32,     // radius of circular transition arc
     pub slope_angle: f32,      // degrees below horizontal (must exceed exit_angle)
     pub slope_length: f32,     // length of entry slope
-    pub handles_visible: bool,
+    pub restitution: f32,
+    pub friction: f32,
     pub dirty: bool,
 }
 
@@ -37,7 +38,8 @@ impl Default for ChuteParams {
             curve_radius: CHUTE_CURVE_RADIUS,
             slope_angle: CHUTE_SLOPE_ANGLE,
             slope_length: CHUTE_SLOPE_LENGTH,
-            handles_visible: false,
+            restitution: CHUTE_RESTITUTION,
+            friction: CHUTE_FRICTION,
             dirty: false,
         }
     }

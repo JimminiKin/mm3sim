@@ -93,8 +93,8 @@ pub fn spawn_chute(
         },
         RigidBody::Static,
         Collider::trimesh_with_config(coll_verts, coll_idx, TrimeshFlags::FIX_INTERNAL_EDGES),
-        Restitution::new(CHUTE_RESTITUTION).with_combine_rule(CoefficientCombine::Min),
-        Friction::new(CHUTE_FRICTION),
+        Restitution::new(params.restitution).with_combine_rule(CoefficientCombine::Min),
+        Friction::new(params.friction),
         ChuteSegment,
     ));
 }

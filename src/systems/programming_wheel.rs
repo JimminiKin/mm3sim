@@ -26,6 +26,7 @@ use crate::resources::programming_wheel_params::{
     ChannelTarget, DragState, ProgrammingWheelParams, WheelNote,
     WHEEL_CH_CHUTE_FIRST, WHEEL_CH_DROP, WHEEL_CH_VIB_FIRST,
     WHEEL_CH_HIHAT_FIRST, WHEEL_CH_HIHAT_PEDAL,
+    WHEEL_CH_KICK_FIRST, WHEEL_CH_RIDE_FIRST,
 };
 use crate::systems::marble::{chute_spawn_pos, spawn_marble};
 
@@ -60,6 +61,14 @@ pub fn setup_spawners_system(mut commands: Commands) {
     }
     // Hi-hat strike channels + pedal channel.
     for ch in WHEEL_CH_HIHAT_FIRST..=WHEEL_CH_HIHAT_PEDAL {
+        commands.spawn((Transform::default(), MarbleSpawner { channel: ch }));
+    }
+    // Kick drum channels.
+    for ch in WHEEL_CH_KICK_FIRST..WHEEL_CH_KICK_FIRST + 6 {
+        commands.spawn((Transform::default(), MarbleSpawner { channel: ch }));
+    }
+    // Ride cymbal channels.
+    for ch in WHEEL_CH_RIDE_FIRST..WHEEL_CH_RIDE_FIRST + 6 {
         commands.spawn((Transform::default(), MarbleSpawner { channel: ch }));
     }
 }
@@ -137,6 +146,28 @@ pub fn sync_instrument_spawners(
                     .map(|(_, gt)| {
                         let p = gt.translation();
                         Vec3::new(p.x, p.y + HIHAT_PEDAL_HALF_HEIGHT + SPAWN_HEIGHT, p.z)
+                    })
+                    .unwrap_or_default()
+            }
+
+            ChannelTarget::Kick { x_offset } => {
+                instruments
+                    .iter()
+                    .find(|(instr, _)| instr.channel == WHEEL_CH_KICK_FIRST)
+                    .map(|(_, gt)| {
+                        let p = gt.translation();
+                        Vec3::new(p.x + x_offset, p.y + KICK_HALF_HEIGHT + SPAWN_HEIGHT, p.z)
+                    })
+                    .unwrap_or_default()
+            }
+
+            ChannelTarget::Ride { x_offset } => {
+                instruments
+                    .iter()
+                    .find(|(instr, _)| instr.channel == WHEEL_CH_RIDE_FIRST)
+                    .map(|(_, gt)| {
+                        let p = gt.translation();
+                        Vec3::new(p.x + x_offset, p.y + RIDE_HALF_HEIGHT + SPAWN_HEIGHT, p.z)
                     })
                     .unwrap_or_default()
             }

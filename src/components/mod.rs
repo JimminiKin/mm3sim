@@ -5,3 +5,5 @@ pub mod pivot_arm;
 pub mod snare;
 pub mod vibraphone;
 pub mod hihat;
+pub mod kick;
+pub mod ride;

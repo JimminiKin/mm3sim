@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::resources::constants::{SNARE_FRICTION, SNARE_RESTITUTION};
+
 /// World position offset applied to the entire snare mechanism.
 ///
 /// `pos = Vec3::ZERO` reproduces the original hard-coded layout:
@@ -11,6 +13,8 @@ use bevy::prelude::*;
 #[derive(Resource, Debug, Clone)]
 pub struct SnareParams {
     pub pos: Vec3,
+    pub restitution: f32,
+    pub friction: f32,
     pub dirty: bool,
 }
 
@@ -18,6 +22,8 @@ impl Default for SnareParams {
     fn default() -> Self {
         Self {
             pos: Vec3::ZERO,
+            restitution: SNARE_RESTITUTION,
+            friction: SNARE_FRICTION,
             dirty: false,
         }
     }

@@ -10,7 +10,6 @@ use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::snare_params::SnareParams;
 use crate::resources::stats_intake::StatsIntake;
 use crate::resources::vibraphone_params::VibraphoneParams;
-use crate::systems::marble::AutoSpawn;
 use crate::systems::sound::SnareVolume;
 
 #[derive(Resource, Default)]
@@ -46,7 +45,6 @@ pub fn chute_editor_ui(
     mut stats_intake: ResMut<StatsIntake>,
     mut snare_fixed: ResMut<SnareFixed>,
     mut snare_volume: ResMut<SnareVolume>,
-    mut auto_spawn: ResMut<AutoSpawn>,
 ) {
     let ctx = contexts.ctx_mut().expect("primary egui context");
     egui::Window::new("Parameters")
@@ -58,11 +56,9 @@ pub fn chute_editor_ui(
                 .id_salt("params_header")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let mut changed = false;
 
+                    // ── Options ──────────────────────────────────────────────
                     ui.heading("Options");
-                    ui.checkbox(&mut params.handles_visible, "Show handles");
-
                     let old_col = marble_col.bypass_change_detection().0;
                     let mut new_col = old_col;
                     ui.checkbox(&mut new_col, "Marble-marble collisions");
@@ -77,155 +73,157 @@ pub fn chute_editor_ui(
                         stats_intake.0 = new_si;
                     }
 
-                    let old_fixed = snare_fixed.bypass_change_detection().0;
-                    let mut new_fixed = old_fixed;
-                    ui.checkbox(&mut new_fixed, "Fix snare (freeze arm)");
-                    if new_fixed != old_fixed {
-                        snare_fixed.0 = new_fixed;
-                    }
-
                     ui.horizontal(|ui| {
-                        ui.label("Snare volume:");
+                        ui.label("Volume:");
                         ui.add(egui::Slider::new(&mut snare_volume.0, 0.0..=1.0).show_value(false));
                         ui.monospace(format!("{:.0}%", snare_volume.0 * 100.0));
                     });
 
-                    // ── Snare position ───────────────────────────────────────
                     ui.separator();
-                    ui.heading("Snare position");
-                    let mut snare_changed = false;
-                    snare_changed |= scalar_drag_row(ui, "X (m)", &mut snare_params.pos.x, 0.001, -1.0..=1.0);
-                    snare_changed |= scalar_drag_row(ui, "Y (m)", &mut snare_params.pos.y, 0.001, -1.0..=1.0);
-                    snare_changed |= scalar_drag_row(ui, "Z (m)", &mut snare_params.pos.z, 0.001, -1.0..=1.0);
-                    if snare_changed {
-                        snare_params.dirty = true;
-                    }
-                    if ui.button("Reset snare position").clicked() {
-                        *snare_params = SnareParams::default();
-                        snare_params.dirty = true;
+                    if ui.button("Copy params as consts").clicked() {
+                        let text = format_params_as_consts(&params, &multi, &snare_params, &vib);
+                        ui.ctx().copy_text(text);
                     }
 
-                    // ── Chute shape (shared across all instances) ────────────
-                    ui.separator();
-                    ui.heading("Chute shape");
-                    changed |= point_drag_row(ui, "Exit end", &mut params.exit_pos);
-                    changed |= scalar_drag_row(ui, "Exit length (m)", &mut params.exit_length, 0.001, 0.005..=0.50);
-                    changed |= angle_drag_row(ui, "Exit angle (°)", &mut params.exit_angle, 0.0..=45.0);
-                    changed |= scalar_drag_row(ui, "Curve radius (m)", &mut params.curve_radius, 0.001, 0.005..=1.0);
-                    changed |= angle_drag_row(ui, "Slope angle (°)", &mut params.slope_angle, 1.0..=85.0);
-                    changed |= scalar_drag_row(ui, "Slope length (m)", &mut params.slope_length, 0.001, 0.01..=1.0);
+                    // ── Ghost Snare ──────────────────────────────────────────
+                    egui::CollapsingHeader::new("Ghost Snare")
+                        .id_salt("ghost_snare_header")
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            let mut changed = false;
 
-                    ui.separator();
-                    if ui.button("Reset shape to defaults").clicked() {
-                        *params = ChuteParams::default();
-                        changed = true;
-                    }
+                            sub_heading(ui, "Shape");
+                            changed |= point_drag_row(ui, "Exit end", &mut params.exit_pos);
+                            changed |= scalar_drag_row(ui, "Exit length (m)", &mut params.exit_length, 0.001, 0.005..=0.50);
+                            changed |= angle_drag_row(ui, "Exit angle (°)", &mut params.exit_angle, 0.0..=45.0);
+                            changed |= scalar_drag_row(ui, "Curve radius (m)", &mut params.curve_radius, 0.001, 0.005..=1.0);
+                            changed |= angle_drag_row(ui, "Slope angle (°)", &mut params.slope_angle, 1.0..=85.0);
+                            changed |= scalar_drag_row(ui, "Slope length (m)", &mut params.slope_length, 0.001, 0.01..=1.0);
 
-                    if changed {
-                        params.dirty = true;
-                    }
+                            sub_heading(ui, "Surface");
+                            changed |= scalar_drag_row(ui, "Restitution", &mut params.restitution, 0.01, 0.0..=1.0);
+                            changed |= scalar_drag_row(ui, "Friction", &mut params.friction, 0.01, 0.0..=1.0);
 
-                    // ── Chute angles (per-instance Y-axis rotation) ──────────
-                    ui.separator();
-                    ui.heading(format!("Chute angles ({N_CHUTES} chutes)"));
-                    let mut angle_changed = false;
-                    for i in 0..N_CHUTES {
-                        angle_changed |= scalar_drag_row(
-                            ui,
-                            &format!("Chute {} (°)", i + 1),
-                            &mut multi.angles_deg[i],
-                            0.1,
-                            -180.0..=180.0,
-                        );
-                    }
-                    ui.horizontal(|ui| {
-                        if ui.small_button("Space 3°").clicked() {
+                            sub_heading(ui, &format!("Angles ({N_CHUTES} chutes)"));
+                            let mut angle_changed = false;
                             for i in 0..N_CHUTES {
-                                multi.angles_deg[i] = 3.0 + i as f32 * 3.0;
+                                angle_changed |= scalar_drag_row(
+                                    ui,
+                                    &format!("Chute {} (°)", i + 1),
+                                    &mut multi.angles_deg[i],
+                                    0.1,
+                                    -180.0..=180.0,
+                                );
                             }
-                            angle_changed = true;
-                        }
-                        if ui.small_button("Reset angles").clicked() {
-                            multi.angles_deg = MultiChuteConfig::default().angles_deg;
-                            angle_changed = true;
-                        }
-                    });
-                    if angle_changed {
-                        multi.dirty = true;
-                    }
+                            ui.horizontal(|ui| {
+                                if ui.small_button("Space 3°").clicked() {
+                                    for i in 0..N_CHUTES {
+                                        multi.angles_deg[i] = 3.0 + i as f32 * 3.0;
+                                    }
+                                    angle_changed = true;
+                                }
+                                if ui.small_button("Reset angles").clicked() {
+                                    multi.angles_deg = MultiChuteConfig::default().angles_deg;
+                                    angle_changed = true;
+                                }
+                            });
+                            if angle_changed {
+                                multi.dirty = true;
+                            }
+
+                            ui.separator();
+                            if ui.button("Reset to defaults").clicked() {
+                                *params = ChuteParams::default();
+                                changed = true;
+                            }
+
+                            if changed {
+                                params.dirty = true;
+                            }
+                        });
+
+                    // ── Snare ────────────────────────────────────────────────
+                    egui::CollapsingHeader::new("Snare")
+                        .id_salt("snare_header")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            let mut snare_changed = false;
+
+                            sub_heading(ui, "Position");
+                            snare_changed |= scalar_drag_row(ui, "X (m)", &mut snare_params.pos.x, 0.001, -1.0..=1.0);
+                            snare_changed |= scalar_drag_row(ui, "Y (m)", &mut snare_params.pos.y, 0.001, -1.0..=1.0);
+                            snare_changed |= scalar_drag_row(ui, "Z (m)", &mut snare_params.pos.z, 0.001, -1.0..=1.0);
+                            if ui.button("Reset position").clicked() {
+                                snare_params.pos = SnareParams::default().pos;
+                                snare_changed = true;
+                            }
+
+                            sub_heading(ui, "Pivot");
+                            let old_fixed = snare_fixed.bypass_change_detection().0;
+                            let mut new_fixed = old_fixed;
+                            ui.checkbox(&mut new_fixed, "Fix arm (freeze)");
+                            if new_fixed != old_fixed {
+                                snare_fixed.0 = new_fixed;
+                            }
+
+                            sub_heading(ui, "Surface");
+                            snare_changed |= scalar_drag_row(ui, "Restitution", &mut snare_params.restitution, 0.01, 0.0..=1.0);
+                            snare_changed |= scalar_drag_row(ui, "Friction", &mut snare_params.friction, 0.01, 0.0..=1.0);
+
+                            if snare_changed {
+                                snare_params.dirty = true;
+                            }
+                        });
 
                     // ── Vibraphone ───────────────────────────────────────────
-                    ui.separator();
-                    ui.heading("Vibraphone");
-                    let mut vib_changed = false;
-                    vib_changed |= scalar_drag_row(ui, "Pos X center (m)", &mut vib.pos.x, 0.001, -2.0..=2.0);
-                    vib_changed |= scalar_drag_row(ui, "Pos Y top face (m)", &mut vib.pos.y, 0.001, -0.5..=0.5);
-                    vib_changed |= scalar_drag_row(ui, "Pos Z (m)", &mut vib.pos.z, 0.001, -2.0..=0.0);
-                    vib_changed |= scalar_drag_row(ui, "Bar width (m)", &mut vib.bar_width, 0.0005, 0.010..=0.10);
-                    vib_changed |= scalar_drag_row(ui, "Bar spacing (m)", &mut vib.bar_spacing, 0.0005, 0.010..=0.20);
-                    vib_changed |= scalar_drag_row(ui, "Bar thickness (m)", &mut vib.bar_thickness, 0.0005, 0.003..=0.05);
-                    vib_changed |= scalar_drag_row(ui, "Bar len max (m)", &mut vib.bar_length_max, 0.001, 0.05..=0.80);
-                    vib_changed |= scalar_drag_row(ui, "Bar len min (m)", &mut vib.bar_length_min, 0.001, 0.05..=0.50);
-                    vib_changed |= scalar_drag_row(ui, "Bar density (kg/m³)", &mut vib.bar_density, 1.0, 500.0..=8000.0);
-                    vib_changed |= scalar_drag_row(ui, "Ang. damping", &mut vib.angular_damping, 0.01, 0.0..=20.0);
-                    vib_changed |= scalar_drag_row(ui, "Restitution", &mut vib.restitution, 0.01, 0.0..=1.0);
-                    vib_changed |= scalar_drag_row(ui, "Friction", &mut vib.friction, 0.01, 0.0..=1.0);
-                    vib_changed |= scalar_drag_row(ui, "Arm scale (×bar len)", &mut vib.arm_scale, 0.01, 0.5..=4.0);
-                    vib_changed |= scalar_drag_row(ui, "Pivot frac (×bar len)", &mut vib.pivot_frac, 0.005, 0.05..=0.48);
-                    vib_changed |= angle_drag_row(ui, "Rest angle (°)", &mut vib.rest_deg, 1.0..=45.0);
-                    vib_changed |= angle_drag_row(ui, "Max tilt (°)", &mut vib.max_tilt_deg, 0.5..=30.0);
-                    vib_changed |= scalar_drag_row(ui, "CW ratio", &mut vib.cw_weight_ratio, 0.001, 0.5..=2.0);
-                    ui.horizontal(|ui| {
-                        ui.label("Drop bar index:");
-                        let old = vib.drop_bar_index;
-                        ui.add(egui::DragValue::new(&mut vib.drop_bar_index).range(0..=36u32));
-                        if vib.drop_bar_index != old { vib_changed = true; }
-                    });
-                    ui.checkbox(&mut vib.spawn_marble, "Spawn vib. marble");
-                    if vib_changed {
-                        vib.dirty = true;
-                    }
-                    if ui.button("Reset vibraphone").clicked() {
-                        *vib = VibraphoneParams::default();
-                        vib.dirty = true;
-                    }
+                    egui::CollapsingHeader::new("Vibraphone")
+                        .id_salt("vib_header")
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            let mut vib_changed = false;
 
-                    // ── Batch Runs ───────────────────────────────────────────
-                    ui.separator();
-                    ui.heading("Batch Runs");
-                    ui.horizontal(|ui| {
-                        ui.label("Count:");
-                        ui.add(egui::DragValue::new(&mut auto_spawn.batch_size).range(1..=1000u32));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Step exit y (mm):");
-                        ui.add(egui::DragValue::new(&mut auto_spawn.step_exit_y_mm).speed(0.1));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Step slope angle (°):");
-                        ui.add(egui::DragValue::new(&mut auto_spawn.step_slope_angle_deg).speed(0.1));
-                    });
+                            sub_heading(ui, "Position");
+                            vib_changed |= scalar_drag_row(ui, "X center (m)", &mut vib.pos.x, 0.001, -2.0..=2.0);
+                            vib_changed |= scalar_drag_row(ui, "Y top face (m)", &mut vib.pos.y, 0.001, -0.5..=0.5);
+                            vib_changed |= scalar_drag_row(ui, "Z (m)", &mut vib.pos.z, 0.001, -2.0..=0.0);
 
-                    let is_running = auto_spawn.pending > 0 || auto_spawn.waiting;
-                    ui.horizontal(|ui| {
-                        if is_running {
-                            let done = auto_spawn.spawned;
-                            let total = done + auto_spawn.pending;
-                            ui.label(format!("{done}/{total}"));
-                            if ui.button("Stop").clicked() {
-                                auto_spawn.pending = 0;
-                                auto_spawn.waiting = false;
+                            sub_heading(ui, "Bar geometry");
+                            vib_changed |= scalar_drag_row(ui, "Width (m)", &mut vib.bar_width, 0.0005, 0.010..=0.10);
+                            vib_changed |= scalar_drag_row(ui, "Spacing (m)", &mut vib.bar_spacing, 0.0005, 0.010..=0.20);
+                            vib_changed |= scalar_drag_row(ui, "Thickness (m)", &mut vib.bar_thickness, 0.0005, 0.003..=0.05);
+                            vib_changed |= scalar_drag_row(ui, "Length max (m)", &mut vib.bar_length_max, 0.001, 0.05..=0.80);
+                            vib_changed |= scalar_drag_row(ui, "Length min (m)", &mut vib.bar_length_min, 0.001, 0.05..=0.50);
+                            vib_changed |= scalar_drag_row(ui, "Density (kg/m³)", &mut vib.bar_density, 1.0, 500.0..=8000.0);
+
+                            sub_heading(ui, "Surface");
+                            vib_changed |= scalar_drag_row(ui, "Restitution", &mut vib.restitution, 0.01, 0.0..=1.0);
+                            vib_changed |= scalar_drag_row(ui, "Friction", &mut vib.friction, 0.01, 0.0..=1.0);
+                            vib_changed |= scalar_drag_row(ui, "Ang. damping", &mut vib.angular_damping, 0.01, 0.0..=20.0);
+
+                            sub_heading(ui, "Pivot");
+                            vib_changed |= scalar_drag_row(ui, "Arm scale (×len)", &mut vib.arm_scale, 0.01, 0.5..=4.0);
+                            vib_changed |= scalar_drag_row(ui, "Pivot frac (×len)", &mut vib.pivot_frac, 0.005, 0.05..=0.48);
+                            vib_changed |= angle_drag_row(ui, "Rest angle (°)", &mut vib.rest_deg, 1.0..=45.0);
+                            vib_changed |= angle_drag_row(ui, "Max tilt (°)", &mut vib.max_tilt_deg, 0.5..=30.0);
+                            vib_changed |= scalar_drag_row(ui, "CW ratio", &mut vib.cw_weight_ratio, 0.001, 0.5..=2.0);
+
+                            if vib_changed {
+                                vib.dirty = true;
                             }
-                        } else if ui
-                            .button(format!("Start {}", auto_spawn.batch_size))
-                            .clicked()
-                        {
-                            auto_spawn.pending = auto_spawn.batch_size;
-                            auto_spawn.spawned = 0;
-                        }
-                    });
+                            ui.separator();
+                            if ui.button("Reset vibraphone").clicked() {
+                                *vib = VibraphoneParams::default();
+                                vib.dirty = true;
+                            }
+                        });
+
                 });
         });
+}
+
+fn sub_heading(ui: &mut egui::Ui, text: &str) {
+    ui.separator();
+    ui.label(egui::RichText::new(text).strong());
 }
 
 fn point_drag_row(ui: &mut egui::Ui, label: &str, pt: &mut [f32; 2]) -> bool {
@@ -279,6 +277,67 @@ fn angle_drag_row(
         });
     });
     changed
+}
+
+fn fmt_f32(v: f32) -> String {
+    let s = format!("{v}");
+    if s.contains('.') || s.contains('e') { s } else { format!("{s}.0") }
+}
+
+fn format_params_as_consts(
+    params: &ChuteParams,
+    multi: &MultiChuteConfig,
+    snare: &SnareParams,
+    vib: &VibraphoneParams,
+) -> String {
+    use std::fmt::Write;
+    let mut s = String::new();
+    let f = fmt_f32;
+
+    writeln!(s, "// Ghost Snare").unwrap();
+    writeln!(s, "pub const CHUTE_EXIT_Z: f32 = {};", f(params.exit_pos[0])).unwrap();
+    writeln!(s, "pub const CHUTE_EXIT_Y: f32 = {};", f(params.exit_pos[1])).unwrap();
+    writeln!(s, "pub const CHUTE_EXIT_LENGTH: f32 = {};", f(params.exit_length)).unwrap();
+    writeln!(s, "pub const CHUTE_EXIT_ANGLE: f32 = {};", f(params.exit_angle)).unwrap();
+    writeln!(s, "pub const CHUTE_CURVE_RADIUS: f32 = {};", f(params.curve_radius)).unwrap();
+    writeln!(s, "pub const CHUTE_SLOPE_ANGLE: f32 = {};", f(params.slope_angle)).unwrap();
+    writeln!(s, "pub const CHUTE_SLOPE_LENGTH: f32 = {};", f(params.slope_length)).unwrap();
+    writeln!(s, "pub const CHUTE_RESTITUTION: f32 = {};", f(params.restitution)).unwrap();
+    writeln!(s, "pub const CHUTE_FRICTION: f32 = {};", f(params.friction)).unwrap();
+    let angles: Vec<String> = multi.angles_deg.iter().map(|&a| f(a)).collect();
+    writeln!(s, "// chute angles: [{}]", angles.join(", ")).unwrap();
+    writeln!(s).unwrap();
+
+    writeln!(s, "// Snare").unwrap();
+    writeln!(s, "pub const SNARE_RESTITUTION: f32 = {};", f(snare.restitution)).unwrap();
+    writeln!(s, "pub const SNARE_FRICTION: f32 = {};", f(snare.friction)).unwrap();
+    if snare.pos != Vec3::ZERO {
+        writeln!(s, "// snare pos offset: ({}, {}, {})", f(snare.pos.x), f(snare.pos.y), f(snare.pos.z)).unwrap();
+    }
+    writeln!(s).unwrap();
+
+    writeln!(s, "// Vibraphone").unwrap();
+    writeln!(s, "pub const VIB_ROW_Y: f32 = {};", f(vib.pos.y)).unwrap();
+    writeln!(s, "pub const VIB_ROW_Z: f32 = {};", f(vib.pos.z)).unwrap();
+    if vib.pos.x != 0.0 {
+        writeln!(s, "// vib row X offset: {}", f(vib.pos.x)).unwrap();
+    }
+    writeln!(s, "pub const VIB_BAR_WIDTH: f32 = {};", f(vib.bar_width)).unwrap();
+    writeln!(s, "pub const VIB_BAR_SPACING: f32 = {};", f(vib.bar_spacing)).unwrap();
+    writeln!(s, "pub const VIB_BAR_THICKNESS: f32 = {};", f(vib.bar_thickness)).unwrap();
+    writeln!(s, "pub const VIB_BAR_LENGTH_MAX: f32 = {};", f(vib.bar_length_max)).unwrap();
+    writeln!(s, "pub const VIB_BAR_LENGTH_MIN: f32 = {};", f(vib.bar_length_min)).unwrap();
+    writeln!(s, "pub const VIB_BAR_DENSITY: f32 = {};", f(vib.bar_density)).unwrap();
+    writeln!(s, "pub const VIB_ANGULAR_DAMPING: f32 = {};", f(vib.angular_damping)).unwrap();
+    writeln!(s, "pub const VIB_RESTITUTION: f32 = {};", f(vib.restitution)).unwrap();
+    writeln!(s, "pub const VIB_FRICTION: f32 = {};", f(vib.friction)).unwrap();
+    writeln!(s, "pub const VIB_ARM_SCALE: f32 = {};", f(vib.arm_scale)).unwrap();
+    writeln!(s, "pub const VIB_PIVOT_FRAC: f32 = {};", f(vib.pivot_frac)).unwrap();
+    writeln!(s, "pub const VIB_REST_DEG: f32 = {};", f(vib.rest_deg)).unwrap();
+    writeln!(s, "pub const VIB_MAX_TILT_DEG: f32 = {};", f(vib.max_tilt_deg)).unwrap();
+    writeln!(s, "pub const VIB_CW_WEIGHT_RATIO: f32 = {};", f(vib.cw_weight_ratio)).unwrap();
+
+    s
 }
 
 /// Despawns all `SnarePart` entities and respawns the snare when `SnareParams.dirty` is set.

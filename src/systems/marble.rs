@@ -2,21 +2,16 @@
 //!
 //! `spawn_marble()` is the single entry point for creating a marble.
 //! All per-marble properties (colour, despawn floor) are derived from the spawn channel.
-//!
-//! `AutoSpawn` drives the sweep-and-record mode in `chute_editor.rs`.
 
 use avian3d::prelude::*;
 use bevy::math::primitives::Sphere;
 use bevy::prelude::*;
-use rand::RngExt;
-
-use crate::components::instrument::MarbleSpawner;
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
 use crate::resources::layers::GameLayer;
 use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::marble_runs::RunHistory;
-use crate::resources::programming_wheel_params::{channel_jitter_xz, channel_target, ChannelTarget, WHEEL_CH_DROP};
+use crate::resources::programming_wheel_params::{channel_target, ChannelTarget};
 
 /// Compute the world-space spawn position for a chute marble (surface of the slope entry).
 ///
@@ -131,6 +126,8 @@ pub fn spawn_marble(
         ChannelTarget::Snare { .. }      => (MARBLE_COLOR,         DESPAWN_Y),
         ChannelTarget::HiHat { .. }
         | ChannelTarget::HiHatPedal     => (HIHAT_MARBLE_COLOR,   DESPAWN_Y),
+        ChannelTarget::Kick { .. }       => (KICK_MARBLE_COLOR,   DESPAWN_Y),
+        ChannelTarget::Ride { .. }       => (RIDE_MARBLE_COLOR,   DESPAWN_Y),
     };
 
     commands.spawn((
@@ -213,94 +210,3 @@ pub fn advance_flight_timers_system(
     }
 }
 
-#[derive(Resource)]
-pub struct AutoSpawn {
-    pub batch_size: u32,
-    pub step_exit_y_mm: f32,
-    pub step_slope_angle_deg: f32,
-    pub pending: u32,
-    pub spawned: u32,
-    /// True while waiting for all live chute marbles (GhostSnare channels) to despawn before
-    /// firing the next batch step.
-    pub waiting: bool,
-}
-
-impl Default for AutoSpawn {
-    fn default() -> Self {
-        Self {
-            batch_size: 100,
-            step_exit_y_mm: 0.0,
-            step_slope_angle_deg: 0.0,
-            pending: 0,
-            spawned: 0,
-            waiting: false,
-        }
-    }
-}
-
-pub fn auto_spawn_system(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut auto: ResMut<AutoSpawn>,
-    mut params: ResMut<ChuteParams>,
-    marble_col: Res<MarbleCollisions>,
-    mut all_runs: ResMut<RunHistory>,
-    spawners: Query<(&MarbleSpawner, &Transform)>,
-    // Wait until all chute marbles from the previous batch have despawned.
-    live_marbles: Query<&SpawnChannel, With<Marble>>,
-) {
-    if auto.waiting {
-        let still_live = live_marbles.iter().any(|ch| matches!(channel_target(ch.0), ChannelTarget::GhostSnare));
-        if still_live {
-            return;
-        }
-        auto.waiting = false;
-    }
-
-    if auto.pending == 0 {
-        return;
-    }
-
-    if auto.spawned > 0 {
-        if auto.step_exit_y_mm != 0.0 {
-            params.exit_pos[1] += auto.step_exit_y_mm * 0.001;
-        }
-        if auto.step_slope_angle_deg != 0.0 {
-            params.slope_angle =
-                (params.slope_angle + auto.step_slope_angle_deg).clamp(1.0, 85.0);
-        }
-        if auto.step_exit_y_mm != 0.0 || auto.step_slope_angle_deg != 0.0 {
-            params.dirty = true;
-        }
-    }
-
-    let mut rng = rand::rng();
-
-    // Drop marble — apply per-channel jitter on top of spawner position.
-    let drop_run_idx = all_runs.push_new_run(WHEEL_CH_DROP);
-    let mut drop_pos = spawners
-        .iter()
-        .find(|(s, _)| s.channel == WHEEL_CH_DROP)
-        .map(|(_, tf)| tf.translation)
-        .unwrap_or_default();
-    let jitter = channel_jitter_xz(WHEEL_CH_DROP);
-    if jitter > 0.0 {
-        drop_pos.x += rng.random_range(-jitter..jitter);
-        drop_pos.z += rng.random_range(-jitter..jitter);
-    }
-    spawn_marble(&mut commands, &mut meshes, &mut materials,
-        drop_pos, marble_col.0, drop_run_idx, WHEEL_CH_DROP);
-
-    // One chute marble per chute spawner (each has its own GhostSnare channel).
-    for (spawner, tf) in spawners.iter().filter(|(s, _)| matches!(channel_target(s.channel), ChannelTarget::GhostSnare)) {
-        let ch = spawner.channel;
-        let chute_run_idx = all_runs.push_new_run(ch);
-        spawn_marble(&mut commands, &mut meshes, &mut materials,
-            tf.translation, marble_col.0, chute_run_idx, ch);
-    }
-
-    auto.waiting = true;
-    auto.pending -= 1;
-    auto.spawned += 1;
-}

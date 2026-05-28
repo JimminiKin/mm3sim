@@ -31,10 +31,6 @@ pub struct VibraphoneParams {
     pub max_tilt_deg: f32,
     pub cw_weight_ratio: f32,
 
-    // ── Marble drop ──────────────────────────────────────────────────────────
-    pub drop_bar_index: u32,
-    pub spawn_marble: bool,
-
     pub dirty: bool,
 }
 
@@ -56,8 +52,6 @@ impl Default for VibraphoneParams {
             rest_deg: VIB_REST_DEG,
             max_tilt_deg: VIB_MAX_TILT_DEG,
             cw_weight_ratio: VIB_CW_WEIGHT_RATIO,
-            drop_bar_index: VIB_DROP_BAR_INDEX,
-            spawn_marble: true,
             dirty: false,
         }
     }

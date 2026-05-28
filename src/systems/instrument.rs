@@ -16,6 +16,7 @@ use crate::resources::constants::MARBLE_RADIUS;
 use crate::resources::marble_runs::{HitRecord, RunHistory};
 use crate::resources::programming_wheel_params::{
     WHEEL_CH_DROP, WHEEL_CH_VIB_FIRST, WHEEL_CH_HIHAT_FIRST,
+    WHEEL_CH_KICK_FIRST, WHEEL_CH_RIDE_FIRST,
 };
 use crate::systems::marble::{FlightTimer, Marble, PrevVelocity, RunIndex, SpawnChannel};
 
@@ -25,6 +26,10 @@ pub const CH_SNARE: usize = WHEEL_CH_DROP;
 pub const CH_VIB_FIRST: usize = WHEEL_CH_VIB_FIRST;
 /// Hi-hat cymbal channel (the physical bottom cymbal entity).
 pub const CH_HIHAT: usize = WHEEL_CH_HIHAT_FIRST;
+/// Kick drum channel (the single physics cylinder).
+pub const CH_KICK: usize = WHEEL_CH_KICK_FIRST;
+/// Ride cymbal channel (the single physics cymbal).
+pub const CH_RIDE: usize = WHEEL_CH_RIDE_FIRST;
 
 #[derive(Clone)]
 pub struct HitData {

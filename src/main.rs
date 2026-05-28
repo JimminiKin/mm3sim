@@ -27,16 +27,13 @@ use systems::chute_editor::{
     apply_snare_fixed_system, chute_editor_ui, rebuild_chute_system, rebuild_snare_system,
     rebuild_vibraphone_system, SnareFixed,
 };
-use systems::chute_handles::{
-    draw_chute_gizmos, setup_chute_handles, sync_handle_transforms, sync_handle_visibility,
-};
 use systems::hud::hud_panel_ui;
 use systems::hihat::{sync_hihat_pedal_state, update_hihat_visual};
 use systems::instrument::{detect_instrument_hits, record_instrument_hits, InstrumentHits};
 use systems::marble::{
-    advance_flight_timers_system, auto_spawn_system, capture_prev_velocity_system,
+    advance_flight_timers_system, capture_prev_velocity_system,
     despawn_fallen_marbles_system, record_marble_paths_system,
-    update_marble_collisions, AutoSpawn,
+    update_marble_collisions,
 };
 use systems::marble_graph::{
     draw_marble_ghosts_system, marble_graph_ui, record_marble_samples_system, snare_tip_graph_ui,
@@ -45,6 +42,8 @@ use systems::setup::setup_system;
 use systems::sound::{play_instrument_sounds, setup_sounds, SnareVolume};
 
 use components::hihat::spawn_hihat;
+use components::kick::spawn_kick;
+use components::ride::spawn_ride;
 
 fn main() {
     let mut app = App::new();
@@ -85,7 +84,6 @@ fn main() {
         .init_resource::<SnareFixed>()
         .init_resource::<SnareVolume>()
         .init_resource::<VibraphoneParams>()
-        .init_resource::<AutoSpawn>()
         .init_resource::<InstrumentHits>()
         .init_resource::<HiHatState>()
         .init_resource::<StatsIntake>()
@@ -95,11 +93,12 @@ fn main() {
                 setup_system,
                 setup_sounds,
                 setup_axes_hud,
-                setup_chute_handles,
                 |mut commands: Commands,
                  mut meshes: ResMut<Assets<Mesh>>,
                  mut materials: ResMut<Assets<StandardMaterial>>| {
                     spawn_hihat(&mut commands, &mut meshes, &mut materials);
+                    spawn_kick(&mut commands, &mut meshes, &mut materials);
+                    spawn_ride(&mut commands, &mut meshes, &mut materials);
                 },
             ),
         )
@@ -139,9 +138,6 @@ fn main() {
                 rebuild_snare_system,
                 rebuild_chute_system,
                 rebuild_vibraphone_system,
-                sync_handle_transforms,
-                sync_handle_visibility,
-                draw_chute_gizmos,
                 // Programming wheel – sync spawner positions, then rotate + spawn + hi-hat gate
                 (
                     sync_instrument_spawners,
@@ -166,7 +162,6 @@ fn main() {
                 programming_wheel_editor_ui,
                 marble_graph_ui,
                 snare_tip_graph_ui,
-                auto_spawn_system.after(chute_editor_ui),
             ),
         )
         .run();
