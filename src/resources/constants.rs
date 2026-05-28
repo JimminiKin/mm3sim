@@ -1,3 +1,8 @@
+// Tunable parameters (physics, positions, surface properties) live in tuning.rs.
+// Everything here is structural geometry, physics, or derived quantities that
+// are not exposed in the Parameters panel.
+pub use crate::resources::tuning::*;
+
 // =============================================================================
 // Camera & Scene
 // =============================================================================
@@ -48,13 +53,9 @@ pub const VIB_MARBLE_COLOR: (f32, f32, f32) = (0.20, 0.80, 0.35);
 // ── Simulation ────────────────────────────────────────────────────────────────
 pub const SIMULATION_TPS: f32 = 1000.0;
 
-// ── Surface physics ───────────────────────────────────────────────────────────
-pub const STEEL_RESTITUTION: f32 = 0.60; // marble
-pub const STEEL_FRICTION: f32 = 0.18; // marble
-pub const CHUTE_RESTITUTION: f32 = 0.05;
-pub const CHUTE_FRICTION: f32 = 0.20; // ABS has moderate grip on steel
-pub const SNARE_RESTITUTION: f32 = 0.60;
-pub const SNARE_FRICTION: f32 = 0.18;
+// ── Surface physics (non-tunable) ────────────────────────────────────────────
+pub const STEEL_RESTITUTION: f32 = 0.60; // marble on steel
+pub const STEEL_FRICTION: f32 = 0.18;    // marble on steel
 
 // ── Snare drum ────────────────────────────────────────────────────────────────
 pub const SNARE_RADIUS: f32 = 0.1778; // 14" diameter
@@ -79,17 +80,15 @@ pub const CW_LOCAL_Z: f32 = ARM_HALF_LEN;
 
 // ── Counterweight ─────────────────────────────────────────────────────────────
 pub const CW_DISTANCE: f32 = ARM_LENGTH - PIVOT_FROM_SNARE;
-pub const CW_WEIGHT_RATIO: f32 = 1.070; // fraction above torque balance; > 0 → arm rests at upper joint limit
+pub const CW_WEIGHT_RATIO: f32 = 1.070;
 pub const CW_MASS: f32 =
     (SNARE_MASS * PIVOT_FROM_SNARE + ARM_MASS * PIVOT_LOCAL_Z) / CW_DISTANCE * (CW_WEIGHT_RATIO);
 pub const CW_RADIUS: f32 = 0.02;
 pub const CW_HALF_HEIGHT: f32 = 0.08;
 
 // ── Pivot joint limits ────────────────────────────────────────────────────────
-pub const SNARE_REST_DEG: f32 = 15.0; // snare tilt at rest (positive = snare-side down)
-pub const MAX_TILT_DEG: f32 = 2.0; // max additional downward tilt from rest on impact
-
-// Arm spawns at its rest angle (upper joint limit)
+pub const SNARE_REST_DEG: f32 = 15.0;
+pub const MAX_TILT_DEG: f32 = 2.0;
 pub const ARM_SPAWN_DEG: f32 = -SNARE_REST_DEG;
 
 // ── Marble ────────────────────────────────────────────────────────────────────
@@ -97,61 +96,27 @@ pub const MARBLE_RADIUS: f32 = 0.0075;
 pub const MARBLE_MASS: f32 = 0.014; // kg — steel at 20 mm diameter
 pub const SPAWN_HEIGHT: f32 = 1.0; // above snare top face
 pub const DROP_REFERENCE_S: f32 = 0.450; // theoretical 1 m free-fall flight time
-/// XZ jitter applied at marble spawn (realistic release noise, in metres).
 pub const MARBLE_SPAWN_JITTER: f32 = 0.001;
 pub const DESPAWN_Y: f32 = -0.3;
-pub const CHUTE_MARBLE_DESPAWN_Y: f32 = -0.1; // chute marbles exit near snare height; cull sooner
+pub const CHUTE_MARBLE_DESPAWN_Y: f32 = -0.1;
 
 // ── Vibraphone ────────────────────────────────────────────────────────────────
 pub const VIB_BAR_COUNT: u32 = 37;
-pub const VIB_BAR_WIDTH: f32 = 0.045;
-pub const VIB_BAR_SPACING: f32 = 0.055;
-pub const VIB_BAR_THICKNESS: f32 = 0.010;
-pub const VIB_BAR_LENGTH_MAX: f32 = 0.390;
-pub const VIB_BAR_LENGTH_MIN: f32 = 0.140;
-pub const VIB_ROW_Z: f32 = -0.51;
-pub const VIB_ROW_Y: f32 = -0.2; // top face Y (snare top = 0.070, slightly lower)
-
-pub const VIB_RESTITUTION: f32 = 0.50;
-pub const VIB_FRICTION: f32 = 0.15;
-pub const VIB_BAR_DENSITY: f32 = 2700.0; // aluminium alloy, kg/m³
-
-// arm_length = bar_length * arm_scale; pivot = bar_length * pivot_frac from bar center toward CW
-pub const VIB_ARM_SCALE: f32 = 0.83;
-pub const VIB_PIVOT_FRAC: f32 = 0.276; // resonance node: 22.4% from far end = 27.6% from center
 pub const VIB_ARM_TUBE_RADIUS: f32 = 0.003;
 pub const VIB_ARM_MASS: f32 = 0.05;
-
-pub const VIB_REST_DEG: f32 = 10.0;
-pub const VIB_MAX_TILT_DEG: f32 = 5.0;
 pub const VIB_LINEAR_DAMPING: f32 = 0.0;
-pub const VIB_ANGULAR_DAMPING: f32 = 0.3;
-pub const VIB_CW_WEIGHT_RATIO: f32 = 1.07;
 pub const VIB_CW_RADIUS: f32 = 0.012;
 pub const VIB_CW_HALF_HEIGHT: f32 = 0.018;
-
-pub const VIB_SPAWN_HEIGHT: f32 = 1.0; // height above bar top to spawn marble
+pub const VIB_SPAWN_HEIGHT: f32 = 1.0;
 
 pub const VIB_BAR_COLOR: (f32, f32, f32) = (0.82, 0.73, 0.33);
 pub const VIB_BAR_METALLIC: f32 = 0.90;
 pub const VIB_BAR_ROUGHNESS: f32 = 0.20;
 
-// ── Chute ─────────────────────────────────────────────────────────────────────
-// All Y/Z coords are relative to the snare top-face centre at arm θ=0.
-// World position = param + CHUTE_ORIGIN_*.
-pub const CHUTE_ORIGIN_Y: f32 = SNARE_HALF_HEIGHT; // snare top face above world origin
-pub const CHUTE_ORIGIN_Z: f32 = 0.0; // snare centre is at z=0 when arm is level
-
-// 3-part chute profile in the Y-Z plane: straight slope → circular arc → straight exit
-// (0, 0) = centre of snare top face; positive Y = up, positive Z = away from snare
+// ── Chute (structural geometry) ───────────────────────────────────────────────
+pub const CHUTE_ORIGIN_Y: f32 = SNARE_HALF_HEIGHT;
+pub const CHUTE_ORIGIN_Z: f32 = 0.0;
 pub const CHUTE_END_X: f32 = 0.0;
-pub const CHUTE_EXIT_Z: f32 = 0.27; // exit end point Z (near snare)
-pub const CHUTE_EXIT_Y: f32 = 0.119; // exit end point Y (height)
-pub const CHUTE_EXIT_LENGTH: f32 = 0.065; // length of horizontal exit section
-pub const CHUTE_EXIT_ANGLE: f32 = 30.0; // degrees below horizontal (usually 0)
-pub const CHUTE_CURVE_RADIUS: f32 = 0.150; // radius of transition arc
-pub const CHUTE_SLOPE_ANGLE: f32 = 82.0; // degrees below horizontal
-pub const CHUTE_SLOPE_LENGTH: f32 = 0.190; // length of entry slope
 pub const CHUTE_THICKNESS: f32 = 0.01;
 pub const CHUTE_WIDTH: f32 = 0.02;
 
@@ -159,73 +124,48 @@ pub const CHUTE_WIDTH: f32 = 0.02;
 // Programming Wheel
 // =============================================================================
 
-pub const PROGRAMMING_WHEEL_RADIUS: f32 = 0.5; // 1 m diameter cylinder
-/// 16 bars × 4 beats/bar = 64 beats per revolution.
-/// At 2.40625 RPM: 2.40625 × 64 = 154 musical BPM.
+pub const PROGRAMMING_WHEEL_RADIUS: f32 = 0.5;
 pub const PROGRAMMING_WHEEL_BEATS_PER_REV: f32 = 64.0;
-/// ch 0–5 = chute, 6–12 = snare, 13–49 = vib, 50–56 = hi-hat, 57–62 = kick, 63–68 = ride.
-/// Must equal the number of entries in `CHANNEL_DEFS` in `programming_wheel_params`.
 pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 69;
-/// 154 BPM ÷ 64 beats/rev = 2.40625 RPM
 pub const PROGRAMMING_WHEEL_RPM_DEFAULT: f32 = 2.40625;
-pub const PROGRAMMING_WHEEL_Z_POS: f32 = 1.4; // world Z (positive from snare)
-pub const PROGRAMMING_WHEEL_Y_POS: f32 = 0.8; // world Y (cylinder centre)
-pub const PROGRAMMING_WHEEL_WIDTH: f32 = 2.2; // total X span of the wheel
-pub const PROGRAMMING_WHEEL_READER_GAP: f32 = 0.014; // gap between cylinder surface and reader bar
-pub const PROGRAMMING_WHEEL_READER_HALF_H: f32 = 0.012; // reader bar cross-section half-size
+pub const PROGRAMMING_WHEEL_Z_POS: f32 = 1.4;
+pub const PROGRAMMING_WHEEL_Y_POS: f32 = 0.8;
+pub const PROGRAMMING_WHEEL_WIDTH: f32 = 2.2;
+pub const PROGRAMMING_WHEEL_READER_GAP: f32 = 0.014;
+pub const PROGRAMMING_WHEEL_READER_HALF_H: f32 = 0.012;
 
 // =============================================================================
-// Hi-hat
+// Hi-hat (structural geometry)
 // =============================================================================
 
 pub const HIHAT_RADIUS: f32 = 0.15; // ~12" cymbal
 pub const HIHAT_HALF_HEIGHT: f32 = 0.003; // 3 mm thick
-pub const HIHAT_X: f32 = 0.35; // world X — right of snare
-pub const HIHAT_Y: f32 = 0.12; // world Y — above snare top face
-pub const HIHAT_Z: f32 = 0.0;
-pub const HIHAT_GAP_OPEN: f32 = 0.025; // top cymbal lift when open
-pub const HIHAT_GAP_CLOSED: f32 = 0.004; // top cymbal lift when closed
-pub const HIHAT_RESTITUTION: f32 = 0.55;
-pub const HIHAT_FRICTION: f32 = 0.15;
-pub const HIHAT_COLOR: (f32, f32, f32) = (0.72, 0.60, 0.18); // brass/gold
+pub const HIHAT_COLOR: (f32, f32, f32) = (0.72, 0.60, 0.18);
 pub const HIHAT_METALLIC: f32 = 0.85;
 pub const HIHAT_ROUGHNESS: f32 = 0.25;
 pub const HIHAT_MARBLE_COLOR: (f32, f32, f32) = (0.95, 0.80, 0.15);
 
-pub const HIHAT_PEDAL_X: f32 = HIHAT_X - HIHAT_RADIUS - 0.06;
-pub const HIHAT_PEDAL_Y: f32 = HIHAT_Y;
-pub const HIHAT_PEDAL_Z: f32 = HIHAT_Z;
 pub const HIHAT_PEDAL_RADIUS: f32 = 0.025;
 pub const HIHAT_PEDAL_HALF_HEIGHT: f32 = 0.003;
 
 // =============================================================================
-// Kick drum
+// Kick drum (structural geometry)
 // =============================================================================
 
 pub const KICK_RADIUS: f32 = 0.25; // ~20" diameter
 pub const KICK_HALF_HEIGHT: f32 = 0.15; // ~12" depth
-pub const KICK_X: f32 = 0.70; // right of snare, past hi-hat
-pub const KICK_Y: f32 = -0.10; // slightly lower than snare centre
-pub const KICK_Z: f32 = 0.2;
-pub const KICK_RESTITUTION: f32 = 0.35; // padded batter head
-pub const KICK_FRICTION: f32 = 0.25;
-pub const KICK_COLOR: (f32, f32, f32) = (0.45, 0.28, 0.12); // dark maple shell
+pub const KICK_COLOR: (f32, f32, f32) = (0.45, 0.28, 0.12);
 pub const KICK_METALLIC: f32 = 0.05;
 pub const KICK_ROUGHNESS: f32 = 0.75;
 pub const KICK_MARBLE_COLOR: (f32, f32, f32) = (0.70, 0.45, 0.20);
 
 // =============================================================================
-// Ride cymbal
+// Ride cymbal (structural geometry)
 // =============================================================================
 
 pub const RIDE_RADIUS: f32 = 0.20; // ~16" diameter
 pub const RIDE_HALF_HEIGHT: f32 = 0.003; // 3 mm thick
-pub const RIDE_X: f32 = -0.65; // further left than kick
-pub const RIDE_Y: f32 = HIHAT_Y; // same height as hi-hat
-pub const RIDE_Z: f32 = 0.0;
-pub const RIDE_RESTITUTION: f32 = 0.55;
-pub const RIDE_FRICTION: f32 = 0.15;
-pub const RIDE_COLOR: (f32, f32, f32) = (0.78, 0.65, 0.25); // slightly different gold from hi-hat
+pub const RIDE_COLOR: (f32, f32, f32) = (0.78, 0.65, 0.25);
 pub const RIDE_METALLIC: f32 = 0.88;
 pub const RIDE_ROUGHNESS: f32 = 0.22;
 pub const RIDE_MARBLE_COLOR: (f32, f32, f32) = (0.85, 0.70, 0.25);

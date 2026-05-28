@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::components::instrument::Instrument;
 use crate::resources::constants::*;
+use crate::resources::hihat_params::HiHatParams;
 use crate::resources::programming_wheel_params::{WHEEL_CH_HIHAT_FIRST, WHEEL_CH_HIHAT_PEDAL};
 
 /// Tags every entity that belongs to the hi-hat assembly.
@@ -18,6 +19,8 @@ pub fn spawn_hihat(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    params: &HiHatParams,
+    open: bool,
 ) {
     let tilt = Quat::from_rotation_x(ARM_SPAWN_DEG.to_radians());
     let bot_mat = materials.add(StandardMaterial {
@@ -50,18 +53,19 @@ pub fn spawn_hihat(
             half_height: HIHAT_HALF_HEIGHT,
         }))),
         MeshMaterial3d(bot_mat),
-        Transform { translation: Vec3::new(HIHAT_X, HIHAT_Y, HIHAT_Z), rotation: tilt, scale: Vec3::ONE },
+        Transform { translation: params.pos, rotation: tilt, scale: Vec3::ONE },
         RigidBody::Static,
         Collider::cylinder(HIHAT_RADIUS, HIHAT_HALF_HEIGHT * 2.0),
-        Restitution::new(HIHAT_RESTITUTION),
-        Friction::new(HIHAT_FRICTION),
+        Restitution::new(params.restitution),
+        Friction::new(params.friction),
         CollisionEventsEnabled,
         Instrument { channel: WHEEL_CH_HIHAT_FIRST },
         HiHatPart,
     ));
 
     // Top cymbal — visual indicator of open/closed state, no physics.
-    let top_offset = tilt * Vec3::Y * (HIHAT_GAP_OPEN + HIHAT_HALF_HEIGHT * 2.0);
+    let gap = if open { params.gap_open } else { params.gap_closed };
+    let top_offset = tilt * Vec3::Y * (gap + HIHAT_HALF_HEIGHT * 2.0);
     commands.spawn((
         Mesh3d(meshes.add(Mesh::from(Cylinder {
             radius: HIHAT_RADIUS,
@@ -69,7 +73,7 @@ pub fn spawn_hihat(
         }))),
         MeshMaterial3d(top_mat),
         Transform {
-            translation: Vec3::new(HIHAT_X, HIHAT_Y, HIHAT_Z) + top_offset,
+            translation: params.pos + top_offset,
             rotation: tilt,
             scale: Vec3::ONE,
         },
@@ -77,7 +81,12 @@ pub fn spawn_hihat(
         HiHatPart,
     ));
 
-    // Pedal trigger — small disc beside the cymbal (marble landing target for the pedal channel).
+    // Pedal trigger — small disc beside the cymbal.
+    let pedal_pos = Vec3::new(
+        params.pos.x - HIHAT_RADIUS - 0.06,
+        params.pos.y,
+        params.pos.z,
+    );
     commands.spawn((
         Mesh3d(meshes.add(Mesh::from(Cylinder {
             radius: HIHAT_PEDAL_RADIUS,
@@ -85,7 +94,7 @@ pub fn spawn_hihat(
         }))),
         MeshMaterial3d(pedal_mat),
         Transform {
-            translation: Vec3::new(HIHAT_PEDAL_X, HIHAT_PEDAL_Y, HIHAT_PEDAL_Z),
+            translation: pedal_pos,
             rotation: tilt,
             scale: Vec3::ONE,
         },

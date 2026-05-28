@@ -1,3 +1,4 @@
+pub mod tuning;
 pub mod constants;
 pub mod programming_wheel_params;
 pub mod chute_params;
@@ -8,3 +9,5 @@ pub mod snare_params;
 pub mod stats_intake;
 pub mod vibraphone_params;
 pub mod hihat_params;
+pub mod kick_params;
+pub mod ride_params;

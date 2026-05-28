@@ -37,7 +37,7 @@ pub struct VibraphoneParams {
 impl Default for VibraphoneParams {
     fn default() -> Self {
         Self {
-            pos: Vec3::new(0.0, VIB_ROW_Y, VIB_ROW_Z),
+            pos: Vec3::new(VIB_ROW_X, VIB_ROW_Y, VIB_ROW_Z),
             bar_width: VIB_BAR_WIDTH,
             bar_spacing: VIB_BAR_SPACING,
             bar_thickness: VIB_BAR_THICKNESS,

@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::components::instrument::Instrument;
 use crate::resources::constants::*;
+use crate::resources::ride_params::RideParams;
 use crate::resources::programming_wheel_params::WHEEL_CH_RIDE_FIRST;
 
 /// Tags every entity that belongs to the ride cymbal assembly.
@@ -14,6 +15,7 @@ pub fn spawn_ride(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    params: &RideParams,
 ) {
     let tilt = Quat::from_rotation_x(ARM_SPAWN_DEG.to_radians());
     let mat = materials.add(StandardMaterial {
@@ -30,14 +32,14 @@ pub fn spawn_ride(
         }))),
         MeshMaterial3d(mat),
         Transform {
-            translation: Vec3::new(RIDE_X, RIDE_Y, RIDE_Z),
+            translation: params.pos,
             rotation: tilt,
             scale: Vec3::ONE,
         },
         RigidBody::Static,
         Collider::cylinder(RIDE_RADIUS, RIDE_HALF_HEIGHT * 2.0),
-        Restitution::new(RIDE_RESTITUTION),
-        Friction::new(RIDE_FRICTION),
+        Restitution::new(params.restitution),
+        Friction::new(params.friction),
         CollisionEventsEnabled,
         Instrument { channel: WHEEL_CH_RIDE_FIRST },
         RidePart,

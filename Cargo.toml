@@ -12,7 +12,7 @@ categories = ["simulation", "games::arcade"]
 
 [dependencies]
 bevy = { version = "0.18", features = ["wav"] }
-bevy_egui = { version = "0.39.1", default-features = false, features = ["default_fonts", "render"] }
+bevy_egui = { version = "0.39.1", default-features = false, features = ["default_fonts", "render", "manage_clipboard"] }
 egui_plot = "0.34"
 avian3d = "0.6.1"
 wasm-bindgen = "0.2"

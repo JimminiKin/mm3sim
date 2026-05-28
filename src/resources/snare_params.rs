@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::resources::constants::{SNARE_FRICTION, SNARE_RESTITUTION};
+use crate::resources::constants::*;
 
 /// World position offset applied to the entire snare mechanism.
 ///
@@ -21,7 +21,7 @@ pub struct SnareParams {
 impl Default for SnareParams {
     fn default() -> Self {
         Self {
-            pos: Vec3::ZERO,
+            pos: Vec3::new(SNARE_POS_X, SNARE_POS_Y, SNARE_POS_Z),
             restitution: SNARE_RESTITUTION,
             friction: SNARE_FRICTION,
             dirty: false,

@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::components::instrument::Instrument;
 use crate::resources::constants::*;
+use crate::resources::kick_params::KickParams;
 use crate::resources::programming_wheel_params::WHEEL_CH_KICK_FIRST;
 
 /// Tags every entity that belongs to the kick drum assembly.
@@ -14,6 +15,7 @@ pub fn spawn_kick(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
+    params: &KickParams,
 ) {
     let tilt = Quat::from_rotation_x(ARM_SPAWN_DEG.to_radians());
     let mat = materials.add(StandardMaterial {
@@ -30,14 +32,14 @@ pub fn spawn_kick(
         }))),
         MeshMaterial3d(mat),
         Transform {
-            translation: Vec3::new(KICK_X, KICK_Y, KICK_Z),
+            translation: params.pos,
             rotation: tilt,
             scale: Vec3::ONE,
         },
         RigidBody::Static,
         Collider::cylinder(KICK_RADIUS, KICK_HALF_HEIGHT * 2.0),
-        Restitution::new(KICK_RESTITUTION),
-        Friction::new(KICK_FRICTION),
+        Restitution::new(params.restitution),
+        Friction::new(params.friction),
         CollisionEventsEnabled,
         Instrument { channel: WHEEL_CH_KICK_FIRST },
         KickPart,

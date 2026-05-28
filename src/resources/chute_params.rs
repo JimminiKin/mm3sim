@@ -118,9 +118,8 @@ pub struct MultiChuteConfig {
 
 impl Default for MultiChuteConfig {
     fn default() -> Self {
-        // 3 ° spacing starting at −5 ° → [−5, −8, −11, −14, −17, −20]
         Self {
-            angles_deg: std::array::from_fn(|i| -5.0 - i as f32 * 3.0),
+            angles_deg: CHUTE_ANGLES,
             dirty: false,
         }
     }
