@@ -21,21 +21,27 @@ Build: `cargo run` (native) · `trunk serve` (WASM dev) · `trunk build --releas
 src/
 ├── main.rs                     – App init, all plugin/system registration
 ├── components/
-│   ├── instrument.rs           – Instrument marker + MarbleSpawner
+│   ├── instrument.rs           – Instrument marker + MarbleSpawner + ChuteSpawnerIndex
+│   ├── chute.rs                – ChuteSegment; spawn_chute() (trimesh geometry)
 │   ├── pivot_arm.rs            – Shared pivot-arm spawner (snare + vibraphone)
 │   ├── snare.rs                – SnareDrum, PivotArm, SnarePart; spawn_snare()
 │   ├── vibraphone.rs           – VibraphoneBar, VibraphoneArm; spawn_vibraphone()
 │   ├── hihat.rs                – HiHatPart, HiHatTopCymbal; spawn_hihat()
+│   ├── kick.rs                 – KickPart; spawn_kick()
+│   ├── ride.rs                 – RidePart; spawn_ride()
 │   ├── programming_wheel.rs    – ProgrammingWheelCylinder; visual mesh spawner
 │   └── mod.rs
 ├── resources/
-│   ├── constants.rs            – Every tuned physics/geometry constant (single source of truth)
+│   ├── constants.rs            – Non-tunable geometry/physics constants (re-exports tuning.rs)
+│   ├── tuning.rs               – All tunable physics/geometry constants (single source of truth)
 │   ├── programming_wheel_params.rs  – Channel table (CHANNEL_DEFS), WheelNote, ProgrammingWheelParams
 │   ├── chute_params.rs         – ChuteParams + ChuteGeometry (3-part curve)
 │   ├── marble_runs.rs          – HitRecord, Run, RunHistory (all hit data lives here)
 │   ├── vibraphone_params.rs    – VibraphoneParams (per-rebuild tuning)
-│   ├── snare_params.rs         – SnareParams.pos (XYZ offset)
-│   ├── hihat_params.rs         – HiHatState { open: bool } (open by default)
+│   ├── snare_params.rs         – SnareParams (position, surface)
+│   ├── hihat_params.rs         – HiHatParams (position, surface, gap); HiHatState { open: bool }
+│   ├── kick_params.rs          – KickParams (position, surface)
+│   ├── ride_params.rs          – RideParams (position, surface)
 │   ├── marble_collisions.rs    – MarbleCollisions toggle
 │   ├── stats_intake.rs         – StatsIntake toggle (enables path/sample recording)
 │   ├── layers.rs               – GameLayer enum for Avian collision filtering
@@ -44,11 +50,10 @@ src/
     ├── setup.rs                – One-shot scene initialisation (lights, floor)
     ├── camera.rs               – Orbit/pan/zoom (right-drag / mid-drag / scroll)
     ├── instrument.rs           – detect_instrument_hits + record_instrument_hits
-    ├── marble.rs               – spawn_marble(), flight timers, despawn, AutoSpawn
+    ├── marble.rs               – spawn_marble(), flight timers, despawn
     ├── marble_graph.rs         – Per-run velocity graphs + ghost marble rendering
     ├── hud.rs                  – Stats panel, run history, help panel (egui)
-    ├── chute_editor.rs         – Chute/snare/vibraphone parameter UI + rebuild triggers
-    ├── chute_handles.rs        – 3D drag handles for Bézier control points
+    ├── chute_editor.rs         – All instrument parameter UIs + rebuild trigger systems
     ├── programming_wheel.rs    – Wheel rotation, beat detection, piano-roll editor UI
     ├── hihat.rs                – sync_hihat_pedal_state + update_hihat_visual
     ├── sound.rs                – Native WAV synthesis + Web Audio API fallback
@@ -64,12 +69,14 @@ The channel encodes: instrument target, display name, colour, and XZ jitter.
 
 | Channel | Constant | Target |
 |---|---|---|
-| 0 | `WHEEL_CH_CHUTE` | Ghost snare — marble enters via chute |
-| 1 | `WHEEL_CH_DROP` | Direct snare drop (centre) |
-| 2–7 | — | Direct snare drops (±2/4/6 cm X offsets) |
-| 8–44 | `WHEEL_CH_VIB_FIRST` + bar_idx | Vibraphone bar 0–36 (F3–F6) |
+| 0–5 | `WHEEL_CH_CHUTE_FIRST` + chute_idx | Ghost snare — marble enters via chute |
+| 6 | `WHEEL_CH_DROP` | Direct snare drop (centre) |
+| 7–12 | — | Direct snare drops (±2/4/6 cm X offsets) |
+| 13–49 | `WHEEL_CH_VIB_FIRST` + bar_idx | Vibraphone bar 0–36 (F3–F6) |
 | 50–55 | `WHEEL_CH_HIHAT_FIRST` + offset_idx | Hi-hat (centre, ±2/4/6 cm X offsets) |
 | 56 | `WHEEL_CH_HIHAT_PEDAL` | Hi-hat pedal gate — no marble spawned |
+| 57–62 | `WHEEL_CH_KICK_FIRST` + offset_idx | Kick drum (centre, ±2/4/6 cm X offsets) |
+| 63–68 | `WHEEL_CH_RIDE_FIRST` + offset_idx | Ride cymbal (centre, ±2/4/6 cm X offsets) |
 
 To add a new instrument: append a `ChannelDef` to `CHANNEL_DEFS`, spawn an `Instrument` entity
 with the matching channel, and handle its spawn position in `sync_instrument_spawners`.
@@ -85,6 +92,13 @@ at startup via `spawn_hihat()` in `components/hihat.rs`.
   `update_hihat_visual` moves the top cymbal along the tilted local Y axis to reflect the gap change.
 - **Sound**: open hi-hat = long metallic shimmer (slow decay); closed = short tick (fast decay).
   Both WAV handles are pre-generated in `setup_sounds` and stored in `HiHatHitSounds`.
+
+### Kick and Ride
+Static cylinders (no pivot arm), tilted to `ARM_SPAWN_DEG` (-15°). Spawned once at startup.
+- **Kick (ch 57–62)**: 6 channels spread ±2/4/6 cm in X; low-frequency thud sound.
+- **Ride (ch 63–68)**: 6 channels spread ±2/4/6 cm in X; bright metallic shimmer sound.
+- Both instruments use `rebuild_kick_system` / `rebuild_ride_system` in `chute_editor.rs` to
+  respond to `KickParams.dirty` / `RideParams.dirty`.
 
 ### Instrument hit pipeline (FixedUpdate, after physics)
 ```
@@ -102,11 +116,13 @@ record_marble_samples / record_marble_paths  (when StatsIntake enabled)
 ```
 
 ### Rebuilding instruments
-`chute_editor.rs` contains `rebuild_snare_system`, `rebuild_chute_system`, and
-`rebuild_vibraphone_system`. Each runs in `Update`, checks if its params resource is
-`Changed`, despawns the old assembly by marker component (`SnarePart`, `ChuteSegment`,
-`VibraphoneEntity`), then re-spawns everything fresh. This is intentional and keeps
-spawning logic simple at the cost of a one-frame gap on change.
+`chute_editor.rs` contains rebuild systems for all instruments: `rebuild_snare_system`,
+`rebuild_chute_system`, `rebuild_vibraphone_system`, `rebuild_hihat_system`,
+`rebuild_kick_system`, and `rebuild_ride_system`. Each runs in `Update`, checks its params
+resource's `dirty` flag, despawns the old assembly by marker component (`SnarePart`,
+`ChuteSegment`, `VibraphoneEntity`, `HiHatPart`, `KickPart`, `RidePart`), then re-spawns
+everything fresh. This is intentional and keeps spawning logic simple at the cost of a
+one-frame gap on change.
 
 ### Avian physics
 - Fixed timestep: 1000 Hz (`SIMULATION_TPS`).
@@ -126,7 +142,9 @@ Pedal-channel notes (`WHEEL_CH_HIHAT_PEDAL`) are skipped in `programming_wheel_s
 they control `HiHatState` via beat position, not marble spawning.
 
 ## Constants discipline
-All physics/geometry numbers live in `src/resources/constants.rs` — add there, never inline.
+Non-tunable geometry numbers live in `src/resources/constants.rs`.
+Tunable physics/geometry parameters live in `src/resources/tuning.rs` — the "Copy params as consts"
+button in the Parameters panel generates a paste-ready replacement for that file.
 UI layout constants (window sizes, offsets) live at the top of their respective system file.
 
 ## No tests

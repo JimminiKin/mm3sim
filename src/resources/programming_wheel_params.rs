@@ -239,7 +239,7 @@ pub enum ChannelTarget {
     /// Marble enters via the chute, then lands on the snare.
     GhostSnare,
     /// Marble drops directly onto the snare.
-    /// `x_offset` is metres from `MARBLE_SPAWN_X` along the X axis.
+    /// `x_offset` is metres from the snare's world X position.
     Snare { x_offset: f32 },
     /// Marble drops onto vibraphone bar `bar_idx` (0 = F3, 36 = F6).
     VibBar { bar_idx: u32 },
