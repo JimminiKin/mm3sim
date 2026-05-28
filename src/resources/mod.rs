@@ -11,3 +11,4 @@ pub mod vibraphone_params;
 pub mod hihat_params;
 pub mod kick_params;
 pub mod ride_params;
+pub mod carousel_params;

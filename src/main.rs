@@ -7,6 +7,7 @@ use bevy::prelude::*;
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass};
 
 use resources::programming_wheel_params::ProgrammingWheelParams;
+use resources::carousel_params::{CarouselParams, CarouselState};
 use resources::chute_params::{ChuteParams, MultiChuteConfig};
 use resources::constants::BG_COLOR;
 use resources::constants::SIMULATION_TPS;
@@ -25,9 +26,10 @@ use systems::programming_wheel::{
     sync_instrument_spawners,
 };
 use systems::camera::orbit_camera_system;
+use systems::carousel::{animate_carousel_system, update_carousel_body, update_carousel_instruments};
 use systems::chute_editor::{
     apply_snare_fixed_system, chute_editor_ui,
-    rebuild_chute_system, rebuild_hihat_system, rebuild_kick_system,
+    rebuild_carousel_system, rebuild_chute_system, rebuild_hihat_system, rebuild_kick_system,
     rebuild_ride_system, rebuild_snare_system, rebuild_vibraphone_system,
     SnareFixed,
 };
@@ -45,6 +47,7 @@ use systems::marble_graph::{
 use systems::setup::setup_system;
 use systems::sound::{play_instrument_sounds, setup_sounds, SnareVolume};
 
+use components::carousel::spawn_carousel;
 use components::hihat::spawn_hihat;
 use components::kick::spawn_kick;
 use components::ride::spawn_ride;
@@ -83,6 +86,8 @@ fn main() {
         .init_resource::<HiHatParams>()
         .init_resource::<KickParams>()
         .init_resource::<RideParams>()
+        .init_resource::<CarouselParams>()
+        .init_resource::<CarouselState>()
         .init_resource::<MarbleCollisions>()
         .init_resource::<RunHistory>()
         .init_resource::<SnareFixed>()
@@ -103,10 +108,12 @@ fn main() {
                  hihat_params: Res<HiHatParams>,
                  hihat_state: Res<HiHatState>,
                  kick_params: Res<KickParams>,
-                 ride_params: Res<RideParams>| {
+                 ride_params: Res<RideParams>,
+                 carousel_params: Res<CarouselParams>| {
                     spawn_hihat(&mut commands, &mut meshes, &mut materials, &hihat_params, hihat_state.open);
                     spawn_kick(&mut commands, &mut meshes, &mut materials, &kick_params);
                     spawn_ride(&mut commands, &mut meshes, &mut materials, &ride_params);
+                    spawn_carousel(&mut commands, &mut meshes, &mut materials, &carousel_params);
                 },
             ),
         )
@@ -144,6 +151,10 @@ fn main() {
                 rebuild_hihat_system,
                 rebuild_kick_system,
                 rebuild_ride_system,
+                rebuild_carousel_system,
+                animate_carousel_system,
+                update_carousel_instruments,
+                update_carousel_body,
                 (
                     sync_instrument_spawners,
                     (

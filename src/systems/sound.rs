@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
 use crate::resources::hihat_params::HiHatState;
-use crate::systems::instrument::{InstrumentHits, CH_HIHAT, CH_KICK, CH_RIDE, CH_SNARE, CH_VIB_FIRST};
+use crate::systems::instrument::{
+    InstrumentHits, CH_HIHAT, CH_KICK, CH_RIDE, CH_SNARE, CH_VIB_FIRST,
+    CH_CAROUSEL_CRASH, CH_CAROUSEL_COWBELL, CH_CAROUSEL_TAMB, CH_CAROUSEL_WOOD,
+};
 
 const MAX_IMPACT_SPEED: f32 = 4.0;
 
@@ -53,6 +56,15 @@ pub(crate) struct KickHitSound(Handle<AudioSource>);
 pub(crate) struct RideHitSound(Handle<AudioSource>);
 
 #[cfg(not(target_arch = "wasm32"))]
+#[derive(Resource)]
+pub(crate) struct CarouselHitSounds {
+    pub crash: Handle<AudioSource>,
+    pub cowbell: Handle<AudioSource>,
+    pub tambourine: Handle<AudioSource>,
+    pub woodblock: Handle<AudioSource>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub fn setup_sounds(mut audio_sources: ResMut<Assets<AudioSource>>, mut commands: Commands) {
     let snare = audio_sources.add(AudioSource {
         bytes: Arc::from(generate_snare_wav()),
@@ -81,6 +93,14 @@ pub fn setup_sounds(mut audio_sources: ResMut<Assets<AudioSource>>, mut commands
 
     let ride = audio_sources.add(AudioSource { bytes: Arc::from(generate_ride_wav()) });
     commands.insert_resource(RideHitSound(ride));
+
+    let carousel = CarouselHitSounds {
+        crash:      audio_sources.add(AudioSource { bytes: Arc::from(generate_crash_wav()) }),
+        cowbell:    audio_sources.add(AudioSource { bytes: Arc::from(generate_cowbell_wav()) }),
+        tambourine: audio_sources.add(AudioSource { bytes: Arc::from(generate_tambourine_wav()) }),
+        woodblock:  audio_sources.add(AudioSource { bytes: Arc::from(generate_woodblock_wav()) }),
+    };
+    commands.insert_resource(carousel);
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -91,6 +111,7 @@ pub fn play_instrument_sounds(
     hihat_sounds: Option<Res<HiHatHitSounds>>,
     kick_sound: Option<Res<KickHitSound>>,
     ride_sound: Option<Res<RideHitSound>>,
+    carousel_sounds: Option<Res<CarouselHitSounds>>,
     hihat_state: Res<HiHatState>,
     volume: Res<SnareVolume>,
     mut commands: Commands,
@@ -110,6 +131,22 @@ pub fn play_instrument_sounds(
         } else if hit.channel == CH_RIDE {
             let Some(s) = ride_sound.as_ref() else { continue };
             commands.spawn((AudioPlayer(s.0.clone()), PlaybackSettings { volume: Volume::Linear(vol), ..PlaybackSettings::ONCE }));
+        } else if hit.channel == CH_CAROUSEL_CRASH
+            || hit.channel == CH_CAROUSEL_COWBELL
+            || hit.channel == CH_CAROUSEL_TAMB
+            || hit.channel == CH_CAROUSEL_WOOD
+        {
+            let Some(sounds) = carousel_sounds.as_ref() else { continue };
+            let handle = if hit.channel == CH_CAROUSEL_CRASH {
+                &sounds.crash
+            } else if hit.channel == CH_CAROUSEL_COWBELL {
+                &sounds.cowbell
+            } else if hit.channel == CH_CAROUSEL_TAMB {
+                &sounds.tambourine
+            } else {
+                &sounds.woodblock
+            };
+            commands.spawn((AudioPlayer(handle.clone()), PlaybackSettings { volume: Volume::Linear(vol), ..PlaybackSettings::ONCE }));
         } else if hit.channel >= CH_VIB_FIRST {
             let Some(sounds) = vib_sounds.as_ref() else { continue };
             let bar_idx = hit.channel - CH_VIB_FIRST;
@@ -150,6 +187,14 @@ pub fn play_instrument_sounds(
             play_kick_web_audio(vol);
         } else if hit.channel == CH_RIDE {
             play_ride_web_audio(vol);
+        } else if hit.channel == CH_CAROUSEL_CRASH {
+            play_carousel_web_audio(vol, 0);
+        } else if hit.channel == CH_CAROUSEL_COWBELL {
+            play_carousel_web_audio(vol, 1);
+        } else if hit.channel == CH_CAROUSEL_TAMB {
+            play_carousel_web_audio(vol, 2);
+        } else if hit.channel == CH_CAROUSEL_WOOD {
+            play_carousel_web_audio(vol, 3);
         } else if hit.channel >= CH_VIB_FIRST {
             play_vib_web_audio((hit.channel - CH_VIB_FIRST) as u32, vol);
         }
@@ -230,6 +275,31 @@ fn play_kick_web_audio(volume: f32) {
         let n = (rate * 0.30) as u32;
         let Ok(buf) = ctx.create_buffer(1, n, rate) else { return };
         let samples = generate_kick_samples_f32(n as usize, rate as u32);
+        let _ = buf.copy_to_channel(&samples, 0);
+        let Ok(source) = ctx.create_buffer_source() else { return };
+        source.set_buffer(Some(&buf));
+        let Ok(gain) = ctx.create_gain() else { return };
+        gain.gain().set_value(volume);
+        let _ = source.connect_with_audio_node(&gain);
+        let _ = gain.connect_with_audio_node(&ctx.destination());
+        let _ = source.start();
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+fn play_carousel_web_audio(volume: f32, slot: u8) {
+    AUDIO_CTX.with(|cell| {
+        let borrow = cell.borrow();
+        let Some(ctx) = borrow.as_ref() else { return };
+        let rate = ctx.sample_rate();
+        let (dur, samples): (f32, Vec<f32>) = match slot {
+            0 => (1.50, generate_crash_samples_f32((rate * 1.50) as usize, rate as u32)),
+            1 => (0.40, generate_cowbell_samples_f32((rate * 0.40) as usize, rate as u32)),
+            2 => (0.20, generate_tambourine_samples_f32((rate * 0.20) as usize, rate as u32)),
+            _ => (0.10, generate_woodblock_samples_f32((rate * 0.10) as usize, rate as u32)),
+        };
+        let n = (rate * dur) as u32;
+        let Ok(buf) = ctx.create_buffer(1, n, rate) else { return };
         let _ = buf.copy_to_channel(&samples, 0);
         let Ok(source) = ctx.create_buffer_source() else { return };
         source.set_buffer(Some(&buf));
@@ -386,6 +456,100 @@ fn generate_kick_wav() -> Vec<u8> {
 fn generate_ride_wav() -> Vec<u8> {
     let sample_rate: u32 = 44100;
     let samples = generate_ride_samples_f32((sample_rate as f32 * 1.0) as usize, sample_rate);
+    pcm_to_wav(samples, sample_rate)
+}
+
+fn generate_crash_samples_f32(n: usize, sample_rate: u32) -> Vec<f32> {
+    // Wide-band noise with bright metallic shimmer and a long slow decay (~1.5 s).
+    let decay = 3.0_f32;
+    let mut state: u32 = 0xA1B2_C3D4;
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / sample_rate as f32;
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let noise = (state >> 16) as f32 / 32768.0 - 1.0;
+            let shimmer = (std::f32::consts::TAU * 1800.0 * t).sin() * 0.05
+                + (std::f32::consts::TAU * 3500.0 * t).sin() * 0.04
+                + (std::f32::consts::TAU * 5200.0 * t).sin() * 0.03
+                + (std::f32::consts::TAU * 7100.0 * t).sin() * 0.02;
+            let env = (-decay * t).exp();
+            ((noise * 0.86 + shimmer * 0.14) * env).clamp(-1.0, 1.0)
+        })
+        .collect()
+}
+
+fn generate_cowbell_samples_f32(n: usize, sample_rate: u32) -> Vec<f32> {
+    // Classic cowbell: two slightly detuned metallic sine partials, medium decay.
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / sample_rate as f32;
+            let env = (-12.0 * t).exp();
+            let tone = (std::f32::consts::TAU * 562.0 * t).sin() * 0.55
+                + (std::f32::consts::TAU * 845.0 * t).sin() * 0.28
+                + (std::f32::consts::TAU * 1480.0 * t).sin() * 0.17;
+            (tone * env).clamp(-1.0, 1.0)
+        })
+        .collect()
+}
+
+fn generate_tambourine_samples_f32(n: usize, sample_rate: u32) -> Vec<f32> {
+    // Short jingle burst: high-frequency noise with ringing metallic partials.
+    let decay = 30.0_f32;
+    let mut state: u32 = 0x7788_9900;
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / sample_rate as f32;
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let noise = (state >> 16) as f32 / 32768.0 - 1.0;
+            let jingle = (std::f32::consts::TAU * 3200.0 * t).sin() * 0.07
+                + (std::f32::consts::TAU * 4800.0 * t).sin() * 0.05
+                + (std::f32::consts::TAU * 6400.0 * t).sin() * 0.03;
+            let env = (-decay * t).exp();
+            ((noise * 0.85 + jingle * 0.15) * env).clamp(-1.0, 1.0)
+        })
+        .collect()
+}
+
+fn generate_woodblock_samples_f32(n: usize, sample_rate: u32) -> Vec<f32> {
+    // Hollow knock: sharp transient click + 920 Hz resonant tone, very fast decay.
+    let mut state: u32 = 0x1234_5678;
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / sample_rate as f32;
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let noise = (state >> 16) as f32 / 32768.0 - 1.0;
+            let click = noise * (-120.0 * t).exp() * 0.35;
+            let tone = (std::f32::consts::TAU * 920.0 * t).sin() * (-38.0 * t).exp() * 0.75;
+            (click + tone).clamp(-1.0, 1.0)
+        })
+        .collect()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn generate_crash_wav() -> Vec<u8> {
+    let sample_rate: u32 = 44100;
+    let samples = generate_crash_samples_f32((sample_rate as f32 * 1.5) as usize, sample_rate);
+    pcm_to_wav(samples, sample_rate)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn generate_cowbell_wav() -> Vec<u8> {
+    let sample_rate: u32 = 44100;
+    let samples = generate_cowbell_samples_f32((sample_rate as f32 * 0.40) as usize, sample_rate);
+    pcm_to_wav(samples, sample_rate)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn generate_tambourine_wav() -> Vec<u8> {
+    let sample_rate: u32 = 44100;
+    let samples = generate_tambourine_samples_f32((sample_rate as f32 * 0.20) as usize, sample_rate);
+    pcm_to_wav(samples, sample_rate)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn generate_woodblock_wav() -> Vec<u8> {
+    let sample_rate: u32 = 44100;
+    let samples = generate_woodblock_samples_f32((sample_rate as f32 * 0.10) as usize, sample_rate);
     pcm_to_wav(samples, sample_rate)
 }
 

@@ -23,6 +23,10 @@ pub const WHEEL_CH_HIHAT_PEDAL: usize = 56;
 pub const WHEEL_CH_KICK_FIRST: usize = 57;
 /// First ride cymbal channel. Channels `WHEEL_CH_RIDE_FIRST + 0..6` are the six hit zones.
 pub const WHEEL_CH_RIDE_FIRST: usize = 63;
+/// First carousel dropper channel. ch 69 = left, ch 70 = right.
+pub const WHEEL_CH_CAROUSEL_FIRST: usize = 69;
+/// Carousel selector channel — advances the carousel one quarter-turn; no marble spawned.
+pub const WHEEL_CH_CAROUSEL_SELECT: usize = 71;
 
 /// A single MIDI-style note on the programming wheel.
 /// `beat` is the start position in beats [0, BEATS_PER_REV).
@@ -261,6 +265,11 @@ pub enum ChannelTarget {
     Kick { x_offset: f32 },
     /// Marble drops onto the ride cymbal. `x_offset` is metres from cymbal centre.
     Ride { x_offset: f32 },
+    /// Marble drops onto whichever carousel instrument is currently at the top.
+    /// `x_offset` is metres from the carousel centre X position.
+    Carousel { x_offset: f32 },
+    /// Advances the carousel one quarter-turn. No marble is spawned.
+    CarouselSelect,
 }
 
 struct ChannelDef {
@@ -271,11 +280,12 @@ struct ChannelDef {
     jitter_xz: f32,
 }
 
-const VIB:   (u8, u8, u8) = (80, 200, 120);
-const SNARE: (u8, u8, u8) = (242, 89, 38);
-const HIHAT: (u8, u8, u8) = (200, 165, 40);
-const KICK:  (u8, u8, u8) = (180, 110, 55);
-const RIDE:  (u8, u8, u8) = (210, 175, 60);
+const VIB:      (u8, u8, u8) = (80, 200, 120);
+const SNARE:    (u8, u8, u8) = (242, 89, 38);
+const HIHAT:    (u8, u8, u8) = (200, 165, 40);
+const KICK:     (u8, u8, u8) = (180, 110, 55);
+const RIDE:     (u8, u8, u8) = (210, 175, 60);
+const CAROUSEL: (u8, u8, u8) = (160, 80, 220);
 /// Lateral XZ jitter for snare drops (realistic marble-release noise).
 const SNARE_JITTER: f32 = crate::resources::constants::MARBLE_SPAWN_JITTER;
 
@@ -369,6 +379,11 @@ const CHANNEL_DEFS: &[ChannelDef] = &[
     ChannelDef { name: "Ride+4", color: RIDE, target: ChannelTarget::Ride { x_offset:  0.04 }, jitter_xz: 0.001 }, // 66
     ChannelDef { name: "Ride-4", color: RIDE, target: ChannelTarget::Ride { x_offset: -0.04 }, jitter_xz: 0.001 }, // 67
     ChannelDef { name: "Ride+6", color: RIDE, target: ChannelTarget::Ride { x_offset:  0.06 }, jitter_xz: 0.001 }, // 68
+    // ch 69–70 — carousel dropper (two marble channels, slightly offset in X)
+    ChannelDef { name: "Carousel L", color: CAROUSEL, target: ChannelTarget::Carousel { x_offset: -0.02 }, jitter_xz: 0.002 }, // 69
+    ChannelDef { name: "Carousel R", color: CAROUSEL, target: ChannelTarget::Carousel { x_offset:  0.02 }, jitter_xz: 0.002 }, // 70
+    // ch 71 — carousel selector (advances carousel one slot, no marble)
+    ChannelDef { name: "Carousel Sel", color: (110, 50, 180), target: ChannelTarget::CarouselSelect, jitter_xz: 0.0 }, // 71
 ];
 
 /// Returns the display name for a channel.

@@ -2,12 +2,14 @@ use avian3d::prelude::*;
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
+use crate::components::carousel::{spawn_carousel, CarouselPart};
 use crate::components::chute::{spawn_chute, ChuteSegment};
 use crate::components::hihat::{spawn_hihat, HiHatPart};
 use crate::components::kick::{spawn_kick, KickPart};
 use crate::components::ride::{spawn_ride, RidePart};
 use crate::components::snare::{spawn_snare, PivotArm, SnarePart};
 use crate::components::vibraphone::{spawn_vibraphone, VibraphoneEntity};
+use crate::resources::carousel_params::{CarouselParams, CarouselState};
 use crate::resources::chute_params::{ChuteParams, MultiChuteConfig, N_CHUTES};
 use crate::resources::hihat_params::{HiHatParams, HiHatState};
 use crate::resources::kick_params::KickParams;
@@ -50,6 +52,8 @@ pub fn chute_editor_ui(
     mut hihat_params: ResMut<HiHatParams>,
     mut kick_params: ResMut<KickParams>,
     mut ride_params: ResMut<RideParams>,
+    mut carousel_params: ResMut<CarouselParams>,
+    carousel_state: Res<CarouselState>,
     mut marble_col: ResMut<MarbleCollisions>,
     mut stats_intake: ResMut<StatsIntake>,
     mut snare_fixed: ResMut<SnareFixed>,
@@ -311,6 +315,63 @@ pub fn chute_editor_ui(
 
                             if changed {
                                 ride_params.dirty = true;
+                            }
+                        });
+
+                    // ── Carousel ─────────────────────────────────────────────
+                    egui::CollapsingHeader::new("Carousel")
+                        .id_salt("carousel_header")
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            let mut changed = false;
+
+                            let slot_names = ["Crash (0)", "Cowbell (1)", "Tambourine (2)", "Woodblock (3)"];
+                            ui.label(format!(
+                                "Current slot: {} — {}",
+                                carousel_state.current_slot,
+                                slot_names[carousel_state.current_slot as usize]
+                            ));
+                            if carousel_state.is_animating {
+                                ui.label("Rotating…");
+                            }
+
+                            sub_heading(ui, "Position");
+                            changed |= scalar_drag_row(ui, "X (m)", &mut carousel_params.pos.x, 0.001, -3.0..=3.0);
+                            changed |= scalar_drag_row(ui, "Y (m)", &mut carousel_params.pos.y, 0.001, -1.0..=1.0);
+                            changed |= scalar_drag_row(ui, "Z (m)", &mut carousel_params.pos.z, 0.001, -1.0..=1.0);
+                            if ui.button("Reset position").clicked() {
+                                carousel_params.pos = CarouselParams::default().pos;
+                                changed = true;
+                            }
+
+                            sub_heading(ui, "Instrument tilt");
+                            changed |= angle_drag_row(ui, "Tilt (°)", &mut carousel_params.tilt_deg, -90.0..=90.0);
+                            ui.label(egui::RichText::new(
+                                "−90°–0° = face angled toward dropper · 0° = face-up · 90° = on edge"
+                            ).weak().small());
+                            if ui.small_button("Reset tilt").clicked() {
+                                carousel_params.tilt_deg = CarouselParams::default().tilt_deg;
+                                changed = true;
+                            }
+
+                            sub_heading(ui, "Crash cymbal (slot 0)");
+                            changed |= scalar_drag_row(ui, "Restitution", &mut carousel_params.crash_restitution, 0.01, 0.0..=1.0);
+                            changed |= scalar_drag_row(ui, "Friction", &mut carousel_params.crash_friction, 0.01, 0.0..=1.0);
+
+                            sub_heading(ui, "Cowbell (slot 1)");
+                            changed |= scalar_drag_row(ui, "Restitution", &mut carousel_params.cowbell_restitution, 0.01, 0.0..=1.0);
+                            changed |= scalar_drag_row(ui, "Friction", &mut carousel_params.cowbell_friction, 0.01, 0.0..=1.0);
+
+                            sub_heading(ui, "Tambourine (slot 2)");
+                            changed |= scalar_drag_row(ui, "Restitution", &mut carousel_params.tamb_restitution, 0.01, 0.0..=1.0);
+                            changed |= scalar_drag_row(ui, "Friction", &mut carousel_params.tamb_friction, 0.01, 0.0..=1.0);
+
+                            sub_heading(ui, "Woodblock (slot 3)");
+                            changed |= scalar_drag_row(ui, "Restitution", &mut carousel_params.wood_restitution, 0.01, 0.0..=1.0);
+                            changed |= scalar_drag_row(ui, "Friction", &mut carousel_params.wood_friction, 0.01, 0.0..=1.0);
+
+                            if changed {
+                                carousel_params.dirty = true;
                             }
                         });
 
@@ -580,4 +641,24 @@ pub fn rebuild_ride_system(
         commands.entity(entity).despawn();
     }
     spawn_ride(&mut commands, &mut meshes, &mut materials, &params);
+}
+
+pub fn rebuild_carousel_system(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut params: ResMut<CarouselParams>,
+    mut state: ResMut<CarouselState>,
+    entities: Query<Entity, With<CarouselPart>>,
+) {
+    if !params.dirty {
+        return;
+    }
+    params.dirty = false;
+    for entity in &entities {
+        commands.entity(entity).despawn();
+    }
+    // Reset rotation state on rebuild so the new assembly starts at slot 0 on top.
+    *state = CarouselState::default();
+    spawn_carousel(&mut commands, &mut meshes, &mut materials, &params);
 }

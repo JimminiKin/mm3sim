@@ -19,6 +19,7 @@ use crate::resources::snare_params::SnareParams;
 use crate::resources::constants::*;
 use crate::resources::marble_collisions::MarbleCollisions;
 use crate::resources::marble_runs::RunHistory;
+use crate::resources::carousel_params::{CarouselParams, CarouselState};
 use crate::resources::programming_wheel_params::{
     channel_color_rgb, channel_jitter_xz, channel_name, channel_target,
     marble_machine_default_notes,
@@ -27,6 +28,7 @@ use crate::resources::programming_wheel_params::{
     WHEEL_CH_CHUTE_FIRST, WHEEL_CH_DROP, WHEEL_CH_VIB_FIRST,
     WHEEL_CH_HIHAT_FIRST, WHEEL_CH_HIHAT_PEDAL,
     WHEEL_CH_KICK_FIRST, WHEEL_CH_RIDE_FIRST,
+    WHEEL_CH_CAROUSEL_FIRST, WHEEL_CH_CAROUSEL_SELECT,
 };
 use crate::systems::marble::{chute_spawn_pos, spawn_marble};
 
@@ -71,6 +73,10 @@ pub fn setup_spawners_system(mut commands: Commands) {
     for ch in WHEEL_CH_RIDE_FIRST..WHEEL_CH_RIDE_FIRST + 6 {
         commands.spawn((Transform::default(), MarbleSpawner { channel: ch }));
     }
+    // Carousel droppers (ch 69–70) + selector (ch 71).
+    for ch in WHEEL_CH_CAROUSEL_FIRST..=WHEEL_CH_CAROUSEL_SELECT {
+        commands.spawn((Transform::default(), MarbleSpawner { channel: ch }));
+    }
 }
 
 // ── Spawner synchronisation ───────────────────────────────────────────────────
@@ -90,6 +96,7 @@ pub fn sync_instrument_spawners(
     chute_params: Res<ChuteParams>,
     multi_config: Res<MultiChuteConfig>,
     snare_params: Res<SnareParams>,
+    carousel_params: Res<CarouselParams>,
     snare_q: Query<&GlobalTransform, With<SnareDrum>>,
     mut spawners: Query<(&MarbleSpawner, Option<&ChuteSpawnerIndex>, &mut Transform)>,
 ) {
@@ -171,6 +178,18 @@ pub fn sync_instrument_spawners(
                     })
                     .unwrap_or_default()
             }
+
+            ChannelTarget::Carousel { x_offset } => {
+                let p = carousel_params.pos;
+                Vec3::new(
+                    p.x + x_offset,
+                    p.y + CAROUSEL_ARM_RADIUS + CAROUSEL_SPAWN_HEIGHT,
+                    p.z,
+                )
+            }
+
+            // Selector has no marble; spawner position is irrelevant.
+            ChannelTarget::CarouselSelect => Vec3::ZERO,
         };
     }
 }
@@ -234,6 +253,7 @@ pub fn programming_wheel_spawn_system(
     mut materials: ResMut<Assets<StandardMaterial>>,
     marble_col: Res<MarbleCollisions>,
     mut all_runs: ResMut<RunHistory>,
+    mut carousel_state: ResMut<CarouselState>,
     spawners: Query<(&MarbleSpawner, &Transform)>,
 ) {
     if params.pending_spawns.is_empty() {
@@ -245,6 +265,10 @@ pub fn programming_wheel_spawn_system(
 
     for ch in channels {
         if ch == WHEEL_CH_HIHAT_PEDAL {
+            continue;
+        }
+        if ch == WHEEL_CH_CAROUSEL_SELECT {
+            carousel_state.pending_advances += 1;
             continue;
         }
         let jitter = channel_jitter_xz(ch);

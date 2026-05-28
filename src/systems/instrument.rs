@@ -14,6 +14,9 @@ use crate::components::instrument::Instrument;
 use crate::components::snare::PivotArm;
 use crate::resources::constants::MARBLE_RADIUS;
 use crate::resources::marble_runs::{HitRecord, RunHistory};
+use crate::components::carousel::{
+    CAROUSEL_HIT_CRASH, CAROUSEL_HIT_COWBELL, CAROUSEL_HIT_TAMB, CAROUSEL_HIT_WOOD,
+};
 use crate::resources::programming_wheel_params::{
     WHEEL_CH_DROP, WHEEL_CH_VIB_FIRST, WHEEL_CH_HIHAT_FIRST,
     WHEEL_CH_KICK_FIRST, WHEEL_CH_RIDE_FIRST,
@@ -30,6 +33,11 @@ pub const CH_HIHAT: usize = WHEEL_CH_HIHAT_FIRST;
 pub const CH_KICK: usize = WHEEL_CH_KICK_FIRST;
 /// Ride cymbal channel (the single physics cymbal).
 pub const CH_RIDE: usize = WHEEL_CH_RIDE_FIRST;
+/// Carousel instrument hit channels (one per slot, not spawn channels).
+pub const CH_CAROUSEL_CRASH: usize = CAROUSEL_HIT_CRASH;
+pub const CH_CAROUSEL_COWBELL: usize = CAROUSEL_HIT_COWBELL;
+pub const CH_CAROUSEL_TAMB: usize = CAROUSEL_HIT_TAMB;
+pub const CH_CAROUSEL_WOOD: usize = CAROUSEL_HIT_WOOD;
 
 #[derive(Clone)]
 pub struct HitData {

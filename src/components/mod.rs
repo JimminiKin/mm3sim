@@ -7,3 +7,4 @@ pub mod vibraphone;
 pub mod hihat;
 pub mod kick;
 pub mod ride;
+pub mod carousel;

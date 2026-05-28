@@ -126,7 +126,7 @@ pub const CHUTE_WIDTH: f32 = 0.02;
 
 pub const PROGRAMMING_WHEEL_RADIUS: f32 = 0.5;
 pub const PROGRAMMING_WHEEL_BEATS_PER_REV: f32 = 64.0;
-pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 69;
+pub const PROGRAMMING_WHEEL_N_CHANNELS: usize = 72;
 pub const PROGRAMMING_WHEEL_RPM_DEFAULT: f32 = 2.40625;
 pub const PROGRAMMING_WHEEL_Z_POS: f32 = 1.4;
 pub const PROGRAMMING_WHEEL_Y_POS: f32 = 0.8;
@@ -180,3 +180,9 @@ pub const RIDE_COLOR: (f32, f32, f32) = (0.78, 0.65, 0.25);
 pub const RIDE_METALLIC: f32 = 0.88;
 pub const RIDE_ROUGHNESS: f32 = 0.22;
 pub const RIDE_MARBLE_COLOR: (f32, f32, f32) = (0.85, 0.70, 0.25);
+
+// =============================================================================
+// Carousel
+// =============================================================================
+
+pub const CAROUSEL_MARBLE_COLOR: (f32, f32, f32) = (0.65, 0.25, 0.90);

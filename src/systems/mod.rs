@@ -9,3 +9,4 @@ pub mod hud;
 pub mod chute_editor;
 pub mod marble_graph;
 pub mod hihat;
+pub mod carousel;
