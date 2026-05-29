@@ -18,6 +18,7 @@ use crate::resources::chute_params::{ChuteParams, MultiChuteConfig, N_CHUTES};
 use crate::resources::snare_params::SnareParams;
 use crate::resources::constants::*;
 use crate::resources::marble_collisions::MarbleCollisions;
+use crate::resources::marble_params::MarbleParams;
 use crate::resources::marble_runs::RunHistory;
 use crate::resources::carousel_params::{CarouselParams, CarouselState};
 use crate::resources::programming_wheel_params::{
@@ -97,6 +98,7 @@ pub fn sync_instrument_spawners(
     multi_config: Res<MultiChuteConfig>,
     snare_params: Res<SnareParams>,
     carousel_params: Res<CarouselParams>,
+    marble_params: Res<MarbleParams>,
     snare_q: Query<&GlobalTransform, With<SnareDrum>>,
     mut spawners: Query<(&MarbleSpawner, Option<&ChuteSpawnerIndex>, &mut Transform)>,
 ) {
@@ -110,7 +112,7 @@ pub fn sync_instrument_spawners(
             ChannelTarget::GhostSnare => {
                 let idx = chute_idx.map_or(0, |c| c.0);
                 let angle_rad = multi_config.angles_deg[idx].to_radians();
-                chute_spawn_pos(&chute_params, snare_params.pos, angle_rad)
+                chute_spawn_pos(&chute_params, snare_params.pos, angle_rad, marble_params.radius)
             }
 
             ChannelTarget::Snare { x_offset } => Vec3::new(
@@ -252,6 +254,7 @@ pub fn programming_wheel_spawn_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     marble_col: Res<MarbleCollisions>,
+    marble_params: Res<MarbleParams>,
     mut all_runs: ResMut<RunHistory>,
     mut carousel_state: ResMut<CarouselState>,
     spawners: Query<(&MarbleSpawner, &Transform)>,
@@ -297,7 +300,7 @@ pub fn programming_wheel_spawn_system(
 
         for pos in positions {
             let run_idx = all_runs.push_new_run(ch);
-            spawn_marble(&mut commands, &mut meshes, &mut materials, pos, marble_col.0, run_idx, ch);
+            spawn_marble(&mut commands, &mut meshes, &mut materials, pos, marble_col.0, run_idx, ch, &marble_params);
         }
     }
 }

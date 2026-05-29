@@ -17,6 +17,8 @@ use resources::marble_collisions::MarbleCollisions;
 use resources::marble_runs::RunHistory;
 use resources::ride_params::RideParams;
 use resources::snare_params::SnareParams;
+use resources::marble_params::MarbleParams;
+use resources::power_params::PowerParams;
 use resources::stats_intake::StatsIntake;
 use resources::vibraphone_params::VibraphoneParams;
 use systems::axes::{resize_axes_viewport, setup_axes_hud, update_axes_hud};
@@ -34,6 +36,7 @@ use systems::chute_editor::{
     SnareFixed,
 };
 use systems::hud::hud_panel_ui;
+use systems::power::power_panel_ui;
 use systems::hihat::{sync_hihat_pedal_state, update_hihat_visual};
 use systems::instrument::{detect_instrument_hits, record_instrument_hits, InstrumentHits};
 use systems::marble::{
@@ -89,12 +92,14 @@ fn main() {
         .init_resource::<CarouselParams>()
         .init_resource::<CarouselState>()
         .init_resource::<MarbleCollisions>()
+        .init_resource::<MarbleParams>()
         .init_resource::<RunHistory>()
         .init_resource::<SnareFixed>()
         .init_resource::<SnareVolume>()
         .init_resource::<VibraphoneParams>()
         .init_resource::<InstrumentHits>()
         .init_resource::<HiHatState>()
+        .init_resource::<PowerParams>()
         .init_resource::<StatsIntake>()
         .add_systems(
             Startup,
@@ -177,6 +182,7 @@ fn main() {
                 programming_wheel_editor_ui,
                 marble_graph_ui,
                 snare_tip_graph_ui,
+                power_panel_ui,
             ),
         )
         .run();

@@ -10,6 +10,7 @@ use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
 use crate::resources::layers::GameLayer;
 use crate::resources::marble_collisions::MarbleCollisions;
+use crate::resources::marble_params::MarbleParams;
 use crate::resources::marble_runs::RunHistory;
 use crate::resources::programming_wheel_params::{channel_target, ChannelTarget};
 
@@ -17,7 +18,7 @@ use crate::resources::programming_wheel_params::{channel_target, ChannelTarget};
 ///
 /// The position is computed in snare-local space (profile at X = 0, in the Y-Z plane)
 /// then rotated by `angle_rad` around the Y-axis and offset by `snare_offset`.
-pub fn chute_spawn_pos(params: &ChuteParams, snare_offset: Vec3, angle_rad: f32) -> Vec3 {
+pub fn chute_spawn_pos(params: &ChuteParams, snare_offset: Vec3, angle_rad: f32, marble_radius: f32) -> Vec3 {
     let geo = params.geometry();
     let [slope_z, slope_y] = geo.slope_start;
     let [slope_tz, slope_ty] = geo.slope_tangent;
@@ -26,7 +27,7 @@ pub fn chute_spawn_pos(params: &ChuteParams, snare_offset: Vec3, angle_rad: f32)
         CHUTE_END_X,
         slope_y + CHUTE_ORIGIN_Y,
         slope_z + CHUTE_ORIGIN_Z,
-    ) + normal_local * (CHUTE_THICKNESS * 0.5 + MARBLE_RADIUS - 0.001);
+    ) + normal_local * (CHUTE_THICKNESS * 0.5 + marble_radius - 0.001);
     Quat::from_rotation_y(angle_rad) * local + snare_offset
 }
 
@@ -77,10 +78,11 @@ fn marble_pbr(
     materials: &mut ResMut<Assets<StandardMaterial>>,
     position: Vec3,
     color: (f32, f32, f32),
+    radius: f32,
 ) -> (Mesh3d, MeshMaterial3d<StandardMaterial>, Transform) {
     (
         Mesh3d(meshes.add(Mesh::from(Sphere {
-            radius: MARBLE_RADIUS,
+            radius,
         }))),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(color.0, color.1, color.2),
@@ -92,11 +94,11 @@ fn marble_pbr(
     )
 }
 
-fn marble_physics(collide: bool) -> impl Bundle {
+fn marble_physics(collide: bool, radius: f32, mass: f32) -> impl Bundle {
     (
         RigidBody::Dynamic,
-        Collider::sphere(MARBLE_RADIUS),
-        Mass(MARBLE_MASS),
+        Collider::sphere(radius),
+        Mass(mass),
         Restitution::new(STEEL_RESTITUTION),
         Friction::new(STEEL_FRICTION),
         marble_layers(collide),
@@ -119,6 +121,7 @@ pub fn spawn_marble(
     collide: bool,
     run_idx: usize,
     spawn_channel: usize,
+    marble: &MarbleParams,
 ) {
     let (color, despawn_floor) = match channel_target(spawn_channel) {
         ChannelTarget::GhostSnare        => (CHUTE_MARBLE_COLOR,    BACKSIDE_INSTRUMENTS_MARBLE_DESPAWN_Y),
@@ -140,8 +143,8 @@ pub fn spawn_marble(
         PathTimer(0.0),
         PrevVelocity::default(),
         DespawnFloor(despawn_floor),
-        marble_pbr(meshes, materials, position, color),
-        marble_physics(collide),
+        marble_pbr(meshes, materials, position, color, marble.radius),
+        marble_physics(collide, marble.radius, marble.mass),
     ));
 }
 

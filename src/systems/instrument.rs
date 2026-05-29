@@ -12,7 +12,7 @@ use bevy::prelude::*;
 
 use crate::components::instrument::Instrument;
 use crate::components::snare::PivotArm;
-use crate::resources::constants::MARBLE_RADIUS;
+use crate::resources::marble_params::MarbleParams;
 use crate::resources::marble_runs::{HitRecord, RunHistory};
 use crate::components::carousel::{
     CAROUSEL_HIT_CRASH, CAROUSEL_HIT_COWBELL, CAROUSEL_HIT_TAMB, CAROUSEL_HIT_WOOD,
@@ -97,6 +97,7 @@ pub fn record_instrument_hits(
     instruments: Query<(&GlobalTransform, &Instrument)>,
     arm_q: Query<&AngularVelocity, With<PivotArm>>,
     mut all_runs: ResMut<RunHistory>,
+    marble_params: Res<MarbleParams>,
 ) {
     for hit in &hits.0 {
         let Ok((tf, prev_vel, flight_timer, run_idx, _spawn_ch)) =
@@ -119,7 +120,8 @@ pub fn record_instrument_hits(
             prev_vel.angvel,
             instr_normal,
             flight_timer.0,
-            MARBLE_RADIUS,
+            marble_params.radius,
+            marble_params.mass,
         );
         record.hit_pos = tf.translation;
         record.hit_local = hit_local;

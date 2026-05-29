@@ -93,7 +93,6 @@ pub const ARM_SPAWN_DEG: f32 = -SNARE_REST_DEG;
 
 // ── Marble ────────────────────────────────────────────────────────────────────
 pub const MARBLE_RADIUS: f32 = 0.0075;
-pub const MARBLE_MASS: f32 = 0.014; // kg — steel at 20 mm diameter
 pub const SPAWN_HEIGHT: f32 = 1.0; // above snare top face
 pub const DROP_REFERENCE_S: f32 = 0.450; // theoretical 1 m free-fall flight time
 pub const MARBLE_SPAWN_JITTER: f32 = 0.001;

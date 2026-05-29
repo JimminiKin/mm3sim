@@ -10,6 +10,7 @@ use avian3d::prelude::{AngularVelocity, LinearVelocity};
 use crate::components::snare::{PivotArm, SnareDrum};
 use crate::resources::chute_params::ChuteParams;
 use crate::resources::constants::*;
+use crate::resources::marble_params::MarbleParams;
 use crate::resources::marble_runs::{HitRecord, Run, RunHistory};
 use crate::resources::programming_wheel_params::{channel_name, channel_target, ChannelTarget};
 use crate::systems::marble::{Marble, SpawnChannel};
@@ -25,6 +26,7 @@ pub fn hud_panel_ui(
     snare: Query<&GlobalTransform, With<SnareDrum>>,
     arm: Query<&Transform, With<PivotArm>>,
     chute_params: Res<ChuteParams>,
+    marble_params: Res<MarbleParams>,
     mut all_runs: ResMut<RunHistory>,
 ) {
     let ctx = contexts.ctx_mut().expect("primary egui context");
@@ -132,7 +134,7 @@ pub fn hud_panel_ui(
                                             } else {
                                                 0.0
                                             };
-                                            let spin = angvel.length() * MARBLE_RADIUS;
+                                            let spin = angvel.length() * marble_params.radius;
                                             let vh = Vec2::new(v.x, v.z).length();
                                             ui.monospace(label);
                                             ui.monospace(format!("{speed:5.2}"));

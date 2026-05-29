@@ -15,6 +15,7 @@ const ACCEL_SMOOTH: usize = 10;
 
 use crate::components::snare::PivotArm;
 use crate::resources::constants::*;
+use crate::resources::marble_params::MarbleParams;
 use crate::resources::marble_runs::{MarbleSample, RunHistory};
 use crate::resources::programming_wheel_params::channel_color_rgb;
 use crate::systems::marble::{FlightTimer, Marble, RunIndex, SpawnChannel};
@@ -31,6 +32,7 @@ fn channel_bevy_color(ch: usize) -> Color {
 
 pub fn record_marble_samples_system(
     mut all_runs: ResMut<RunHistory>,
+    marble_params: Res<MarbleParams>,
     marbles: Query<(&LinearVelocity, &AngularVelocity, &FlightTimer, &RunIndex, &SpawnChannel), With<Marble>>,
 ) {
     for (lin_vel, ang_vel, timer, run_idx, _spawn_ch) in &marbles {
@@ -46,7 +48,7 @@ pub fn record_marble_samples_system(
             vy: lin_vel.0.y,
             vz: lin_vel.0.z,
             speed: lin_vel.0.length(),
-            spin: ang_vel.0.length() * MARBLE_RADIUS,
+            spin: ang_vel.0.length() * marble_params.radius,
         });
     }
 }

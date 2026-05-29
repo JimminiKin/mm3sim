@@ -5,8 +5,6 @@
 
 use bevy::prelude::*;
 
-use crate::resources::constants::MARBLE_MASS;
-
 #[derive(Clone, Copy, Default)]
 pub struct HitRecord {
     pub vx: f32,
@@ -24,7 +22,7 @@ pub struct HitRecord {
 }
 
 impl HitRecord {
-    pub fn new(v: Vec3, angvel: Vec3, snare_normal: Vec3, flight_s: f32, marble_radius: f32) -> Self {
+    pub fn new(v: Vec3, angvel: Vec3, snare_normal: Vec3, flight_s: f32, marble_radius: f32, marble_mass: f32) -> Self {
         let speed = v.length();
         let aoa = if speed > 0.01 {
             (v / speed).dot(snare_normal).abs().clamp(0.0, 1.0).asin().to_degrees()
@@ -32,7 +30,7 @@ impl HitRecord {
             0.0
         };
         let spin = angvel.length() * marble_radius;
-        let ke_mj = 0.5 * MARBLE_MASS * speed * speed * 1000.0;
+        let ke_mj = 0.5 * marble_mass * speed * speed * 1000.0;
         Self { vx: v.x, vy: v.y, vz: v.z, speed, aoa, flight_s, spin, ke_mj, ..default() }
     }
 }

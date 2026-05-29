@@ -14,6 +14,7 @@ use crate::resources::chute_params::{ChuteParams, MultiChuteConfig, N_CHUTES};
 use crate::resources::hihat_params::{HiHatParams, HiHatState};
 use crate::resources::kick_params::KickParams;
 use crate::resources::marble_collisions::MarbleCollisions;
+use crate::resources::marble_params::MarbleParams;
 use crate::resources::ride_params::RideParams;
 use crate::resources::snare_params::SnareParams;
 use crate::resources::stats_intake::StatsIntake;
@@ -55,6 +56,7 @@ pub fn chute_editor_ui(
     mut carousel_params: ResMut<CarouselParams>,
     carousel_state: Res<CarouselState>,
     mut marble_col: ResMut<MarbleCollisions>,
+    mut marble_params: ResMut<MarbleParams>,
     mut stats_intake: ResMut<StatsIntake>,
     mut snare_fixed: ResMut<SnareFixed>,
     mut snare_volume: ResMut<SnareVolume>,
@@ -90,6 +92,19 @@ pub fn chute_editor_ui(
                         ui.label("Volume:");
                         ui.add(egui::Slider::new(&mut snare_volume.0, 0.0..=1.0).show_value(false));
                         ui.monospace(format!("{:.0}%", snare_volume.0 * 100.0));
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Marble ⌀:");
+                        let mut diameter_mm = marble_params.radius * 2000.0;
+                        if ui.add(
+                            egui::DragValue::new(&mut diameter_mm)
+                                .speed(0.1)
+                                .range(5.0_f32..=50.0_f32)
+                        ).changed() {
+                            marble_params.set_radius(diameter_mm / 2000.0);
+                        }
+                        ui.monospace(format!("mm  {:.2} g", marble_params.mass * 1000.0));
                     });
 
                     ui.separator();
